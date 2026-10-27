@@ -1,0 +1,1264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Cyclone</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&display=swap">
+<style>
+/* =====================================================================================
+   CYCLONE — the ticket wheel. A Hyperdot Arcade cabinet.
+   One self-contained page: an offscreen W x H "matrix" canvas is drawn by the game, then
+   shown through a WebGL2 LED shader (round dots + bloom + tonemap). On this cabinet the
+   shader also renders real incandescent bulbs mounted on the panel, from simulated filaments.
+   Everything visual is drawn by code; all sound is synthesized. Dark-only by design.
+   ===================================================================================== */
+:root{
+  --bg:#07060b;--ink:#efeaf6;--ink-2:#a39cb4;--accent:#ffb040;--accent-2:#4fe3ff;
+  --panel:rgba(18,15,24,.82);--edge:rgba(255,255,255,.14);
+  --f:"Chakra Petch","Arial Narrow",system-ui,sans-serif;color-scheme:dark;
+}
+[hidden]{display:none!important}           /* author display rules would otherwise beat the hidden attribute */
+html{height:100%;box-sizing:border-box;background:var(--bg)}
+*,*::before,*::after{box-sizing:inherit}
+body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:var(--f);overflow:hidden;overscroll-behavior:none;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+#gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#sa{position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+.bar{position:fixed;left:0;right:0;top:0;display:flex;align-items:center;justify-content:space-between;gap:10px;pointer-events:none;
+  padding-top:max(10px,env(safe-area-inset-top,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.brand{font:700 14px/1 var(--f);letter-spacing:.32em;color:var(--accent);text-shadow:0 0 12px rgba(255,176,64,.55);white-space:nowrap}
+.brand span{color:var(--ink-2);letter-spacing:.2em;font-weight:500;font-size:10px;margin-left:8px;text-shadow:none}
+@media (max-width:560px){.brand span{display:none}}
+@media (max-width:440px){.brand{font-size:12px;letter-spacing:.2em}.opts{gap:6px}.chip{padding:0 9px;font-size:10px;letter-spacing:.06em}.chip .lbl{display:none}}
+.opts{display:flex;gap:8px}
+.chip{pointer-events:auto;height:34px;padding:0 12px;border-radius:999px;border:1px solid var(--edge);background:var(--panel);color:var(--ink);cursor:pointer;
+  font:600 11px/1 var(--f);letter-spacing:.12em;text-transform:uppercase;font-variant-numeric:tabular-nums;white-space:nowrap}
+.chip:focus-visible,.ab:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+/* touch controls: a stick on the left, two buttons on the right (phones only) */
+#pad{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:space-between;align-items:flex-end;gap:10px;pointer-events:none;
+  padding-bottom:max(16px,env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.stk{pointer-events:auto;touch-action:none;position:relative;flex:none;width:var(--stick,150px);height:var(--stick,150px);border-radius:50%;
+  background:radial-gradient(circle,rgba(255,255,255,.05) 0 30%,transparent 31%),var(--panel);border:1px solid var(--edge)}
+.kn{position:absolute;left:50%;top:50%;width:40%;height:40%;margin:-20% 0 0 -20%;border-radius:50%;background:radial-gradient(circle at 40% 32%,#ffe0a0,#d0801a 62%,#5a3006);box-shadow:0 0 16px rgba(255,176,64,.4)}
+.acts{pointer-events:auto;display:flex;gap:12px;align-items:flex-end}
+.ab{touch-action:none;cursor:pointer;width:var(--b,64px);height:var(--b,64px);border-radius:50%;border:1px solid var(--edge);color:var(--ink);background:var(--panel);
+  font:700 11px/1 var(--f);letter-spacing:.06em;display:grid;place-items:center;padding:0;transition:transform .05s}
+#bA{border-color:rgba(255,176,64,.7);background:radial-gradient(circle at 50% 34%,rgba(255,176,64,.55),var(--panel) 74%);width:calc(var(--b,64px)*1.25);height:calc(var(--b,64px)*1.25)}
+#bB{border-color:rgba(79,227,255,.6);background:radial-gradient(circle at 50% 34%,rgba(79,227,255,.45),var(--panel) 74%)}
+.ab.on{transform:scale(.9);filter:brightness(1.5)}
+body.portrait #pad{top:var(--padTop,60%);align-items:center}
+body.land #pad{opacity:.8}
+.keys{position:fixed;left:0;right:0;bottom:max(10px,env(safe-area-inset-bottom,0px));margin:0;text-align:center;font:500 11px/1.5 var(--f);letter-spacing:.08em;color:var(--ink-2);pointer-events:none;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.keys b{color:var(--ink);font-weight:600}
+#turn{position:fixed;left:0;right:0;margin:0;text-align:center;font:500 11px/1.4 var(--f);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2);pointer-events:none}
+#err{position:fixed;inset:0;display:none;place-items:center;padding:24px;text-align:center;font:500 14px/1.6 var(--f);color:var(--ink-2)}
+/* embedded in the 3D arcade: no page chrome, the matrix fills the frame */
+body.embed .bar,body.embed .keys,body.embed #turn{display:none!important}
+/* CYCLONE: a one-button cabinet. No stick, no B: A is the big red arcade push-button under the wheel. */
+#pad.one{justify-content:flex-end}
+body.portrait #pad.one{justify-content:center}
+body.portrait #pad.one .acts{align-items:center}
+#pad.one #bA{border-color:rgba(255,120,96,.8);color:#fff4ee;letter-spacing:.16em;font-size:13px;
+  background:radial-gradient(circle at 50% 30%,rgba(255,190,170,.9),rgba(220,44,30,.72) 50%,rgba(70,8,8,.85) 76%);
+  box-shadow:0 0 26px rgba(255,60,40,.32),inset 0 -7px 16px rgba(0,0,0,.4),inset 0 3px 8px rgba(255,255,255,.18)}
+body.portrait #pad.one #bA{width:min(44vw,184px);height:min(44vw,184px);font-size:17px;letter-spacing:.2em}
+body.land #pad.one #bA{width:calc(var(--b,56px)*1.7);height:calc(var(--b,56px)*1.7)}
+</style>
+</head>
+<body>
+<canvas id="gl" aria-label="LED matrix game display"></canvas>
+<div id="sa"></div>
+<div class="bar">
+  <span class="brand" id="brand">CABINET<span>HYPERDOT ARCADE</span></span>
+  <div class="opts"><button class="chip" id="res" type="button"><span class="lbl">Dots </span><span id="resv">256×144</span></button><button class="chip" id="snd" type="button">Sound on</button><button class="chip" id="pauseBtn" type="button">Pause</button></div>
+</div>
+<div id="pad" hidden>
+  <div class="stk" id="stL" aria-label="Stick"><div class="kn" id="knL"></div></div>
+  <div class="acts"><button class="ab" id="bB" type="button">B</button><button class="ab" id="bA" type="button">A</button></div>
+</div>
+<p id="turn" hidden>Turn your phone sideways for a bigger screen</p>
+<p class="keys" id="keys"><b>Space</b> stop</p>
+<div id="err">This game needs WebGL2, which this browser has turned off.</div>
+<script>
+(()=>{
+'use strict';
+/* =====================================================================================
+   0. CABINET CONFIG
+   ===================================================================================== */
+const CAB={
+  id:'cyclone',                 // file name in the arcade: games/cyclone.html
+  title:'CYCLONE',
+  brand:'CYCLONE',sub:'HYPERDOT ARCADE',
+  style:'color',                // the panel is a colour LED matrix; the lamps on it are rendered as real bulbs (section 4)
+  res:[[192,108],[256,144],[320,180]], // panel dot pitch; the lamps keep their physical size at every pitch
+  resDefault:1,
+  tickets:true,
+  keys:'<b>Space</b>, <b>click</b> or <b>tap</b> stop the light · <b>Enter</b> start · <b>Esc</b> pause · <b>M</b> mute'
+};
+/* =====================================================================================
+   1. BASICS
+   ===================================================================================== */
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>v<a?a:v>b?b:v,lerp=(a,b,t)=>a+(b-a)*t,rnd=(a,b)=>a+Math.random()*(b-a),TAU=Math.PI*2;
+const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:v}catch(e){return d}},set(k,v){try{localStorage.setItem(k,String(v))}catch(e){}}};
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const touchy=matchMedia('(hover: none)').matches;
+const fmt=n=>Math.floor(n).toLocaleString('en-US');
+const pick=a=>a[(Math.random()*a.length)|0];
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function hexRGB(h){const n=parseInt(h.slice(1),16);return [n>>16&255,n>>8&255,n&255];}
+const c255=v=>v<0?0:v>255?255:v|0;
+/* pixels are stored ABGR little-endian in a Uint32Array view of ImageData */
+const pack=(r,g,b,a=255)=>(((a&255)<<24)|(c255(b)<<16)|(c255(g)<<8)|c255(r))>>>0;
+function rgba(c,a=1){return 'rgba('+c255(c[0])+','+c255(c[1])+','+c255(c[2])+','+a+')';}
+function mixC(a,b,t){return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];}
+const EMBED=/[?&]embed=1/.test(location.search);
+if(touchy&&Math.min(screen.width||999,screen.height||999)<520)CAB.resDefault=0;   // phones: the coarser pitch keeps dots above 2 px
+/* =====================================================================================
+   2. BITMAP FONTS — 5x7 (txt5) and 3x5 (txt3); col may be a CSS color or an array of 7 row colors (gradient)
+   ===================================================================================== */
+const F5SRC=`A 01110 10001 10001 11111 10001 10001 10001|B 11110 10001 10001 11110 10001 10001 11110|C 01110 10001 10000 10000 10000 10001 01110|D 11110 10001 10001 10001 10001 10001 11110|E 11111 10000 10000 11110 10000 10000 11111|F 11111 10000 10000 11110 10000 10000 10000|G 01110 10001 10000 10111 10001 10001 01111|H 10001 10001 10001 11111 10001 10001 10001|I 01110 00100 00100 00100 00100 00100 01110|J 00111 00010 00010 00010 00010 10010 01100|K 10001 10010 10100 11000 10100 10010 10001|L 10000 10000 10000 10000 10000 10000 11111|M 10001 11011 10101 10101 10001 10001 10001|N 10001 10001 11001 10101 10011 10001 10001|O 01110 10001 10001 10001 10001 10001 01110|P 11110 10001 10001 11110 10000 10000 10000|Q 01110 10001 10001 10001 10101 10010 01101|R 11110 10001 10001 11110 10100 10010 10001|S 01111 10000 10000 01110 00001 00001 11110|T 11111 00100 00100 00100 00100 00100 00100|U 10001 10001 10001 10001 10001 10001 01110|V 10001 10001 10001 10001 10001 01010 00100|W 10001 10001 10001 10101 10101 10101 01010|X 10001 10001 01010 00100 01010 10001 10001|Y 10001 10001 01010 00100 00100 00100 00100|Z 11111 00001 00010 00100 01000 10000 11111|0 01110 10001 10011 10101 11001 10001 01110|1 00100 01100 00100 00100 00100 00100 01110|2 01110 10001 00001 00010 00100 01000 11111|3 11111 00010 00100 00010 00001 10001 01110|4 00010 00110 01010 10010 11111 00010 00010|5 11111 10000 11110 00001 00001 10001 01110|6 00110 01000 10000 11110 10001 10001 01110|7 11111 00001 00010 00100 01000 01000 01000|8 01110 10001 10001 01110 10001 10001 01110|9 01110 10001 10001 01111 00001 00010 01100|! 00100 00100 00100 00100 00100 00000 00100|. 00000 00000 00000 00000 00000 01100 01100|, 00000 00000 00000 00000 01100 00100 01000|: 00000 01100 01100 00000 01100 01100 00000|- 00000 00000 00000 11111 00000 00000 00000|+ 00000 00100 00100 11111 00100 00100 00000|? 01110 10001 00001 00010 00100 00000 00100|' 00100 00100 01000 00000 00000 00000 00000|/ 00001 00001 00010 00100 01000 10000 10000|> 01000 00100 00010 00001 00010 00100 01000|< 00010 00100 01000 10000 01000 00100 00010|x 00000 00000 10001 01010 00100 01010 10001|_ 00000 00000 00000 00000 00000 00000 00000`;
+const G5={};for(const ln of F5SRC.split('|')){const p=ln.trim().split(/\s+/);G5[p[0]==='_'?' ':p[0]]=p.slice(1).map(r=>parseInt(r,2));}
+const F3SRC=`A 010 101 111 101 101|B 110 101 110 101 110|C 011 100 100 100 011|D 110 101 101 101 110|E 111 100 110 100 111|F 111 100 110 100 100|G 011 100 101 101 011|H 101 101 111 101 101|I 111 010 010 010 111|J 001 001 001 101 010|K 101 101 110 101 101|L 100 100 100 100 111|M 101 111 111 101 101|N 110 101 101 101 101|O 010 101 101 101 010|P 110 101 110 100 100|Q 010 101 101 110 011|R 110 101 110 101 101|S 011 100 010 001 110|T 111 010 010 010 010|U 101 101 101 101 111|V 101 101 101 101 010|W 101 101 111 111 101|X 101 101 010 101 101|Y 101 101 010 010 010|Z 111 001 010 100 111|0 111 101 101 101 111|1 010 110 010 010 111|2 111 001 111 100 111|3 111 001 011 001 111|4 101 101 111 001 001|5 111 100 111 001 111|6 111 100 111 101 111|7 111 001 001 010 010|8 111 101 111 101 111|9 111 101 111 001 111|x 000 101 010 101 000|+ 000 010 111 010 000|- 000 000 111 000 000|: 0 1 0 1 0|. 0 0 0 0 1|, 0 0 0 1 1|! 1 1 1 0 1|/ 001 001 010 100 100|' 1 1 0 0 0|> 100 010 001 010 100|< 001 010 100 010 001|? 111 001 011 000 010|( 01 10 10 10 01|) 10 01 01 01 10|% 101 001 010 100 101|# 101 111 101 111 101`;
+const G3={};for(const ln of F3SRC.split('|')){const p=ln.trim().split(/\s+/);G3[p[0]]=p.slice(1);}
+function tw5(s,sc=1){return s.length*6*sc-sc;}
+function txt5(g,s,x,y,col,sc=1,align,it=0){
+  if(align==='c')x=Math.round(x-tw5(s,sc)/2);else if(align==='r')x=x-tw5(s,sc);
+  const cols=Array.isArray(col)?col:null;if(!cols)g.fillStyle=col;
+  for(const ch of s){const gl5=G5[ch]||G5[ch.toUpperCase()]||G5[' '];
+    for(let r=0;r<7;r++){if(cols)g.fillStyle=cols[Math.min(cols.length-1,r)];const ox=it?Math.round((6-r)*it*sc):0;for(let c=0;c<5;c++)if((gl5[r]>>(4-c))&1)g.fillRect(x+c*sc+ox,y+r*sc,sc,sc);}
+    x+=6*sc;}
+}
+function tw3(s,sc=1){let w=0;for(const ch of s){const gg=G3[ch]||G3[ch.toUpperCase()];w+=((gg?gg[0].length:3)+1)*sc;}return Math.max(0,w-sc);}
+function txt3(g,s,x,y,col,sc=1,align){
+  if(align==='c')x=Math.round(x-tw3(s,sc)/2);else if(align==='r')x=x-tw3(s,sc);
+  g.fillStyle=col;
+  for(const ch of s){const gg=G3[ch]||G3[ch.toUpperCase()];if(!gg){x+=4*sc;continue;}for(let r=0;r<5;r++)for(let c=0;c<gg[r].length;c++)if(gg[r][c]==='1')g.fillRect(x+c*sc,y+r*sc,sc,sc);x+=(gg[0].length+1)*sc;}
+}
+const O8=[[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]];
+function otxt5(g,s,x,y,col,sc=1,align,it=0,ol='#000'){const o=Math.max(1,sc>>1);for(const [a,b] of O8)txt5(g,s,x+a*o,y+b*o,ol,sc,align,it);txt5(g,s,x,y,col,sc,align,it);}
+function otxt3(g,s,x,y,col,sc=1,align,ol='#000'){for(const [a,b] of O8)txt3(g,s,x+a,y+b,ol,sc,align);txt3(g,s,x,y,col,sc,align);}
+const GR={
+  volt:['#ffffff','#fff7cc','#ffe46a','#ffc21a','#ff9a10','#e2600a','#902c06'],
+  cyan:['#ffffff','#e6fbff','#a6f3ff','#4fe0ff','#22b4ff','#2a70ff','#3a36c8'],
+  red:['#ffffff','#ffe0e6','#ff9aab','#ff4a62','#ff1a3a','#c80d2a','#7a0618'],
+  steel:['#ffffff','#eef1f8','#cfd6e6','#a2adc6','#76829e','#4e5876','#2c3250'],
+  pink:['#ffffff','#ffe2f2','#ffa6d6','#ff5ab4','#ff2f9a','#c81476','#760a46'],
+  green:['#ffffff','#eaffe6','#b4ffaa','#6aff5a','#2ee04a','#1a9c3a','#0e5a26'],
+  violet:['#ffffff','#f0e6ff','#d0b4ff','#a878ff','#8048ff','#5a2ad8','#34168a']
+};
+/* =====================================================================================
+   3. THE MATRIX — draw into `g` (2D canvas, W x H) and/or write pixels into RBUF (Uint32, ABGR)
+   ===================================================================================== */
+let resI=parseInt(store.get('hd-'+CAB.id+'-res',CAB.resDefault),10);if(!(resI>=0&&resI<CAB.res.length))resI=CAB.resDefault;
+let W=CAB.res[resI][0],H=CAB.res[resI][1];
+const mc=document.createElement('canvas'),g=mc.getContext('2d',{willReadFrequently:true});
+const ac=document.createElement('canvas'),acx=ac.getContext('2d',{willReadFrequently:true});
+let AIMG=null,RBUF=null,ZB=null;const RESCB=[];
+function setRes(i){
+  resI=i;W=CAB.res[i][0];H=CAB.res[i][1];mc.width=ac.width=W;mc.height=ac.height=H;g.imageSmoothingEnabled=false;acx.imageSmoothingEnabled=false;
+  AIMG=acx.createImageData(W,H);RBUF=new Uint32Array(AIMG.data.buffer);ZB=new Float32Array(W*H);
+  store.set('hd-'+CAB.id+'-res',i);$('resv').textContent=W+'×'+H;for(const f of RESCB)f();
+}
+function commit(){acx.putImageData(AIMG,0,0);g.drawImage(ac,0,0);}
+/* =====================================================================================
+   4. LED DISPLAY — WebGL2: round dots, unlit-dot floor, two-level bloom, ACES tonemap, vignette.
+      uStyle 0 = full color, 1 = classic amber DMD (16 brightness steps), 2 = big incandescent lamps.
+      CYCLONE adds two small textures to the LED pass, keeping the rest of the house pipeline:
+        uIdx  (W x H, R8)  what each panel dot is: 0 a colour LED, 254 an amber DMD dot (the counter panel),
+                           255 bare cabinet face (the DMD bezel), k = 1..253 the socket of lamp k-1;
+        uLamp (n x 2, RGBA32F) row 0 each lamp's centre and envelope radius in panel dots plus its kind,
+                           row 1 the linear light its filament gives off this frame (+ a beacon angle).
+      A fragment inside a socket draws that bulb at its exact, off-grid position, so a ring of lamps can be a
+      true circle laid over the dot grid instead of a staircase of cells. Lamps bloom like everything else.
+   ===================================================================================== */
+const cv=$('gl');
+const gl=cv.getContext('webgl2',{antialias:false,alpha:false,depth:false,powerPreference:'high-performance'});
+let g2=null;if(!gl)g2=cv.getContext('2d');
+const HDR=gl?!!gl.getExtension('EXT_color_buffer_float'):false;
+const STYLE_ID={color:0,amber:1,lamp:2}[(location.search.match(/[?&]style=(\w+)/)||[])[1]||CAB.style]||0; /* ?style=amber to preview another look */
+function prog(vs,fs){
+  const p=gl.createProgram();
+  for(const [t,src] of [[gl.VERTEX_SHADER,vs],[gl.FRAGMENT_SHADER,fs]]){const s=gl.createShader(t);gl.shaderSource(s,'#version 300 es\nprecision highp float;\n'+src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));gl.attachShader(p,s);}
+  gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));
+  const u={},n=gl.getProgramParameter(p,gl.ACTIVE_UNIFORMS);for(let i=0;i<n;i++){const inf=gl.getActiveUniform(p,i);u[inf.name]=gl.getUniformLocation(p,inf.name);}
+  return {p,u};
+}
+const VS=`out vec2 vT;void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));vT=p;gl_Position=vec4(p*2.0-1.0,0.0,1.0);}`;
+const FS_LED=`in vec2 vT;uniform sampler2D uTex;uniform highp sampler2D uIdx;uniform highp sampler2D uLamp;uniform vec2 uRes;uniform float uGain;uniform int uStyle;out vec4 o;
+/* an incandescent bulb seated in a chrome reflector cup, in its own coordinates (glass radius .395, cup .5).
+   c = linear light from the filament. A dim filament lights only its coil and the middle of the frosted glass;
+   a hot one fills the envelope and whitens at the centre. kind 1 = the jackpot beacon (a ribbed dome; when ex is
+   non-zero a mirror turns inside it and sweeps the beam), kind 3 = a push-button lens (moulded fresnel rings). */
+vec3 bulb(vec3 c,vec2 f,float fw,float kind,float ex){
+  float d=length(f),L=max(c.r,max(c.g,c.b)),b=clamp(L*1.12,0.,1.);
+  vec3 hue=c/max(L,1e-5);float I=L*uGain,aa=fw*.7+.012;
+  const float RG=.395;
+  float env=1.-smoothstep(RG-aa,RG+aa,d),sb=sqrt(b),an=atan(f.y,f.x);
+  vec3 col;
+  if(kind>2.5){
+    float gr=.82+.18*sin(d*118.);
+    col=env*(hue*I*(.55+.6*(1.-d/RG))*gr+vec3(.05,.007,.005)*(1.25-d/RG));
+  }else{
+    vec2 rc=vec2(mix(.11,.255,sb),mix(.045,.255,sb));
+    vec2 fe=(f-vec2(0.,-.012))/rc;float core=exp(-dot(fe,fe));
+    float fil=(1.-smoothstep(.05,.085+aa,abs(f.x)))*(1.-smoothstep(.011,.03+aa,abs(f.y+.012)));
+    float gw=(.07+.24*b)*(1.-.62*d/RG);
+    if(kind>.5&&kind<1.5){gw*=.8+.3*sin(d*62.);if(ex!=0.){float bm=pow(max(0.,cos(an-ex)),3.);gw*=.4+2.6*bm;core*=.65+.7*bm;}}
+    col=hue*I*(core*1.06+env*gw+fil*(1.5-b)*.7);
+    float sat=1.-min(hue.r,min(hue.g,hue.b));
+    col=mix(col,vec3(dot(col,vec3(.36,.42,.22))),.3*core*b*(1.-sat*sat));
+  }
+  float cup=smoothstep(RG+.004,RG+.045,d)*(1.-smoothstep(.45,.5,d));
+  col+=(hue*I*.13*(.6+.4*sin(an+2.4))+vec3(.016,.015,.018))*cup;
+  vec2 h=(f-vec2(-.135,.15))*vec2(1.,1.55);
+  col+=vec3(.5,.5,.56)*exp(-dot(h,h)/.0022)*env*(.06+.22*b);
+  col+=vec3(.010,.009,.012)*env*(1.-d/RG);
+  return mix(col,hue*I*.42+vec3(.01),smoothstep(.36,.9,fw));
+}
+void main(){
+  vec2 cell=vT*uRes;vec2 id=floor(cell);vec2 f=fract(cell)-.5;
+  float fw=max(fwidth(cell.x),fwidth(cell.y));
+  int k=int(texelFetch(uIdx,ivec2(int(id.x),int(uRes.y)-1-int(id.y)),0).r*255.+.5);
+  vec3 col;
+  if(k>0&&k<254){
+    vec4 G=texelFetch(uLamp,ivec2(k-1,0),0),Lc=texelFetch(uLamp,ivec2(k-1,1),0);
+    vec2 d=vec2(cell.x-G.x,G.y-(uRes.y-cell.y));float s=.395/G.z;vec2 lf=d*s;
+    col=length(lf)<.5?bulb(Lc.rgb,lf,fw*s,G.w,Lc.a):vec3(.0035,.003,.005);
+  }else if(k==255){col=vec3(.005,.0045,.007);}
+  else{
+    vec3 c=texture(uTex,(id+.5)/uRes).rgb;c=pow(c,vec3(2.2));
+    int st=k==254?1:uStyle;
+    if(st==2)col=bulb(c,f,fw,0.,0.);
+    else{
+      float r=.43;
+      if(st==1){float l=dot(c,vec3(.3,.59,.11));l=floor(pow(l,.8)*15.+.5)/15.;c=vec3(1.,.38,.06)*l*1.25;r=.4;}
+      float dd=length(f);
+      float dm=1.0-smoothstep(r-fw*.6-.03,r+fw*.6,dd);
+      float hot=1.0-smoothstep(0.0,r,dd);
+      float far=smoothstep(.38,.95,fw);
+      float m=mix(dm*(.74+.48*hot),.58,far);
+      vec3 unlit=(st==1?vec3(.6,.25,.08):vec3(.52,.5,.62))*.016;
+      col=(c*uGain+unlit)*m;
+    }
+  }
+  vec2 q=vT-vec2(.22,.9);col+=vec3(.010,.010,.014)*(1.0-smoothstep(0.0,.8,length(q)));
+  o=vec4(col,1.0);
+}`;
+const FS_BRIGHT=`in vec2 vT;uniform sampler2D uTex;uniform vec2 uPx;uniform float uThr;out vec4 o;
+void main(){vec3 c=texture(uTex,vT+uPx*vec2(-1,-1)).rgb+texture(uTex,vT+uPx*vec2(1,-1)).rgb+texture(uTex,vT+uPx*vec2(-1,1)).rgb+texture(uTex,vT+uPx*vec2(1,1)).rgb;
+c*=.25;float l=max(c.r,max(c.g,c.b));c*=max(l-uThr,0.0)/max(l,1e-4);o=vec4(c,1.0);}`;
+const FS_BLUR=`in vec2 vT;uniform sampler2D uTex;uniform vec2 uDir;out vec4 o;
+void main(){vec3 s=texture(uTex,vT).rgb*.227027;s+=(texture(uTex,vT+uDir*1.3846).rgb+texture(uTex,vT-uDir*1.3846).rgb)*.316216;
+s+=(texture(uTex,vT+uDir*3.2308).rgb+texture(uTex,vT-uDir*3.2308).rgb)*.070270;o=vec4(s,1.0);}`;
+const FS_COMP=`in vec2 vT;uniform sampler2D uScene;uniform sampler2D uB1;uniform sampler2D uB2;uniform float uBloom;out vec4 o;
+vec3 aces(vec3 x){return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.0,1.0);}
+void main(){vec3 c=texture(uScene,vT).rgb+(texture(uB1,vT).rgb*.8+texture(uB2,vT).rgb*1.2)*uBloom;c=aces(c*1.1);c=pow(c,vec3(1.0/2.2));vec2 q=vT-.5;c*=1.0-dot(q,q)*.5;o=vec4(c,1.0);}`;
+let P_LED,P_BR,P_BL,P_CO,VAO,MTEX,ITEX=null,LTEX=null;
+const FB={};let VW=1,VH=1,DPR=1,RECT={x:0,y:0,w:100,h:56};
+function dataTex(){const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);return t;}
+if(gl){
+  P_LED=prog(VS,FS_LED);P_BR=prog(VS,FS_BRIGHT);P_BL=prog(VS,FS_BLUR);P_CO=prog(VS,FS_COMP);
+  VAO=gl.createVertexArray();MTEX=dataTex();ITEX=dataTex();LTEX=dataTex();gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);
+}
+function mkTarget(w,h){
+  const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texImage2D(gl.TEXTURE_2D,0,HDR?gl.RGBA16F:gl.RGBA8,w,h,0,gl.RGBA,HDR?gl.HALF_FLOAT:gl.UNSIGNED_BYTE,null);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  const f=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,f);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);
+  return {t,f,w,h};
+}
+function pass(p,src,dst,setup){
+  gl.bindFramebuffer(gl.FRAMEBUFFER,dst?dst.f:null);gl.viewport(0,0,dst?dst.w:VW,dst?dst.h:VH);
+  gl.useProgram(p.p);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,src.t);gl.uniform1i(p.u.uTex,0);
+  if(setup)setup(p.u);gl.bindVertexArray(VAO);gl.drawArrays(gl.TRIANGLES,0,3);
+}
+/* the socket map and lamp geometry change only with the layout; the lamps' light is re-sent every frame */
+function uploadLampMaps(){
+  if(!gl)return;gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+  gl.bindTexture(gl.TEXTURE_2D,ITEX);gl.texImage2D(gl.TEXTURE_2D,0,gl.R8,W,H,0,gl.RED,gl.UNSIGNED_BYTE,IDX);
+  const b=new Float32Array(LM.n*8);for(let i=0;i<LM.n;i++){b[i*4]=LM.x[i];b[i*4+1]=LM.y[i];b[i*4+2]=LM.r[i];b[i*4+3]=LM.kind[i];}
+  gl.bindTexture(gl.TEXTURE_2D,LTEX);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA32F,LM.n,2,0,gl.RGBA,gl.FLOAT,b);
+}
+/* upload the matrix canvas and the lamps, then run the LED + bloom passes */
+function present(){
+  if(!gl){g2.fillStyle='#07050b';g2.fillRect(0,0,VW,VH);g2.imageSmoothingEnabled=false;g2.drawImage(mc,RECT.x*DPR,RECT.y*DPR,RECT.w*DPR,RECT.h*DPR);return;}
+  gl.activeTexture(gl.TEXTURE0);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);gl.bindTexture(gl.TEXTURE_2D,LTEX);gl.texSubImage2D(gl.TEXTURE_2D,0,0,1,LM.n,1,gl.RGBA,gl.FLOAT,LM.col);
+  gl.bindTexture(gl.TEXTURE_2D,MTEX);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,mc);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,FB.scene.f);gl.viewport(0,0,VW,VH);gl.clearColor(.02,.015,.03,1);gl.clear(gl.COLOR_BUFFER_BIT);
+  const rx=Math.round(RECT.x*DPR),rw=Math.round(RECT.w*DPR),rh=Math.round(RECT.h*DPR),ry=VH-Math.round(RECT.y*DPR)-rh;
+  gl.viewport(rx,ry,rw,rh);gl.useProgram(P_LED.p);
+  gl.activeTexture(gl.TEXTURE3);gl.bindTexture(gl.TEXTURE_2D,ITEX);gl.uniform1i(P_LED.u.uIdx,3);
+  gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,LTEX);gl.uniform1i(P_LED.u.uLamp,4);
+  gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,MTEX);
+  gl.uniform1i(P_LED.u.uTex,0);gl.uniform2f(P_LED.u.uRes,W,H);gl.uniform1f(P_LED.u.uGain,HDR?2.5:1.6);gl.uniform1i(P_LED.u.uStyle,STYLE_ID);
+  gl.bindVertexArray(VAO);gl.drawArrays(gl.TRIANGLES,0,3);
+  pass(P_BR,FB.scene,FB.a,u=>{gl.uniform2f(u.uPx,1/VW,1/VH);gl.uniform1f(u.uThr,HDR?1.0:.8);});
+  pass(P_BL,FB.a,FB.b,u=>gl.uniform2f(u.uDir,1/FB.a.w,0));pass(P_BL,FB.b,FB.a,u=>gl.uniform2f(u.uDir,0,1/FB.a.h));
+  pass(P_BR,FB.a,FB.c,u=>{gl.uniform2f(u.uPx,1/FB.a.w,1/FB.a.h);gl.uniform1f(u.uThr,0);});
+  pass(P_BL,FB.c,FB.d,u=>gl.uniform2f(u.uDir,2.2/FB.c.w,0));pass(P_BL,FB.d,FB.c,u=>gl.uniform2f(u.uDir,0,2.2/FB.c.h));
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,VW,VH);gl.useProgram(P_CO.p);
+  gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,FB.scene.t);gl.uniform1i(P_CO.u.uScene,0);
+  gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,FB.a.t);gl.uniform1i(P_CO.u.uB1,1);
+  gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,FB.c.t);gl.uniform1i(P_CO.u.uB2,2);
+  gl.uniform1f(P_CO.u.uBloom,HDR?1:.55);gl.bindVertexArray(VAO);gl.drawArrays(gl.TRIANGLES,0,3);gl.activeTexture(gl.TEXTURE0);
+}
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2.5);VW=Math.max(2,Math.round(innerWidth*DPR));VH=Math.max(2,Math.round(innerHeight*DPR));cv.width=VW;cv.height=VH;
+  if(gl){for(const k in FB){gl.deleteTexture(FB[k].t);gl.deleteFramebuffer(FB[k].f);}
+    FB.scene=mkTarget(VW,VH);FB.a=mkTarget(Math.max(1,VW>>2),Math.max(1,VH>>2));FB.b=mkTarget(Math.max(1,VW>>2),Math.max(1,VH>>2));
+    FB.c=mkTarget(Math.max(1,VW>>3),Math.max(1,VH>>3));FB.d=mkTarget(Math.max(1,VW>>3),Math.max(1,VH>>3));}
+  layout();
+}
+/* RECT = where the matrix sits on screen (CSS px). Phones upright: matrix on top, controls below. */
+function layout(){
+  const sa=getComputedStyle($('sa')),st=parseFloat(sa.paddingTop)||0,sb=parseFloat(sa.paddingBottom)||0,sl=parseFloat(sa.paddingLeft)||0,sr=parseFloat(sa.paddingRight)||0;
+  const vw=innerWidth,vh=innerHeight,portrait=touchy&&vh>vw*1.05,bs=document.body.style,asp=W/H;
+  document.body.classList.toggle('portrait',portrait);document.body.classList.toggle('land',touchy&&!portrait);document.body.classList.toggle('embed',EMBED);
+  $('pad').hidden=!touchy;$('keys').hidden=touchy||EMBED;$('turn').hidden=!portrait||EMBED;
+  const gutL=EMBED?Math.max(0,sl):Math.max(16,sl),gutR=EMBED?Math.max(0,sr):Math.max(16,sr),top=EMBED?Math.max(0,st):Math.max(10,st)+46;
+  if(portrait){
+    const w=vw-gutL-gutR,h=w/asp;RECT={x:gutL,y:top+4,w,h};
+    bs.setProperty('--stick',Math.min(156,vw*.36)+'px');bs.setProperty('--b',Math.min(64,vw*.16)+'px');
+    bs.setProperty('--padTop',(RECT.y+h+26)+'px');$('turn').style.top=(RECT.y+h+8)+'px';
+  }else{
+    const bottom=EMBED?Math.max(0,sb):touchy?Math.max(8,sb)+4:Math.max(10,sb)+30,aw=vw-gutL-gutR,ah=vh-top-bottom;let w=aw,h=w/asp;if(h>ah){h=ah;w=h*asp;}
+    RECT={x:gutL+(aw-w)/2,y:top+(ah-h)/2,w,h};
+    if(touchy){bs.setProperty('--stick',Math.min(140,vh*.34)+'px');bs.setProperty('--b',Math.min(56,vh*.13)+'px');}
+  }
+}
+/* =====================================================================================
+   5. AUDIO — tiny synth: tone() and noise() voices into a compressor, plus reverb and delay sends.
+      Nothing plays until the first user gesture calls audioInit().
+   ===================================================================================== */
+const AU={ctx:null,out:null,mus:null,sfx:null,rev:null,dly:null,noise:null,muted:store.get('hd-mute','0')==='1',next:0,step:0,track:null,want:null};
+const mtof=m=>440*Math.pow(2,(m-69)/12),now=()=>AU.ctx?AU.ctx.currentTime:0;
+function audioInit(){
+  try{
+    if(!AU.ctx){
+      const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const c=new C();AU.ctx=c;
+      const comp=c.createDynamicsCompressor();comp.threshold.value=-12;comp.ratio.value=5;comp.attack.value=.003;comp.release.value=.15;comp.connect(c.destination);
+      AU.out=c.createGain();AU.out.gain.value=AU.muted||ARC.muted?0:.62;AU.out.connect(comp);
+      AU.mus=c.createGain();AU.mus.gain.value=.26;AU.mus.connect(AU.out);
+      AU.sfx=c.createGain();AU.sfx.gain.value=.85;AU.sfx.connect(AU.out);
+      const len=c.sampleRate*2.2|0,ir=c.createBuffer(2,len,c.sampleRate);
+      for(let ch=0;ch<2;ch++){const d=ir.getChannelData(ch);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3.2);}
+      const cvn=c.createConvolver();cvn.buffer=ir;AU.rev=c.createGain();AU.rev.gain.value=.5;AU.rev.connect(cvn);cvn.connect(AU.out);
+      const dl=c.createDelay(1);dl.delayTime.value=.3;const fb=c.createGain();fb.gain.value=.32;const dlo=c.createGain();dlo.gain.value=.35;
+      dl.connect(fb);fb.connect(dl);dl.connect(dlo);dlo.connect(AU.mus);AU.dly=dl;
+      const nb=c.createBuffer(1,c.sampleRate,c.sampleRate),nd=nb.getChannelData(0);for(let i=0;i<nd.length;i++)nd[i]=Math.random()*2-1;AU.noise=nb;
+      AU.next=c.currentTime+.05;busLevel();
+    }
+    if(AU.ctx.state==='suspended')AU.ctx.resume();
+  }catch(e){}
+}
+function setVolume(){if(AU.out)AU.out.gain.value=AU.muted||ARC.muted?0:.62;}
+function env(gn,t,a,peak,d){gn.gain.setValueAtTime(.0001,t);gn.gain.exponentialRampToValueAtTime(Math.max(.0002,peak),t+a);gn.gain.exponentialRampToValueAtTime(.0001,t+a+d);}
+/* tone(freq, start, dur, wave, vol, bus, slideTo, lowpassCut, reverbSend, attack) */
+function tone(f,t,dur,type,vol,bus,slide,cut,rv,att){
+  const c=AU.ctx;if(!c||AU.muted)return;const o=c.createOscillator();o.type=type||'square';o.frequency.setValueAtTime(f,t);
+  if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(20,slide),t+dur);
+  const gn=c.createGain();env(gn,t,att||.005,vol||.1,dur);let n=o;
+  if(cut){const fl=c.createBiquadFilter();fl.type='lowpass';fl.frequency.value=cut;fl.Q.value=3;o.connect(fl);n=fl;}
+  n.connect(gn);gn.connect(bus||AU.sfx);if(rv){const s=c.createGain();s.gain.value=rv;gn.connect(s);s.connect(AU.rev);}o.start(t);o.stop(t+dur+.08);
+}
+/* noise(start, dur, vol, filterFrom, filterTo, filterType, bus, reverbSend, Q) */
+function noise(t,dur,vol,f0,f1,type,bus,rv,q){
+  const c=AU.ctx;if(!c||AU.muted)return;const s=c.createBufferSource();s.buffer=AU.noise;s.loop=true;
+  const fl=c.createBiquadFilter();fl.type=type||'lowpass';fl.Q.value=q||1;fl.frequency.setValueAtTime(f0||4000,t);fl.frequency.exponentialRampToValueAtTime(Math.max(30,f1||200),t+dur);
+  const gn=c.createGain();env(gn,t,.003,vol,dur);s.connect(fl);fl.connect(gn);gn.connect(bus||AU.sfx);if(rv){const r=c.createGain();r.gain.value=rv;gn.connect(r);r.connect(AU.rev);}
+  s.start(t,Math.random()*.5);s.stop(t+dur+.08);
+}
+/* sound effects: a ticket wheel is a box of relays, so most sounds are mechanical. Rate-limited below. */
+const SFX={
+  select(){tone(990,now(),.05,'square',.04);},
+  confirm(){const t=now();tone(880,t,.06,'square',.05);tone(1320,t+.06,.18,'square',.05,AU.sfx,0,0,.2);},
+  /* one step of the wheel's stepping relay, scheduled at its exact instant t: a bright contact click, a bounce a
+     few ms later, and (on slow steps) the armature's thock. v (0..1) = how long the step dwelt: slow steps hit harder. */
+  stepAt(t,v,p){noise(t,.006+.01*v,.045+.11*v,(5600-1900*v)*p,2000*p,'bandpass',0,.015+.05*v,2.6);
+    noise(t+.003+.004*Math.random(),.005,.02+.045*v,4600*p,1900,'bandpass',0,0,2.4);if(v>.25)tone(150*p,t,.025+.05*v,'sine',.03+.08*v,AU.sfx,55);},
+  /* the wheel seats in its detent: a heavy contactor */
+  clunkAt(t){noise(t,.05,.3,2600,160,'lowpass',0,.1);tone(88,t,.2,'sine',.32,AU.sfx,34);noise(t+.01,.012,.12,5000,2000,'bandpass',0,0,2);},
+  relay(v=1){const t=now();noise(t,.010,.11*v,6200,2400,'bandpass',0,.03,2.4);noise(t+.006+Math.random()*.004,.006,.05*v,5200,2000,'bandpass',0,0,2.4);tone(150*rnd(.92,1.08),t,.035,'sine',.07*v,AU.sfx,60);},
+  /* the drive motor winding up under the accelerating clicks */
+  motor(d){const t=now();tone(55,t,d+.25,'sawtooth',.03,AU.sfx,170,420,.05,.08);noise(t,d+.2,.03,500,2800,'bandpass',0,.08,4);},
+  /* payout chimes: one bar per ticket band */
+  ding(n=1){const t=now();for(let i=0;i<n;i++){const f=[1319,1568,1976][i%3];tone(f,t+i*.085,.55,'sine',.06,AU.sfx,0,0,.35);tone(f*2.76,t+i*.085,.16,'sine',.016);}},
+  /* an alarm bell: a struck-bar partial set re-struck at 20 Hz */
+  bell(dur=1){const t=now();for(let k=0;k*.05<dur;k++){const tt=t+k*.05,a=.035*(1-k*.05/dur*.6);tone(2480,tt,.09,'triangle',a,AU.sfx,0,0,.15);tone(2480*2.32,tt,.05,'sine',a*.4);}},
+  /* the jackpot siren: a rising-falling saw through a filter, four cycles */
+  siren(){const t=now();for(let k=0;k<4;k++){tone(470,t+k*.5,.25,'sawtooth',.045,AU.sfx,1180,2800,.15);tone(1180,t+k*.5+.25,.25,'sawtooth',.045,AU.sfx,470,2800,.15);}},
+  fanfare(){const t=now();[0,4,7,12,7,12,16].forEach((n,i)=>tone(mtof(67+n),t+i*.085,.26,'square',.045,AU.sfx,0,3200,.3));},
+  /* so close: a two-note sigh */
+  aww(){const t=now();tone(415,t,.2,'square',.035,AU.sfx,392,1700,.2);tone(370,t+.22,.55,'square',.035,AU.sfx,311,1300,.25);},
+  /* super: a filter sweep and a rising saw */
+  sweep(){const t=now();noise(t,1.1,.07,300,7000,'bandpass',0,.3,2.2);tone(110,t,1.1,'sawtooth',.045,AU.sfx,880,2600,.3);tone(220,t+.5,.6,'square',.03,AU.sfx,1760,3000,.3);},
+  /* the ticket dispenser: a feed click and a soft motor tick per ticket */
+  ticket(){const t=now();noise(t,.014,.07,3400,1600,'bandpass',0,0,2);tone(820,t,.015,'square',.016,AU.sfx,0,1800);},
+  /* the jackpot counter's number wheels */
+  odo(){noise(now(),.005,.024,6500,3800,'bandpass',0,0,3);},
+  /* pressed before the wheel is up to speed */
+  dud(){const t=now();tone(160,t,.09,'square',.05,AU.sfx,95,600);noise(t,.02,.05,1500,500,'lowpass');},
+  /* a whole board of filaments switching on at once: the transformer groans */
+  thunk(){const t=now();tone(55,t,.55,'sine',.3,AU.sfx,40);noise(t,.09,.2,1200,100,'lowpass',0,.15);},
+  chase(){noise(now(),.006,.026,7200,3200,'bandpass',0,0,3);},
+  win(){const t=now();[0,4,7,12,16].forEach((n,i)=>tone(mtof(72+n),t+i*.09,.32,'square',.05,AU.sfx,0,0,.3));}
+};
+{const lim={stepAt:0,clunkAt:0,ticket:.026,odo:.03,relay:.02,chase:.035,ding:.05,bell:.1};const last={};for(const k of Object.keys(SFX)){const f=SFX[k],m=k in lim?lim[k]:.02;SFX[k]=(...a)=>{if(!AU.ctx)return;const t=now();if(m>0&&t-(last[k]||-9)<m)return;last[k]=t;f(...a);};}}
+/* optional announcer through the browser's speech engine */
+let VOICE=store.get('hd-voice','1')==='1';
+function say(txt,pitch=.6,rate=.95){if(AU.muted||ARC.muted||!VOICE)return;try{const s=window.speechSynthesis;if(!s)return;s.cancel();const u=new SpeechSynthesisUtterance(txt);u.pitch=pitch;u.rate=rate;
+  const vs=s.getVoices?s.getVoices():[];const v=vs.find(v=>/^en/i.test(v.lang));if(v)u.voice=v;s.speak(u);}catch(e){}}
+/* ---- step-sequencer music: one string per instrument, 16 steps per bar, chords by scale degree ----
+   bass: R=root O=octave F=fifth T=third  .=rest   lead: digits/letters = scale degree (1..g), '-' = hold
+   kick/snare/hat: x = hit.  prog = scale degree of each bar's chord.  arp '8'/'16' = arpeggio speed. */
+const SCALES={minor:[0,2,3,5,7,8,10],phryg:[0,1,3,5,7,8,10],harm:[0,2,3,5,7,8,11],dorian:[0,2,3,5,7,9,10],major:[0,2,4,5,7,9,11],penta:[0,3,5,7,10],mixo:[0,2,4,5,7,9,10]};
+function sdeg(tr,d){const sc=SCALES[tr.scale],n=sc.length,o=Math.floor(d/n),i=((d%n)+n)%n;return sc[i]+12*o;}
+const LEADCH='123456789abcdefg';
+const TRACKS={
+  /* attract: a fairground spin in D mixolydian with a whirling 16th arpeggio */
+  title:{bpm:116,root:50,scale:'mixo',prog:[0,3,4,3],bass:'R..OF..OR..OF.T.',lead:'5.6.5.3.1-2-3---5.6.5.3.2-1-----',kick:'x.......x.......',snare:'....x.......x...',hat:'..x...x...x...x.',arp:'16',pad:1,lv:.026},
+  /* play: A minor drive, sparse so the relay clicks carry the rhythm; its tempo climbs with the speed tier */
+  play:{bpm:118,root:45,scale:'minor',prog:[0,5,3,4],bass:'R.R.O.R.R.R.O.F.',lead:'8.......7.......5.......3.5.7...',kick:'x...x...x...x...',snare:'....x.......x...',hat:'x.x.x.x.x.x.x.x.',arp:'16',pad:1,lv:.02},
+  /* the super stop: E harmonic minor, double time */
+  super:{bpm:150,root:40,scale:'harm',prog:[0,0,5,4],bass:'R.O.R.O.R.O.F.O.',lead:'1.2.3.5.7.5.3.2.1.2.3.5.8---7---',kick:'x..x..x.x..x..x.',snare:'....x.......x..x',hat:'xxxxxxxxxxxxxxxx',arp:'16',pad:1,lv:.024},
+  /* jackpot: bright C major fanfare */
+  win:{bpm:150,root:48,scale:'major',prog:[0,3,4,0],bass:'R.O.R.O.F.O.R.O.',lead:'1-3-5-8---5-8-a-8-------5-3-5-8-',kick:'x...x...x...x...',snare:'....x.......x...',hat:'xxxxxxxxxxxxxxxx',arp:'16',pad:1,lv:.035},
+  /* results: unhurried, warm */
+  over:{bpm:92,root:43,scale:'major',prog:[0,3,4,0],bass:'R.......F.......',lead:'3---5---8-------7---5---3-------',kick:'x.......x.......',snare:'................',hat:'....x.......x...',pad:1,lv:.022}
+};
+function setTrack(name){AU.want=name;}
+function musicTick(paused){
+  const c=AU.ctx;if(!c||c.state!=='running')return;
+  if(AU.want!==AU.track){AU.track=AU.want;AU.step=0;AU.next=Math.max(AU.next,c.currentTime+.05);}
+  const tr=TRACKS[AU.track];if(!tr)return;
+  const sd=60/tr.bpm/4;if(AU.next<c.currentTime)AU.next=c.currentTime+.03;
+  while(AU.next<c.currentTime+.15){
+    const st=AU.step,s=st&15,bar=(st>>4)%tr.prog.length,d=tr.prog[bar],t=AU.next,R=tr.root;
+    if(!AU.muted&&!ARC.muted&&!paused){
+      const bc=tr.bass[s];
+      if(bc!=='.'){const n=R+sdeg(tr,d)+(bc==='O'?12:bc==='F'?sdeg(tr,d+4)-sdeg(tr,d):bc==='T'?sdeg(tr,d+2)-sdeg(tr,d):0);tone(mtof(n),t,sd*1.7,'sawtooth',.13,AU.mus,0,700);}
+      if(tr.kick[s]==='x'){const o=c.createOscillator();o.type='sine';o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(42,t+.12);const gn=c.createGain();env(gn,t,.002,.45,.16);o.connect(gn);gn.connect(AU.mus);o.start(t);o.stop(t+.22);}
+      if(tr.snare[s]==='x'){noise(t,.14,.24,2800,900,'bandpass',AU.mus);tone(190,t,.06,'triangle',.08,AU.mus,120);}
+      if(tr.hat[s]==='x')noise(t,.025,.06,9000,7000,'highpass',AU.mus);
+      const lc=tr.lead[st%32];
+      if(lc&&lc!=='.'&&lc!=='-'&&tr.lv){let len=1;while(tr.lead[(st+len)%32]==='-'&&len<16)len++;const dg=LEADCH.indexOf(lc);
+        const o=c.createOscillator();o.type='square';o.frequency.setValueAtTime(mtof(R+24+sdeg(tr,dg)),t);const fl=c.createBiquadFilter();fl.type='lowpass';fl.frequency.value=2600;
+        const gn=c.createGain();env(gn,t,.01,tr.lv,sd*len*.95);o.connect(fl);fl.connect(gn);gn.connect(AU.mus);gn.connect(AU.dly);o.start(t);o.stop(t+sd*len+.1);}
+      if(tr.arp){const ev=tr.arp==='16'?1:2;if(s%ev===0){const k=(s/ev|0)%4,deg=[0,2,4,7][k];tone(mtof(R+12+sdeg(tr,d+deg)),t,sd*ev*.9,'triangle',.035,AU.mus);}}
+      if(tr.pad&&s===0){for(const k of [0,2,4]){const f=mtof(R+12+sdeg(tr,d+k));tone(f,t,sd*15,'sawtooth',.018,AU.mus,0,900,0,sd*4);tone(f*1.006,t,sd*15,'sawtooth',.014,AU.mus,0,900,0,sd*4);}}
+    }
+    AU.next+=sd;AU.step++;
+  }
+}
+/* the music steps back while the wheel brakes, so every click of the relay is heard */
+function duck(on){if(AU.mus&&AU.ctx)AU.mus.gain.setTargetAtTime(on?.09:.26,AU.ctx.currentTime,on?.04:.25);}
+function busLevel(){if(AU.sfx&&AU.ctx)AU.sfx.gain.setTargetAtTime(S.mode==='title'?.45:.85,AU.ctx.currentTime,.08);}
+/* =====================================================================================
+   6. INPUT — one snapshot per simulation tick from keyboard, mouse/pen, touch stick + buttons, gamepads.
+      LATCH holds keys pressed since the last tick so very quick taps are never lost.
+      CYCLONE also keeps the exact instant of every STOP press (PQ): the wheel is judged at the event's own
+      timestamp, never at the tick or frame that happens to process it.
+   ===================================================================================== */
+const KEY={},LATCH=new Set();
+const GAMEKEYS=new Set(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Space','Tab']);
+const PRIMARY=new Set(['Space','Enter','NumpadEnter','KeyZ','KeyJ']);
+const PQ=[];let MANUAL=false;           // PQ: press instants (ms, performance.now() timebase) not yet consumed
+function pressEvt(ts){const n=performance.now();if(!MANUAL&&(!(ts>0)||ts>n+5||ts<n-1500))ts=n;PQ.push(ts);if(PQ.length>8)PQ.shift();}
+addEventListener('keydown',e=>{if(GAMEKEYS.has(e.code))e.preventDefault();KEY[e.code]=true;if(e.repeat)return;LATCH.add(e.code);if(PRIMARY.has(e.code))pressEvt(e.timeStamp);audioInit();});
+addEventListener('keyup',e=>{KEY[e.code]=false;});
+addEventListener('blur',()=>{for(const k in KEY)KEY[k]=false;PTR.down=false;});
+const K=c=>KEY[c]||LATCH.has(c);
+/* pointer in matrix pixels (works for mouse, pen and touch on the matrix itself) */
+const PTR={x:0,y:0,on:false,down:false,pressed:false,released:false,last:0,id:null,touch:false};
+const toM=e=>[(e.clientX-RECT.x)/RECT.w*W,(e.clientY-RECT.y)/RECT.h*H];
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('pointerdown',e=>{e.preventDefault();audioInit();[PTR.x,PTR.y]=toM(e);PTR.on=true;PTR.down=true;PTR.pressed=true;PTR.id=e.pointerId;PTR.touch=e.pointerType!=='mouse';PTR.last=performance.now();
+  if(e.button===0||e.pointerType!=='mouse')pressEvt(e.timeStamp);try{cv.setPointerCapture(e.pointerId);}catch(_){}});
+addEventListener('pointermove',e=>{if(e.pointerType==='mouse'||e.pointerId===PTR.id){[PTR.x,PTR.y]=toM(e);PTR.on=true;PTR.last=performance.now();}});
+addEventListener('pointerup',e=>{if(e.pointerId===PTR.id||e.pointerType==='mouse'){if(PTR.down)PTR.released=true;PTR.down=false;}});
+addEventListener('pointercancel',e=>{if(e.pointerId===PTR.id){PTR.down=false;PTR.released=true;}});
+function pads(){try{const gp=navigator.getGamepads?navigator.getGamepads():[];const out=[];for(const p of gp)if(p&&p.connected!==false)out.push(p);return out;}catch(e){return [];}}
+const TS={x:0,y:0,on:false,A:false,B:false};
+function stick(el,kn,cb){
+  let id=null,cx=0,cy=0;
+  const set=(x,y)=>{const dx=x-cx,dy=y-cy,r=el.clientWidth*.5,l=Math.hypot(dx,dy),k=l>r*.62?r*.62/l:1;kn.style.transform=`translate(${dx*k}px,${dy*k}px)`;const m=Math.min(1,l/(r*.62));cb(l>2?dx/l*m:0,l>2?dy/l*m:0,true);};
+  el.addEventListener('pointerdown',e=>{e.preventDefault();audioInit();id=e.pointerId;const r=el.getBoundingClientRect();cx=r.left+r.width/2;cy=r.top+r.height/2;try{el.setPointerCapture(id);}catch(_){}set(e.clientX,e.clientY);});
+  el.addEventListener('pointermove',e=>{if(e.pointerId===id)set(e.clientX,e.clientY);});
+  const end=e=>{if(e.pointerId!==id)return;id=null;kn.style.transform='';cb(0,0,false);};
+  el.addEventListener('pointerup',end);el.addEventListener('pointercancel',end);el.addEventListener('lostpointercapture',end);
+}
+stick($('stL'),$('knL'),(x,y,on)=>{TS.x=x;TS.y=y;TS.on=on;});
+for(const [bid,k] of [['bA','A'],['bB','B']]){
+  const el=$(bid);
+  el.addEventListener('pointerdown',e=>{e.preventDefault();audioInit();TS[k]=true;el.classList.add('on');try{el.setPointerCapture(e.pointerId);}catch(_){}});
+  const up=()=>{TS[k]=false;el.classList.remove('on');};
+  el.addEventListener('pointerup',up);el.addEventListener('pointercancel',up);el.addEventListener('lostpointercapture',up);
+}
+/* the control snapshot. x,y in -1..1 ; a = primary ; b = secondary ; ok/back for menus */
+function readCtl(){
+  const o={x:0,y:0,a:false,b:false,start:false,ok:false,back:false,pause:false,u:false,d:false,l:false,r:false};
+  if(K('ArrowLeft')||K('KeyA'))o.x-=1;if(K('ArrowRight')||K('KeyD'))o.x+=1;if(K('ArrowUp')||K('KeyW'))o.y-=1;if(K('ArrowDown')||K('KeyS'))o.y+=1;
+  if(K('Space')||K('KeyJ')||K('KeyZ'))o.a=true;if(K('ShiftLeft')||K('ShiftRight')||K('KeyK')||K('KeyX'))o.b=true;
+  if(TS.on&&(TS.x||TS.y)){o.x=TS.x;o.y=TS.y;}if(TS.A)o.a=true;if(TS.B)o.b=true;
+  for(const p of pads()){
+    const b=k=>!!(p.buttons[k]&&p.buttons[k].pressed),lx=p.axes[0]||0,ly=p.axes[1]||0;
+    if(Math.hypot(lx,ly)>.2){o.x=lx;o.y=ly;}if(b(14))o.x=-1;if(b(15))o.x=1;if(b(12))o.y=-1;if(b(13))o.y=1;
+    if(b(0)||b(7))o.a=true;if(b(1)||b(6))o.b=true;if(b(9))o.start=true;if(b(0))o.ok=true;if(b(1))o.back=true;
+  }
+  const l=Math.hypot(o.x,o.y);if(l>1){o.x/=l;o.y/=l;}
+  o.u=o.y<-.5;o.d=o.y>.5;o.l=o.x<-.5;o.r=o.x>.5;
+  o.ok=o.ok||K('Enter')||K('NumpadEnter')||K('Space')||K('KeyJ')||TS.A;o.back=o.back||K('Escape');o.pause=K('Escape')||K('KeyP')||o.start;
+  return o;
+}
+function endInputFrame(){LATCH.clear();PTR.pressed=false;PTR.released=false;}
+/* gamepads have no events: poll once per frame and stamp a STOP press with the pad's own sample time */
+const GPP=[];
+function padPresses(ts){const ps=pads();for(let i=0;i<ps.length;i++){const p=ps[i],b=p.buttons,on=!!((b[0]&&b[0].pressed)||(b[7]&&b[7].pressed));
+  if(on&&!GPP[i]){const pt=p.timestamp;pressEvt(pt>0&&Math.abs(pt-ts)<250?pt:ts);}GPP[i]=on;}}
+/* =====================================================================================
+   7. ARCADE BRIDGE — the 3D arcade loads cabinets in an iframe with ?embed=1.
+      game -> arcade:  {src:'hyperdot',type:'ready'|'score'|'over'|'exit', id, ...}
+      arcade -> game:  {src:'hyperdot-arcade',cmd:'start'|'pause'|'resume'|'attract'|'mute'|'unmute'}
+      Same origin, so the arcade may also sample #gl directly for the cabinet screen in the 3D world.
+   ===================================================================================== */
+const ARC={muted:false,last:0,
+  post(type,data){if(window.parent===window)return;try{window.parent.postMessage(Object.assign({src:'hyperdot',type,id:CAB.id},data||{}),'*');}catch(e){}},
+  score(s){const t=performance.now();if(t-this.last>250){this.last=t;this.post('score',{score:s});}},
+  over(score,tickets){this.post('over',{score,tickets:CAB.tickets?Math.max(0,Math.round(tickets||0)):0});},
+  exit(){this.post('exit');}
+};
+addEventListener('message',e=>{const m=e.data;if(!m||m.src!=='hyperdot-arcade')return;
+  if(m.cmd==='start'){audioInit();APP_start();}
+  else if(m.cmd==='pause')setPause(true);
+  else if(m.cmd==='resume')setPause(false);
+  else if(m.cmd==='attract')APP_attract();
+  else if(m.cmd==='mute'){ARC.muted=true;setVolume();}
+  else if(m.cmd==='unmute'){ARC.muted=false;setVolume();}
+});
+window.HYPERDOT_GAME={id:CAB.id,title:CAB.title,tickets:CAB.tickets,version:1};
+
+/* =====================================================================================
+   8. SMALL DRAWING HELPERS on RBUF (fast) — rect, disc with soft dithered edge, additive glow, line
+   ===================================================================================== */
+const BAY4=new Float32Array([0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5].map(v=>(v+.5)/16));
+function clear(c){RBUF.fill(c);}
+function rect(x,y,w,h,c){x=Math.round(x);y=Math.round(y);w=Math.round(w);h=Math.round(h);const x0=Math.max(0,x),x1=Math.min(W,x+w);for(let j=Math.max(0,y);j<Math.min(H,y+h);j++)RBUF.fill(c,j*W+x0,j*W+x1);}
+function px(x,y,c){x|=0;y|=0;if(x>=0&&y>=0&&x<W&&y<H)RBUF[y*W+x]=c;}
+function addPx(i,r,g2,b){const c=RBUF[i],R=(c&255)+r,G=((c>>>8)&255)+g2,B=((c>>>16)&255)+b;RBUF[i]=(0xff000000|((B>255?255:B)<<16)|((G>255?255:G)<<8)|(R>255?255:R))>>>0;}
+function disc(cx,cy,r,c,alpha=1){const y0=Math.max(0,Math.floor(cy-r)),y1=Math.min(H-1,Math.ceil(cy+r));for(let y=y0;y<=y1;y++){const dy=y+.5-cy,br=(y&3)<<2;for(let x=Math.max(0,Math.floor(cx-r));x<=Math.min(W-1,Math.ceil(cx+r));x++){const dx=x+.5-cx,d=(dx*dx+dy*dy)/(r*r);if(d<1&&BAY4[br|(x&3)]<alpha*(1-d*d*.6))RBUF[y*W+x]=c;}}}
+function glow(cx,cy,r,col,k=1){const y0=Math.max(0,Math.floor(cy-r)),y1=Math.min(H-1,Math.ceil(cy+r));for(let y=y0;y<=y1;y++){const dy=(y+.5-cy)/r;for(let x=Math.max(0,Math.floor(cx-r));x<=Math.min(W-1,Math.ceil(cx+r));x++){const dx=(x+.5-cx)/r,d=dx*dx+dy*dy;if(d<1){const f=(1-d)*(1-d)*k;addPx(y*W+x,col[0]*f,col[1]*f,col[2]*f);}}}}
+function line(x0,y0,x1,y1,c){const n=Math.max(1,Math.round(Math.max(Math.abs(x1-x0),Math.abs(y1-y0))));for(let k=0;k<=n;k++)px(x0+(x1-x0)*k/n,y0+(y1-y0)*k/n,c);}
+
+/* =====================================================================================
+   9. CYCLONE — the ticket wheel.
+      The cabinet face is a fine LED panel (the house matrix: DMD counter, legends, HUD) with real lamps
+      mounted on it. No lamp is drawn: the game is a lamp CONTROLLER that sets each lamp's drive voltage;
+      the FILAMENT model integrates every lamp's temperature at ~1 kHz; the LED shader renders each lamp
+      from the light its filament gives off. So nothing on the ring is a painted gradient: the racing
+      light's tail is filaments still cooling, and it lengthens with speed all by itself.
+      The light itself is a stepping relay whose position is an analytic function of game time (9.3),
+      judged at the exact instant of the press, and braked by a schedule fixed at that instant.
+   ===================================================================================== */
+
+/* ---------- 9.1 FILAMENTS (shared physics with SKY STACK, integrated in display time here) ----------
+   u = filament temperature as a fraction of the rated 2900 K; the room is 300 K (u = .105).
+   Steady state: electrical power V^2/R(T), with tungsten's R ~ T^1.2, balances radiation ~ T^4, so
+   u_eq = V^(2/5.2). The approach is a first-order lag, asymmetric for physical reasons:
+     heating  is forced by the supply (cold tungsten has 1/15 of its hot resistance: a big inrush), so it is a
+              short constant tau_heat, solved exactly per step;
+     cooling  is radiation alone, whose rate falls as T^3 as the filament cools (linearised Stefan-Boltzmann):
+              tau_cool/u^3, which stretches into the long dim orange afterglow of a lamp switched off.
+   Light and colour come from the temperature: intensity from Planck's law at 580 nm, chromaticity from a
+   blackbody fit, white-balanced so a lamp at full voltage reads warm white. Visible output rises like T^8,
+   which is why a dimmed or barely-warmed lamp is so much more orange than it is darker.
+   The ring's lamps idle on a small PREHEAT current (as real chaser boards do): the filament sits at a dull
+   red ~1800 K, warms faster when the relay reaches it, and cools back towards that ember, not to black. */
+const U0=.105,TREF=2900,U_DARK=.40,SAG=.03;
+const UEQN=300,UEQS=200,UEQ=new Float32Array(UEQN);for(let i=0;i<UEQN;i++)UEQ[i]=Math.max(U0,Math.pow(i/UEQS,1/2.6));
+const LUTN=1024,UMAX=1.08,LUTS=(LUTN-1)/(UMAX-U0);
+const RINV=new Float32Array(LUTN);for(let k=0;k<LUTN;k++)RINV[k]=Math.pow(U0+k/LUTS,-1.2);   // current ~ V/R(T)
+/* glass: linear transmission + a gain that buys back what tinted glass absorbs (blue glass eats most of a warm filament) */
+const GLS=[[1,1,1,1],[1,.40,.045,1.2],[1,.022,.012,1.45],[.035,1,.10,1.6],[.03,.16,1,2.6],[1,.72,.24,1.08],[1,.09,.36,1.35],[.03,.5,1,2.1],[.5,.07,1,2.3]];
+const G_CLR=0,G_AMB=1,G_RED=2,G_GRN=3,G_BLU=4,G_GLD=5,G_PNK=6,G_CYN=7,G_VIO=8;
+const LUTF=new Float32Array(GLS.length*LUTN*3),LUML=new Float32Array(GLS.length*LUTN);   // linear light (floats: overdrive stays above 1) + its peak
+(()=>{
+  const pl=(l,T)=>1/(Math.pow(l,5)*(Math.exp(14388/(l*T))-1));          // Planck radiance, l in um (constants cancel in ratios)
+  const chroma=T=>{const t=T/100,cg=t>1?clamp(99.4708*Math.log(t)-161.1196,0,255):0,cb=T<=1900?0:clamp(138.5177*Math.log(t-10)-305.0448,0,255);
+    return [1,Math.pow(cg/255,2.2),Math.pow(cb/255,2.2)];};
+  const c0=chroma(TREF),WB=[1,Math.pow(225/255,2.2)/c0[1],Math.pow(182/255,2.2)/c0[2]],ref=pl(.58,TREF),EXPO=.86;
+  for(let k=0;k<LUTN;k++){const T=(U0+k/LUTS)*TREF,I=pl(.58,T)/ref*EXPO,ch=chroma(T);
+    for(let q=0;q<GLS.length;q++){const G=GLS[q],o=(q*LUTN+k)*3;let mx=0;for(let c=0;c<3;c++){const v=Math.min(1.8,I*ch[c]*WB[c]*G[c]*G[3]);LUTF[o+c]=v;if(v>mx)mx=v;}LUML[q*LUTN+k]=mx;}}
+})();
+/* drive levels (fraction of rated voltage; light ~ drive^3.4, so these are far apart in brightness) */
+const D_PRE=.30,D_EMB=.40,D_DIM=.56,D_MID=.72,D_ON=.86,D_HOT=1,D_FL=1.13,D_BR=1;
+function filStep(u,d,kh,kc,V){
+  if(d>0){let q=(d*V*UEQS+.5)|0;if(q>=UEQN)q=UEQN-1;const ue=UEQ[q];
+    if(ue>=u)return u+(ue-u)*kh;                               // exact exponential step: stable at any dt
+    const x=kc*u*u*u;return u+(ue-u)*x/(1+.5*x);}              // radiative cooling, Pade(1,1) of 1-e^-x
+  if(u<U_DARK)return U0;                                         // below ~1160 K nothing visible is emitted: let it rest
+  const x=kc*u*u*u;return u+(U0-u)*x/(1+.5*x);
+}
+
+/* ---------- 9.2 THE LAMPS AND THE CABINET FACE ----------
+   40 ring lamps (0 = the jackpot beacon at the top, numbered clockwise), five STOPS lamps, five SPEED lamps,
+   the STOP push-button and a marquee of small bulbs round the edge. Positions are in panel dots and are NOT
+   snapped to the grid. The layout is rebuilt per panel pitch; lamps keep their physical size on screen. */
+const RING=40,KSTEP=5,SUPER_LAMP=RING/2,N_IND=5;
+/* tickets per lamp, mirrored about the jackpot: 10 and 5 beside it, 3s and a 4 scattered, the SUPER lamp opposite */
+const VAL=new Int16Array(RING);
+{const half=[10,10,5,3,1,2,1,3,1,2,1,4,1,2,1,3,1,2,1,2,5];for(let k=0;k<=RING/2;k++){VAL[k]=half[k];VAL[(RING-k)%RING]=half[k];}}
+const glassOf=k=>k===0?G_RED:k===SUPER_LAMP?G_PNK:VAL[k]>=10?G_GLD:VAL[k]>=5?G_GRN:VAL[k]>=3?G_CYN:G_CLR;
+const LBC=k=>k===SUPER_LAMP?[255,90,210]:VAL[k]>=10?[255,196,60]:VAL[k]>=5?[110,255,110]:VAL[k]>=3?[90,220,255]:[255,226,196];
+const LM={n:0,x:null,y:null,r:null,kind:null,glass:null,th:null,tc:null,u:null,col:null,lum:null,ex:null};
+let DRV=null,CD=null,COV=null,KH=null,KC=null,IDX=null;
+let L_STOP=0,L_SPD=0,L_BTN=0,L_MQ=0,N_MQ=0;
+const LY={};let LBL=[],RAIL_I=null,RAIL_L=null,RAIL_W=null;
+const PITCH=new Float32Array(RING);{const r=mulberry(7);for(let k=0;k<RING;k++)PITCH[k]=.9+r()*.2;}   // each relay contact rings a little differently
+function rrDist(x,y,D){const qx=Math.abs(x-D.cx)-(D.w/2-D.cr),qy=Math.abs(y-D.cy0)-(D.h/2-D.cr);return Math.hypot(Math.max(qx,0),Math.max(qy,0))+Math.min(Math.max(qx,qy),0)-D.cr;}
+function layoutCab(){
+  const L=[],add=(x,y,r,kind,glass,th,tc)=>{L.push([x,y,r,kind,glass,th,tc]);return L.length-1;};
+  const cx=W/2,cy=H/2,R=H*.405,sp=TAU*R/RING,re=sp*.305,rc=re*.5/.395;
+  Object.assign(LY,{cx,cy,R,re,rc});
+  /* the ring: preheated, so they warm in ~6 ms (the lit bulb out-glows the one behind it ~13 ms after the relay contact
+     the judge uses), but their heavy filaments cool slowly: that slow fall is the racing light's tail */
+  for(let k=0;k<RING;k++){const a=-Math.PI/2+k*TAU/RING;add(cx+R*Math.cos(a),cy+R*Math.sin(a),k?re:re*1.45,k?0:1,glassOf(k),k?.006:.02,k?.26:.36);}
+  /* the marquee: corners red, the rest alternating amber and clear */
+  const m=H*.032,ms=H*.062,mr=H*.0118,nx=Math.max(2,Math.round((W-2*m)/ms)),ny=Math.max(2,Math.round((H-2*m)/ms));
+  L_MQ=L.length;
+  const mq=(x,y,corner,i)=>add(x,y,mr,2,corner?G_RED:(i&1)?G_AMB:G_CLR,.009,.16);
+  for(let i=0;i<nx;i++)mq(m+(W-2*m)*i/nx,m,i===0,i);
+  for(let i=0;i<ny;i++)mq(W-m,m+(H-2*m)*i/ny,i===0,i);
+  for(let i=0;i<nx;i++)mq(W-m-(W-2*m)*i/nx,H-m,i===0,i);
+  for(let i=0;i<ny;i++)mq(m,H-m-(H-2*m)*i/ny,i===0,i);
+  N_MQ=L.length-L_MQ;
+  /* the side panels between the marquee and the ring */
+  const pin=m+mr*1.27+H*.03;
+  const pl={x0:Math.ceil(pin),x1:Math.floor(cx-R-rc-H*.025)},pr={x0:Math.ceil(cx+R+rc+H*.025),x1:Math.floor(W-pin)};
+  for(const p of [pl,pr]){p.w=p.x1-p.x0;p.cx=Math.round((p.x0+p.x1)/2);}
+  LY.pl=pl;LY.pr=pr;
+  const isp=Math.min(H*.068,pl.w/5),ir=isp*.29;
+  LY.y1=Math.round(H*.13);LY.y2=Math.round(H*.185);LY.y3=Math.round(H*.465);LY.yS=H*.565;LY.y4=Math.round(H*.725);LY.y5=Math.round(H*.775);
+  L_STOP=L.length;for(let i=0;i<N_IND;i++)add(pl.cx+(i-2)*isp,LY.yS,ir,0,G_AMB,.012,.2);
+  L_SPD=L.length;const sg=[G_GRN,G_GRN,G_GLD,G_AMB,G_RED];for(let i=0;i<N_IND;i++)add(pr.cx+(i-2)*isp,LY.y1+H*.095,ir,0,sg[i],.012,.2);
+  const br=Math.min(H*.078,pr.w*.27);LY.yB=H*.5;L_BTN=add(pr.cx,LY.yB,br,3,G_RED,.03,.3);LY.yBL=Math.round(LY.yB+br*1.27+H*.03);LY.yST=Math.round(H*.78);
+  /* pack the lamp arrays */
+  const n=L.length;LM.n=n;
+  for(const k of ['x','y','r','kind','th','tc','u','lum','ex'])LM[k]=new Float32Array(n);
+  LM.glass=new Uint8Array(n);LM.col=new Float32Array(n*4);
+  for(let i=0;i<n;i++){const l=L[i];LM.x[i]=l[0];LM.y[i]=l[1];LM.r[i]=l[2];LM.kind[i]=l[3];LM.glass[i]=l[4];LM.th[i]=l[5];LM.tc[i]=l[6];LM.u[i]=U0;}
+  DRV=new Float32Array(n);KH=new Float32Array(n);KC=new Float32Array(n);CD=new Float32Array(RING);COV=new Float32Array(RING);
+  /* the DMD counter panel: the widest rounded rectangle that clears the ring's legends */
+  const Rl=R-rc-H*.052,dh=Math.round(H*.285),cr=H*.04,yy=dh/2-cr,maxHalf=Math.sqrt(Math.max(0,(Rl-3.4-cr-1)**2-yy*yy))+cr;
+  const dw=2*Math.floor(Math.min(H*.28,maxHalf));
+  const D={w:dw,h:dh,cr,x:Math.round(cx-dw/2),y:Math.round(cy-dh/2)};D.cx=D.x+dw/2;D.cy0=D.y+dh/2;
+  D.lf=dh>=38?5:3;const lh=D.lf===5?7:5,tot=lh+2+14+3+5,pad=Math.max(0,Math.floor((dh-tot)/2));
+  D.ly=D.y+pad;D.cy=D.ly+lh+2;D.my=D.cy+14+3;LY.dmd=D;LY.Rl=Rl;
+  /* legends: each lamp's ticket value printed inside the ring, lit from behind by its own bulb */
+  const tight=Rl*TAU/RING<6.5;
+  /* on a tight ring the legends either side of the (unlabelled) jackpot slide towards it to make room */
+  const nudge=k=>!tight?0:k===1?-.32:k===RING-1?.32:k===2?-.1:k===RING-2?.1:0;
+  LBL=[];for(let k=1;k<RING;k++){const a=-Math.PI/2+(k+nudge(k))*TAU/RING;LBL.push({k,s:k===SUPER_LAMP?'*':VAL[k]===10&&tight?'@':''+VAL[k],x:cx+Rl*Math.cos(a),y:cy+Rl*Math.sin(a),c:LBC(k)});}
+  /* chrome trim rings either side of the lamps; each trim dot remembers which lamp it reflects */
+  const rails=[R+rc+H*.012,R-rc-H*.012],ri=[],rl=[],rw=[];
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const dx=x+.5-cx,dy=y+.5-cy,d=Math.hypot(dx,dy);
+    for(const Rr of rails)if(Math.abs(d-Rr)<.5){const a=(Math.atan2(dy,dx)+Math.PI/2)/TAU*RING,k=mod(Math.round(a),RING),off=Math.abs(a-Math.round(a));ri.push(y*W+x);rl.push(k);rw.push(1-off*1.3);}}
+  RAIL_I=Int32Array.from(ri);RAIL_L=Uint8Array.from(rl);RAIL_W=Float32Array.from(rw);
+  /* the socket map for the shader */
+  IDX=new Uint8Array(W*H);const best=new Float32Array(W*H).fill(9);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const v=rrDist(x+.5,y+.5,D);if(v<=0)IDX[y*W+x]=254;else if(v<1.4)IDX[y*W+x]=255;}
+  for(let i=0;i<n;i++){const rcI=LM.r[i]*.5/.395,lim=rcI+.75,X=LM.x[i],Y=LM.y[i];
+    for(let y=Math.max(0,Math.floor(Y-lim));y<=Math.min(H-1,Math.ceil(Y+lim));y++)for(let x=Math.max(0,Math.floor(X-lim));x<=Math.min(W-1,Math.ceil(X+lim));x++){
+      const d=Math.hypot(x+.5-X,y+.5-Y);if(d<=lim){const j=y*W+x,nd=d/rcI;if(nd<best[j]){best[j]=nd;IDX[j]=i+1;}}}}
+  uploadLampMaps();
+}
+RESCB.push(layoutCab);
+
+/* ---------- 9.3 THE WHEEL: an analytic stepping relay ----------
+   The light is a brush on a 40-contact commutator. Its position is a PHASE phi (lamps travelled, real-valued);
+   the lit lamp is floor(phi), mapped onto the ring through (base, dir). phi is a pure function of game time:
+     spin-up  knots: the relay starts from its detent and steps faster and faster (geometric intervals) up to v;
+     run      phi = pr + v (t - tr): exact, analytic, independent of ticks and frames;
+     brake    knots fixed at the instant of the press: the current step finishes at full speed, then KSTEP-1
+              more steps whose dwell grows geometrically to BRAKE_LAST, then the rotor seats in the detent.
+   So the lamp it stops on is decided the moment the button goes down: final = lamp lit at the press + KSTEP.
+   The press instant comes from the input event's own timestamp mapped into game time (CLK.off), so the
+   result does not depend on frame rate, tick phase or which frame happened to process the event.
+   Every consumer (filaments, clicks, the judge, the autopilot) evaluates phaseAt(t) at its own time. */
+const BRAKE_LAST=.30,SETTLE=.085,UP_STEPS=8,UP_FIRST=.22,AUTO_STOP=15;
+const VT=[0,22,25,28,31,34,42];                 // lamps per second: STOP 1..5, then the SUPER stop (window = 1/v: 45 ms down to 24 ms)
+const WH={st:'rest',dir:1,base:0,p:.5,kt:new Float64Array(UP_STEPS+1),kp:new Float64Array(UP_STEPS+1),kn:0,tr:Infinity,pr:0,v:0,
+  tb:Infinity,bt:new Float64Array(KSTEP+2),bp:new Float64Array(KSTEP+2),bn:0,tset:Infinity,fin:0,pe:0,se:0,brush:true};
+const CLK={gt:0,off:0,disp:0};                    // game time (s); off maps an input timestamp to game time; disp = time on screen
+const mod=(a,n)=>((a%n)+n)%n;
+function lampOf(ph){return mod(WH.base+WH.dir*Math.floor(ph),RING);}
+function seg(ts,ps,n,t){for(let i=1;i<n;i++)if(t<ts[i])return ps[i-1]+(ps[i]-ps[i-1])*(t-ts[i-1])/(ts[i]-ts[i-1]);return ps[n-1];}
+function phaseAt(t){
+  const w=WH;if(w.st==='rest')return w.p;
+  if(t<w.tr)return t<=w.kt[0]?w.kp[0]:seg(w.kt,w.kp,w.kn,t);
+  if(t<w.tb)return w.pr+w.v*(t-w.tr);
+  return seg(w.bt,w.bp,w.bn,t);
+}
+/* the inverse, for the click scheduler: when does the brush reach integer phase j? */
+function timeOfPhase(j){
+  const w=WH;if(w.st==='rest')return null;
+  if(j<=w.pr){for(let i=1;i<w.kn;i++)if(w.kp[i]>=j)return w.kt[i-1]+(w.kt[i]-w.kt[i-1])*(j-w.kp[i-1])/(w.kp[i]-w.kp[i-1]);return w.tr;}
+  if(w.tb===Infinity||j<=w.pe)return w.tr+(j-w.pr)/w.v;
+  for(let i=1;i<w.bn;i++)if(w.bp[i]>=j)return w.bt[i-1]+(w.bt[i]-w.bt[i-1])*(j-w.bp[i-1])/(w.bp[i]-w.bp[i-1]);
+  return w.tset;
+}
+/* park the wheel on whatever lamp is lit now (used when a game interrupts the attract demo) */
+function wheelPark(){const cur=lampOf(phaseAt(CLK.gt));Object.assign(WH,{st:'rest',base:cur,dir:1,p:.5,tr:Infinity,tb:Infinity,tset:Infinity});}
+function spinUp(t0,v,dir){
+  const w=WH,cur=lampOf(w.st==='rest'?w.p:phaseAt(t0));
+  w.dir=dir;w.base=cur;w.v=v;                    // re-based so phase .5 is the lamp it rests on: phi stays small and exact
+  let t=t0;w.kt[0]=t;w.kp[0]=.5;
+  for(let i=0;i<UP_STEPS;i++){const dt=UP_FIRST*Math.pow(1/(v*UP_FIRST),i/(UP_STEPS-1));t+=i?dt:dt*.5;w.kt[i+1]=t;w.kp[i+1]=i+1;}
+  w.kn=UP_STEPS+1;w.tr=t;w.pr=UP_STEPS;w.tb=Infinity;w.tset=Infinity;w.st='spin';CK.set=false;
+}
+/* THE STOP. se = the press instant in game time. Accepted only at full speed (se >= tr). Deterministic from se. */
+function applyPress(se){
+  const w=WH;if(w.st!=='spin'||!(se>=w.tr))return false;
+  const pe=w.pr+w.v*(se-w.tr),n=Math.floor(pe),g=Math.pow(BRAKE_LAST*w.v,1/(KSTEP-1));
+  let t=se+(n+1-pe)/w.v;w.bt[0]=se;w.bp[0]=pe;w.bt[1]=t;w.bp[1]=n+1;
+  for(let i=1;i<KSTEP;i++){t+=Math.pow(g,i)/w.v;w.bt[i+1]=t;w.bp[i+1]=n+1+i;}
+  w.bt[KSTEP+1]=t+SETTLE;w.bp[KSTEP+1]=n+KSTEP+.5;w.bn=KSTEP+2;
+  w.tb=se;w.tset=t+SETTLE;w.pe=pe;w.se=se;w.fin=lampOf(n+KSTEP);w.st='brake';CK.set=false;
+  return true;
+}
+
+/* ---------- 9.4 THE RELAY'S VOICE: every step clicks at its exact instant ----------
+   Each frame schedules the steps that fall in the next few ms on the audio clock (phase crossings are known
+   analytically), so the rattle at speed and the slowing clicks of the brake keep perfect time at any frame rate. */
+const CK={t:0,last:0,set:false};
+function schedClicks(){
+  const w=WH,nw=CLK.disp;
+  if(w.st==='rest'||!AU.ctx||AU.ctx.state!=='running'||S.paused){CK.t=nw;return;}
+  const a=Math.max(CK.t,nw-.03),b=nw+.02;if(!(b>a))return;
+  const pa=phaseAt(a),pb=phaseAt(b),ct=AU.ctx.currentTime;
+  for(let j=Math.floor(pa)+1;j<=Math.floor(pb);j++){
+    const tc=timeOfPhase(j);if(tc===null)continue;
+    const iv=tc-CK.last;CK.last=tc;
+    SFX.stepAt(ct+Math.max(0,tc-nw),clamp(iv/BRAKE_LAST,.08,1),PITCH[lampOf(j)]);
+  }
+  if(w.st==='brake'&&!CK.set&&w.tset<=b){CK.set=true;SFX.clunkAt(ct+Math.max(0,w.tset-nw));}
+  CK.t=b;
+}
+
+/* ---------- 9.5 INTEGRATING THE LAMPS (display time, ~1 ms sub-steps) ----------
+   Called once per rendered frame with the game time that frame shows (and per tick by the test hook). In each
+   sub-step the brush's exact phase interval [phi(ta), phi(tb)] says which lamp(s) it touched and for what
+   fraction of the step; a covered lamp's new temperature blends its powered and unpowered solutions by that
+   fraction. Show comets are analytic runners too. Nothing here depends on the tick or frame rate. */
+let LT=0;const SUP={v:1,i:0};
+const COM=[];                                     // show comets on the ring: {p0, v, t0, t1, d}
+function comet(p0,v,dur,d=D_FL){COM.push({p0,v,t0:CLK.gt,t1:CLK.gt+dur,d});}
+function lampsAdvance(tTo,realDt){
+  const n=LM.n;if(!n)return;
+  const paused=S.paused;let ta,span;
+  if(paused){ta=0;span=Math.min(.1,realDt||0);}
+  else{span=tTo-LT;if(!(span>0))return;if(span>.25){LT=tTo-.25;span=.25;}ta=LT;}
+  if(!(span>0))return;
+  const ns=Math.min(100,Math.max(1,Math.ceil(span/.001))),h=span/ns,u=LM.u,V=SUP.v;
+  for(let i=0;i<n;i++){KH[i]=1-Math.exp(-h/LM.th[i]);KC[i]=h/LM.tc[i];}
+  const br=!paused&&WH.st!=='rest'&&WH.brush,nc=paused?0:COM.length;
+  for(let s=0;s<ns;s++){
+    const tb=ta+h;
+    if(nc){CD.fill(0);const tm=ta+h*.5;for(let c=0;c<nc;c++){const o=COM[c];if(tm<o.t0||tm>o.t1)continue;const L=mod(Math.floor(o.p0+o.v*(tm-o.t0)),RING);if(o.d>CD[L])CD[L]=o.d;}}
+    if(br){const pa=phaseAt(ta),pb=phaseAt(tb),sp=pb-pa;
+      for(let j=Math.floor(pa),j1=Math.floor(pb);j<=j1;j++){const L=lampOf(j);COV[L]=sp>1e-9?(Math.min(j+1,pb)-Math.max(j,pa))/sp:1;}}
+    for(let i=0;i<n;i++){
+      let d=DRV[i];if(nc&&i<RING&&CD[i]>d)d=CD[i];
+      let x=filStep(u[i],d,KH[i],KC[i],V);
+      if(i<RING&&COV[i]>0){const c=COV[i];x=c*filStep(u[i],d>D_BR?d:D_BR,KH[i],KC[i],V)+(1-c)*x;COV[i]=0;}
+      u[i]=x;
+    }
+    ta=tb;
+  }
+  if(!paused)LT=tTo;
+  if(nc)for(let c=COM.length-1;c>=0;c--)if(COM[c].t1<tTo)COM.splice(c,1);
+  /* the lamp supply sags a hair under the board's draw (flash every lamp and the whole board dims a touch) */
+  let I=0;for(let i=0;i<n;i++){const d=DRV[i];if(d>0){let k=((u[i]-U0)*LUTS)|0;if(k>=LUTN)k=LUTN-1;I+=d*V*RINV[k];}}
+  SUP.i=I/n;const tv=Math.max(.88,1-SAG*SUP.i);SUP.v+=(tv-SUP.v)*.5;
+}
+/* temperature -> light for every lamp (the shader gets linear floats; the legends get the peak for their spill) */
+function lampColours(){
+  const n=LM.n,c=LM.col,u=LM.u,gq=LM.glass;
+  for(let i=0;i<n;i++){let k=((u[i]-U0)*LUTS)|0;if(k<0)k=0;else if(k>=LUTN)k=LUTN-1;const q=gq[i]*LUTN+k,o=q*3,j=i*4;
+    c[j]=LUTF[o];c[j+1]=LUTF[o+1];c[j+2]=LUTF[o+2];c[j+3]=LM.ex[i];LM.lum[i]=LUML[q];}
+}
+
+/* ---------- 9.6 GAME STATE AND RULES ----------
+   A game is 5 STOPS at rising speed (22 -> 34 lamps/s). Every stop pays its lamp's tickets (1-10).
+   An honest one-lamp window is hit by anyone who aims (the odds go as 1 / your timing spread, not 1/40), so
+   instead of rigging the wheel the jackpot is LIT, pinball-style: the SUPER lamp opposite it pays 5 and awards
+   a bonus SUPER STOP (the wheel runs backwards at 42 lamps/s) during which the top lamp pays the progressive
+   JACKPOT. Unlit, the top lamp pays 10 like its neighbours. One jackpot per game: once it is won the beacon
+   goes dark and SUPER just pays its 5. Every stop that misses feeds the jackpot (+3,
+   capped at 500); a win resets it to 100. It persists in localStorage, so the counter belongs to the cabinet. */
+const STOPS=5,JP_SEED=100,JP_STEP=3,JP_CAP=500,JPKEY='hd-'+CAB.id+'-jackpot';
+const JP={v:JP_SEED};{const v=parseInt(store.get(JPKEY,JP_SEED),10);JP.v=v>=JP_SEED&&v<=JP_CAP?v:JP_SEED;}
+function jpSet(v){JP.v=clamp(Math.round(v),JP_SEED,JP_CAP);store.set(JPKEY,JP.v);}
+const jpShown=()=>JP.v;
+const S={mode:'title',ph:'',pt:0,t:0,k:0,stop:0,bonus:0,sup:false,tickets:0,tkd:0,jpd:JP.v,jpx:-1,tk0:0,prize:0,fin:-1,demo:true,paused:false,
+  shake:0,flash:0,hs:0,beacon:0,newHi:false,rdur:0,btnT:9,jpWon:false,hi:parseInt(store.get('hd-'+CAB.id+'-hi','0'),10)||0,games:0};
+const LOG=[];                                       // every settled stop, for the tests: press phase, lamp, prize
+const MSG={s:'',t:0,dur:0},BIG={s:'',t:0,dur:0};
+function msg(s,dur=1.6){MSG.s=s;MSG.t=0;MSG.dur=dur;}
+function slam(s,dur=1.2){BIG.s=s;BIG.t=0;BIG.dur=dur;}
+function setPh(p){S.ph=p;S.pt=0;S.k=0;}
+function newGame(demo){
+  Object.assign(S,{t:0,pt:0,k:0,stop:0,bonus:0,sup:false,tickets:0,tkd:0,jpx:-1,tk0:0,prize:0,fin:-1,demo,shake:0,flash:0,hs:0,beacon:0,newHi:false,rdur:0,btnT:9,jpWon:false});
+  S.jpd=jpShown();MSG.dur=0;BIG.dur=0;COM.length=0;BOT.at=null;setPh('intro');
+}
+function APP_start(){AT.booted=true;PQ.length=0;wheelPark();newGame(false);S.mode='play';setPause(false);setTrack('play');busLevel();duck(false);SFX.confirm();SFX.thunk();S.games++;}
+function APP_attract(){PQ.length=0;S.mode='title';setPause(false);wheelPark();newGame(true);atGo(AT.booted?'loop':'boot');setTrack('title');busLevel();duck(false);}
+const speedNow=()=>VT[S.sup?6:clamp(S.stop,1,5)];
+function nextStop(sup){
+  if(!sup)S.stop++;S.sup=sup;setPh('ready');
+  if(S.demo)mqSet('run',7);else mqSet('run',sup?6:2.5,.75);
+  if(!S.demo){const tier=sup?6:S.stop;TRACKS.play.bpm=112+tier*6;setTrack(sup?'super':'play');}
+}
+/* one simulation step of a game (real, or the attract demo). I = this tick's press, from the player or the autopilot */
+function playSim(dt,I){
+  S.t+=dt;fxTick(dt);
+  if(S.hs>0){S.hs-=dt;return;}                       // hit-stop: the rules freeze for a beat; the filaments do not
+  S.pt+=dt;const P=S.ph,pt=S.pt;
+  if(P==='intro'){const n=Math.floor(pt/.035);if(n>S.k&&n<=RING/2){S.k=n;if(!(n&1))SFX.relay(.45);}if(pt>1.15)nextStop(false);}
+  else if(P==='ready'){if(pt>.6){spinUp(CLK.gt,speedNow(),S.sup?-1:1);SFX.motor(WH.tr-CLK.gt);setPh('run');}}
+  else if(P==='run'){
+    if(I.press!==null&&applyPress(I.press)){setPh('brake');S.btnT=0;duck(true);}
+    else{if(I.early&&!S.demo){SFX.dud();msg('WAIT FOR IT',.9);}
+      if(CLK.gt-WH.tr>AUTO_STOP&&applyPress(CLK.gt)){setPh('brake');msg('AUTO STOP',1.4);duck(true);}}
+  }
+  else if(P==='brake'){if(CLK.gt>=WH.tset)settle();}
+  else if(P==='result'){if(pt>S.rdur)afterResult();}
+  else if(P==='jackpot'){jackpotSim();if(pt>5.6)afterResult();}
+  else if(P==='superin'){superSim();if(pt>1.95)nextStop(true);}
+  else if(P==='end'){if(pt>1.4)finishGame();}
+}
+/* the wheel has seated: pay out */
+function settle(){
+  const J=WH.fin;WH.p=WH.bp[WH.bn-1];WH.st='rest';S.fin=J;duck(false);
+  const dist=Math.min(J,RING-J),jack=J===0&&S.sup,prize=jack?JP.v:VAL[J];
+  S.prize=prize;S.tk0=S.tickets;S.tickets+=prize;
+  LOG.push({demo:S.demo,stop:S.stop,sup:S.sup,v:WH.v,dir:WH.dir,se:WH.se,pe:WH.pe,lit:mod(WH.base+WH.dir*Math.floor(WH.pe),RING),fin:J,prize,jack,jp:JP.v});if(LOG.length>400)LOG.shift();
+  if(!S.demo){ARC.score(S.tickets);jpSet(jack?JP_SEED:Math.min(JP_CAP,JP.v+JP_STEP));}
+  S.shake=Math.max(S.shake,jack?.7:.14);
+  if(jack){S.jpWon=true;setPh('jackpot');S.hs=.24;S.jpx=prize;S.flash=1;SFX.siren();if(!S.demo){say('Jackpot!',.7,1);setTrack('win');}mqSet('strobe',12);return;}
+  setPh('result');mqSet('comet',prize>=10?34:prize>=3?22:14,1,prize>=10?4:2);
+  if(J===SUPER_LAMP&&!S.jpWon){S.bonus++;S.rdur=1.4;SFX.ding(3);msg('JACKPOT LIT!',1.4);slam('+5',1.3);return;}
+  if(prize>=10){S.rdur=1.6;SFX.bell(.9);SFX.ding(3);if(dist===1&&S.sup){SFX.aww();msg('SO CLOSE!',1.6);}else msg('10 TICKETS',1.6);}
+  else if(prize>=3){S.rdur=1.25;SFX.ding(2);msg(dist===2&&S.sup?'CLOSE!':prize+' TICKETS',1.25);}
+  else{S.rdur=1.0;SFX.ding(1);msg(prize+(prize===1?' TICKET':' TICKETS'),1);}
+  slam('+'+prize,Math.min(1.2,S.rdur));
+}
+function afterResult(){
+  S.jpx=-1;
+  if(S.bonus>0){S.bonus--;setPh('superin');SFX.sweep();if(!S.demo){say('Super stop!',.7,1);setTrack('super');}mqSet('comet',40,1,6);return;}
+  if(S.stop>=STOPS){if(S.demo){S.stop=0;S.tickets=0;S.jpWon=false;nextStop(false);}else{setPh('end');SFX.relay(1);if(!S.demo)setTrack('over');}return;}
+  nextStop(false);
+}
+function finishGame(){
+  const prevHi=S.hi;S.mode='over';S.newHi=S.tickets>S.hi;if(S.newHi){S.hi=S.tickets;store.set('hd-'+CAB.id+'-hi',S.hi);}
+  Object.assign(RES,{prevHi,t:0,total:S.tickets,shown:0,rate:clamp(S.tickets/2.4,8,140),off:0,newHi:S.newHi,doneAt:0});
+  setTrack('over');mqSet('comet',22,1,3);busLevel();ARC.over(S.tickets,S.tickets);
+}
+/* the jackpot: blackout + beacon, strobe, comets, the counter drains into the ticket counter, fill, reset */
+function jackpotSim(){
+  const pt=S.pt,pr=S.prize;
+  if(pt>=.02&&S.k<1){S.k=1;SFX.bell(1.2);}
+  if(pt>=1.3&&S.k<2){S.k=2;SFX.bell(2.2);for(let c=0;c<4;c++)comet(c*RING/4,44,2.5);mqSet('comet',46,1,8);}
+  if(pt>=3.8&&S.k<3){S.k=3;SFX.fanfare();mqSet('wig',8);}
+  if(pt>=4.8&&S.k<4){S.k=4;SFX.relay(1);}
+  S.jpx=pt<1.3?pr:pt<3.6?pr*(1-(pt-1.3)/2.3):0;S.jpd=S.jpx;
+  S.beacon+=1/60*11;
+}
+function superSim(){const pt=S.pt;if(pt>=.4&&S.k<1){S.k=1;comet(SUPER_LAMP,-48,1.25);comet(0,-48,1.25);}}
+/* effects and counters that run every tick of a game */
+function fxTick(dt){
+  if(S.shake>0)S.shake=Math.max(0,S.shake-dt*1.6);if(S.flash>0)S.flash=Math.max(0,S.flash-dt*3);
+  if(MSG.t<MSG.dur)MSG.t+=dt;if(BIG.t<BIG.dur)BIG.t+=dt;S.btnT+=dt;if(S.sup||S.ph==='superin')S.beacon+=dt*6;
+  /* the counters are number wheels: they roll to their targets, the ticket wheel chattering as it goes */
+  if(S.ph!=='jackpot'){const tg=jpShown(),d=tg-S.jpd;if(Math.abs(d)>1e-3){const p=Math.floor(S.jpd);S.jpd+=Math.sign(d)*Math.min(Math.abs(d),dt*Math.max(5,Math.abs(d)*2.2));if(Math.floor(S.jpd)!==p&&!S.demo)SFX.odo();}else S.jpd=tg;}
+  const tt=S.ph==='jackpot'?S.tk0+S.prize-Math.max(0,S.jpx):S.tickets,d2=tt-S.tkd;
+  if(d2>1e-3){const p=Math.floor(S.tkd);S.tkd=Math.min(tt,S.tkd+dt*Math.max(9,d2*3));if(Math.floor(S.tkd)!==p&&S.mode==='play')SFX.ticket();}else if(d2<0)S.tkd=tt;
+}
+
+/* ---------- 9.7 THE AUTOPILOT — plays the attract demo (and the soak test) like a person ----------
+   It knows the wheel (phase is analytic), so it picks the lap and the window that lands on its target lamp and
+   presses inside it with a human timing error (a casual player is off by tens of ms and a little biased; a pro by a
+   few). Its press goes through the same judge at an exact game time, so the soak exercises the real timing path. */
+const BOT={at:null,sig:.03,bias:0,aim:0,pro:false,hes:.12};
+const AUTO={on:false,pro:false,sig:.035,bias:.3,aim:-1};   // aim -1 = the sensible strategy
+function gauss(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(TAU*v);}
+function botPlan(){
+  const w=WH;
+  const r=Math.random(),smart=S.sup||S.jpWon?0:SUPER_LAMP;                    // a sensible player: light the jackpot, then go for it
+  if(S.demo){BOT.pro=Math.random()<.3;BOT.sig=BOT.pro?.006:rnd(.02,.055);BOT.bias=BOT.pro?0:rnd(-.8,.8);BOT.aim=S.sup||r<.55?smart:r<.82?0:(Math.random()*RING|0);}
+  else{BOT.pro=AUTO.pro;BOT.sig=AUTO.sig;BOT.bias=rnd(-AUTO.bias,AUTO.bias);BOT.aim=AUTO.aim<0?smart:AUTO.aim;}
+  const n0=mod(w.dir*(BOT.aim-w.base)-KSTEP,RING),pmin=phaseAt(Math.max(CLK.gt,w.tr)+rnd(.3,.7));
+  let n=n0+RING*Math.ceil((pmin-n0)/RING);if(!BOT.pro&&Math.random()<BOT.hes)n+=RING;
+  BOT.at=w.tr+(n+.5+BOT.bias-w.pr)/w.v+gauss()*BOT.sig;
+}
+const INP={press:null,early:false};
+function botInput(){const I=INP;I.press=null;I.early=false;PQ.length=0;
+  if(S.ph==='run'&&WH.st==='spin'){if(BOT.at===null)botPlan();if(BOT.at<CLK.gt+1/60){I.press=Math.max(BOT.at,WH.tr);BOT.at=null;}}else BOT.at=null;
+  return I;}
+/* the player's press: the EARLIEST stamped press at or after full speed; presses during spin-up are refused */
+function playerInput(press){
+  const I=INP;I.press=null;I.early=false;
+  if(S.ph==='run'&&WH.st==='spin'){
+    let seen=0;
+    while(PQ.length){let s=PQ.shift()/1000+CLK.off;seen++;if(s>CLK.gt+.05)s=CLK.gt+.05;if(s>=WH.tr){if(I.press===null)I.press=s;}else I.early=true;}
+    if(!seen&&press){if(CLK.gt>=WH.tr)I.press=CLK.gt;else I.early=true;}   // a press that arrived without a timestamp
+    if(I.press!==null)I.early=false;
+  }else PQ.length=0;
+  return I;
+}
+
+/* ---------- 9.8 THE LAMP CONTROLLER: what is switched on this tick ---------- */
+const MQ={pat:'run',ph:0,rate:6,step:0,lv:1,k:4,fill:0};
+function mqSet(p,rate,lv=1,k=4){MQ.pat=p;MQ.rate=rate;MQ.lv=lv;MQ.k=k;}
+function mqTick(dt){MQ.ph+=dt*MQ.rate;const s=Math.floor(MQ.ph);if(s!==MQ.step){MQ.step=s;if(MQ.pat==='run'&&S.mode==='title')SFX.chase();}}
+function mqDrive(){
+  const n=N_MQ,s=MQ.step,lv=MQ.lv,P=MQ.pat;
+  for(let i=0;i<n;i++){let d=0;
+    if(P==='run')d=((i+s)%3===0)?D_ON:D_EMB*.7;
+    else if(P==='wig')d=(((i>>1)+s)&1)?D_HOT:D_EMB*.6;
+    else if(P==='comet'){for(let k=0;k<MQ.k;k++){const p=mod(MQ.ph+k*n/MQ.k,n);if(Math.floor(p)===i){d=D_FL;break;}}if(!d)d=D_EMB*.55;}
+    else if(P==='strobe')d=reduce?D_ON:(s&1)?D_FL:0;
+    else if(P==='fill')d=i<MQ.fill?D_ON:0;
+    else if(P==='glow')d=D_EMB*.62;
+    DRV[L_MQ+i]=d*lv;}
+}
+function composeRing(){
+  const P=S.ph,pt=S.pt,T=S.t,J=S.fin;
+  if(S.mode==='title'&&AT.ph==='boot'){const t=AT.t;for(let k=0;k<RING;k++)DRV[k]=t>=2.55&&t<2.72?D_FL:t>=2.72?D_PRE:k<AT.k?D_ON:0;return;}
+  for(let k=0;k<RING;k++)DRV[k]=D_PRE;
+  DRV[0]=S.sup?(((T*5|0)&1)?D_FL:D_MID):S.jpWon?D_PRE:D_EMB+.07*Math.sin(T*2.6);    // unlit, the beacon smoulders; lit, it flashes and its mirror turns
+  if(S.mode==='over'){if(!COM.length){comet(0,9,4,D_ON);comet(RING/2,9,4,D_ON);}return;}
+  if(P==='intro'){for(let k=0;k<RING;k++)if(Math.min(k,RING-k)<=S.k&&pt<.95)DRV[k]=D_ON;}
+  else if(P==='ready')DRV[lampOf(WH.p)]=D_HOT;
+  else if(P==='result'){
+    DRV[J]=pt<S.rdur-.15?(((pt*7)|0)&1?D_MID:D_FL):D_HOT;
+    if(S.prize>=3&&J!==SUPER_LAMP){const nb=(pt*10|0)&1;DRV[mod(J+1,RING)]=nb?D_ON:D_PRE;DRV[mod(J-1,RING)]=nb?D_PRE:D_ON;}
+    if(S.prize>=10&&pt<1.1)for(let k=0;k<RING;k++)if(k!==J&&((k+(pt*12|0))&1))DRV[k]=D_ON;
+  }
+  else if(P==='jackpot'){
+    if(S.hs>0||pt<.04){for(let k=0;k<RING;k++)DRV[k]=0;DRV[0]=D_FL;}
+    else if(pt<1.3){const on=reduce?((pt*3|0)&1):((pt*16|0)&1);for(let k=1;k<RING;k++)DRV[k]=on?D_FL:0;DRV[0]=D_FL;}
+    else if(pt<3.8)DRV[0]=D_FL;
+    else if(pt<4.8){for(let k=1;k<RING;k++)DRV[k]=((k+(pt*10|0))&1)?D_ON:D_PRE;DRV[0]=D_FL;}
+    else{const n=(pt-4.8)/.7*RING/2;for(let k=0;k<RING;k++)DRV[k]=Math.min(k,RING-k)<=n?D_ON:D_PRE;}
+  }
+  else if(P==='superin'){DRV[SUPER_LAMP]=((pt*8|0)&1)?D_FL:D_DIM;}
+  else if(P==='end'){for(let k=0;k<RING;k++)DRV[k]=pt<.35?D_ON:Math.min(k,RING-k)<(pt-.35)/.035?0:D_ON;}
+}
+function composeInd(){
+  const m=S.mode,T=S.t,P=S.ph;
+  const left=STOPS-S.stop;
+  for(let i=0;i<N_IND;i++){let d=D_EMB*.55;
+    if(m==='play'||m==='title'){if(i<left)d=D_ON;else if(i===left&&S.stop>0&&!S.sup&&P!=='end')d=((T*4|0)&1)?D_FL:D_DIM;}
+    DRV[L_STOP+i]=d;}
+  const tier=S.sup?6:S.stop;
+  for(let i=0;i<N_IND;i++)DRV[L_SPD+i]=m==='over'?D_EMB*.55:tier>5?(((i+(T*12|0))&1)?D_FL:D_DIM):i<tier?D_ON:D_EMB*.55;
+  let bd=D_EMB*.6;
+  if(m==='title')bd=((T*1.6|0)&1)?D_HOT:D_DIM;
+  else if(m==='play'){if(P==='run'&&WH.st==='spin')bd=CLK.gt>=WH.tr?D_ON+.12*Math.sin(T*14):D_DIM;if(S.btnT<.2)bd=D_FL;}
+  else bd=RES.shown>=RES.total?(((T*1.6|0)&1)?D_HOT:D_DIM):D_EMB*.6;
+  DRV[L_BTN]=bd;
+}
+function compose(){
+  DRV.fill(0);composeRing();composeInd();mqDrive();
+  if(S.paused)for(let i=0;i<LM.n;i++)DRV[i]*=.42;           // standby: every lit lamp falls to a warm ember
+  LM.ex[0]=(S.sup||S.ph==='jackpot'||S.ph==='superin')&&S.mode!=='over'?S.beacon+.001:0;
+}
+
+/* ---------- 9.9 ATTRACT MODE ----------
+   First boot: the marquee fills, the ring lamps power up one by one round the wheel, then every circuit at once
+   (the supply sags, the transformer groans). After that the wheel plays itself forever while the DMD cycles
+   its cards; a demo jackpot or super stop takes over the DMD like it would in a real game. */
+const AT={ph:'boot',t:0,booted:false,card:0,ct:0,k:0,th:0};
+const CARDS=[['logo',4.6],['jp',3.2],['how',3.4],['near',2.8],['super',2.8],['start',2.6],['best',2.4]];
+function atGo(p){AT.ph=p;AT.t=0;AT.k=0;AT.th=0;AT.card=0;AT.ct=0;if(p==='boot')mqSet('fill',0);else mqSet('run',7);}
+function attractSim(dt){
+  AT.t+=dt;
+  if(AT.ph==='boot'){
+    const t=AT.t;MQ.fill=Math.min(N_MQ,Math.floor(t/1.1*N_MQ));S.t+=dt;
+    const n=clamp(Math.floor((t-.45)/.05),0,RING);if(n>AT.k){AT.k=n;SFX.relay(.55);}
+    if(t>2.55&&!AT.th){AT.th=1;SFX.thunk();}
+    if(t>3.3){AT.booted=true;atGo('loop');}
+    return;
+  }
+  AT.ct+=dt;if(AT.ct>CARDS[AT.card][1]){AT.ct=0;AT.card=(AT.card+1)%CARDS.length;}
+  playSim(dt,botInput());
+}
+/* results */
+const RES={t:0,total:0,shown:0,rate:0,off:0,newHi:false,doneAt:0,prevHi:0};
+function overSim(dt,press){
+  RES.t+=dt;S.t+=dt;fxTick(dt);
+  if(RES.t>.8&&RES.shown<RES.total){const p=Math.floor(RES.shown);RES.shown=Math.min(RES.total,RES.shown+RES.rate*dt);if(Math.floor(RES.shown)>p)SFX.ticket();RES.off+=dt*clamp(RES.rate*.9,14,40);
+    if(RES.shown>=RES.total){RES.doneAt=RES.t;SFX.relay(1.2);if(RES.newHi)SFX.fanfare();else if(RES.total>=40)SFX.win();}}
+  if(press){if(RES.shown<RES.total&&RES.t>.3){RES.shown=RES.total;RES.doneAt=RES.t;SFX.ticket();}else if(RES.t>1.5)APP_attract();}
+  else if(RES.t>18)APP_attract();
+}
+
+/* ---------- 9.10 THE PANEL: legends, trim, the DMD counter and the side HUD, written straight into RBUF ---------- */
+const GB={3:{},5:{},10:{}},FH={3:5,5:7,10:14},FG={3:1,5:1,10:2};
+/* the 10x14 face: Scale2x of the 5x7 glyphs (diagonals come out rounded, like a real DMD's big numerals) */
+function s2x(rows,w,h){const P=(x,y)=>x<0||y<0||x>=w||y>=h?0:(rows[y]>>(w-1-x))&1,out=new Array(h*2).fill(0);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const p=P(x,y),A=P(x,y-1),B=P(x+1,y),C=P(x-1,y),D=P(x,y+1);
+    const e0=(C===A&&C!==D&&A!==B)?A:p,e1=(A===B&&A!==C&&B!==D)?B:p,e2=(D===C&&D!==B&&C!==A)?C:p,e3=(B===D&&B!==A&&D!==C)?D:p,sh=w*2-1-2*x;
+    out[2*y]|=(e0<<sh)|(e1<<(sh-1));out[2*y+1]|=(e2<<sh)|(e3<<(sh-1));}
+  return out;}
+G5['*']=[0b00100,0b00100,0b11111,0b01110,0b01110,0b11011,0b10001];   // the SUPER star
+for(const k in G5){GB[5][k]={w:5,r:G5[k]};GB[10][k]={w:10,r:s2x(G5[k],5,7)};}
+for(const k in G3)GB[3][k]={w:G3[k][0].length,r:G3[k].map(s=>parseInt(s,2))};
+GB[3]['*']={w:5,r:[0b00100,0b11111,0b01110,0b01010,0b10001]};          // the SUPER legend: a little star
+GB[3]['@']={w:5,r:[0b10111,0b10101,0b10101,0b10101,0b10111]};          // a condensed "10" for tight legend rings
+const CL={x0:0,y0:0,x1:0,y1:0};
+function clipAll(){CL.x0=0;CL.y0=0;CL.x1=W;CL.y1=H;}
+function clipR(x,y,w,h){CL.x0=Math.max(0,x|0);CL.y0=Math.max(0,y|0);CL.x1=Math.min(W,Math.ceil(x+w));CL.y1=Math.min(H,Math.ceil(y+h));}
+function gget(f,ch){const t=GB[f];return t[ch]||t[ch.toUpperCase()]||null;}
+function tws(s,f,gp=FG[f]){let w=0;for(const ch of s){const q=gget(f,ch);w+=(q?q.w:3)+gp;}return Math.max(0,w-gp);}
+function bt(s,x,y,f,col,al,gp=FG[f]){
+  if(al==='c')x=Math.round(x-tws(s,f,gp)/2);else if(al==='r')x=Math.round(x-tws(s,f,gp));else x=Math.round(x);y=Math.round(y);
+  const h=FH[f];
+  for(const ch of s){const q=gget(f,ch);if(!q){x+=3+gp;continue;}
+    for(let r=0;r<h;r++){const bits=q.r[r],yy=y+r;if(!bits||yy<CL.y0||yy>=CL.y1)continue;const row=yy*W;
+      for(let c=0;c<q.w;c++)if((bits>>(q.w-1-c))&1){const xx=x+c;if(xx>=CL.x0&&xx<CL.x1)RBUF[row+xx]=col;}}
+    x+=q.w+gp;}
+  return x;
+}
+/* a string drawn at any scale (the DMD's slam-in zoom), sampled from its own bitmap */
+const ZM=new Uint8Array(160*14);
+function bzoom(s,cx,cy,sc,col,f=10){
+  const w=tws(s,f),h=FH[f];if(w>160)return;ZM.fill(0,0,w*h);let x=0;
+  for(const ch of s){const q=gget(f,ch);if(!q){x+=3+FG[f];continue;}for(let r=0;r<h;r++)for(let c=0;c<q.w;c++)if((q.r[r]>>(q.w-1-c))&1)ZM[r*w+x+c]=1;x+=q.w+FG[f];}
+  const x0=cx-w*sc/2,y0=cy-h*sc/2;
+  for(let yy=Math.max(CL.y0,Math.floor(y0));yy<Math.min(CL.y1,Math.ceil(y0+h*sc));yy++){const sy=Math.floor((yy+.5-y0)/sc);if(sy<0||sy>=h)continue;
+    for(let xx=Math.max(CL.x0,Math.floor(x0));xx<Math.min(CL.x1,Math.ceil(x0+w*sc));xx++){const sx=Math.floor((xx+.5-x0)/sc);if(sx>=0&&sx<w&&ZM[sy*w+sx])RBUF[yy*W+xx]=col;}}
+}
+/* number wheels: each digit is a drum that rolls when the one below it carries (a true odometer, both ways) */
+function odo(v,xr,y,nd,f,col){
+  const q0=GB[f]['0'],dw=q0.w,gp=FG[f],h=FH[f],pitch=h+(f===10?4:2),c0={x0:CL.x0,y0:CL.y0,x1:CL.x1,y1:CL.y1};
+  v=Math.max(0,v);let x=xr-dw;
+  for(let i=0;i<nd;i++){
+    const p=Math.pow(10,i),base=Math.floor(v/p),rem=v-base*p;
+    if(i>0&&v<=p-1)break;                                           // leading wheels stay dark
+    const pos=i===0?mod(v,10):(base%10)+Math.max(0,rem-(p-1)),d0=Math.floor(pos)%10,off=Math.round((pos-Math.floor(pos))*pitch);
+    CL.x0=Math.max(c0.x0,x);CL.x1=Math.min(c0.x1,x+dw);CL.y0=Math.max(c0.y0,y);CL.y1=Math.min(c0.y1,y+h);
+    if(!(i>0&&base===0&&d0===0))bt(''+d0,x,y-off,f,col);bt(''+((d0+1)%10),x,y-off+pitch,f,col);
+    x-=dw+gp;
+  }
+  CL.x0=c0.x0;CL.y0=c0.y0;CL.x1=c0.x1;CL.y1=c0.y1;
+}
+function odoC(v,cx,y,nd,f,col){const dw=GB[f]['0'].w,gp=FG[f];odo(v,Math.round(cx+(nd*dw+(nd-1)*gp)/2),y,nd,f,col);}
+const BLK=pack(0,0,0),gr=v=>pack(v,v,v);
+/* DMD helpers: greys only; the shader turns these dots into 16-step amber */
+function dLine(s,y,f,lv){const D=LY.dmd;if(tws(s,f)>D.w-2&&f>3)f=3;if(f===3&&tws(s,3)>D.w-2)return;bt(s,D.cx,y,f,gr(lv),'c');}
+function dBigText(s,lv,sc=1){const D=LY.dmd;const f=tws(s,10,s.length>5?1:2)<=D.w-4?10:5,y=D.cy+(f===10?0:3);
+  if(sc!==1){bzoom(s,D.cx,D.cy+7,sc,gr(lv),f);return;}bt(s,D.cx,y,f,gr(lv),'c',f===10&&s.length>5?1:FG[f]);}
+function dCounter(v,lv){const D=LY.dmd,nd=v>=999.5?4:3;odoC(v,D.cx,D.cy,nd,10,gr(lv));}
+function drawBig(){const D=LY.dmd,t=BIG.t,sc=t<.16?1+2.4*Math.pow(1-t/.16,2):1,lv=t<.45&&((t*20|0)&1)?255:225;
+  const f=tws(BIG.s,10)<=D.w-4?10:5;bzoom(BIG.s,D.cx,D.cy+7,sc*(f===5?1.6:1),gr(lv),f);}
+function dmdPlay(){
+  const D=LY.dmd,P=S.ph,pt=S.pt,T=S.t;
+  let lab=S.sup?fitS(D.lf,D.w-2,'JACKPOT LIT','JP LIT'):S.jpWon&&S.ph!=='jackpot'?fitS(D.lf,D.w-2,'NEXT JACKPOT','JACKPOT'):'JACKPOT',lv=S.sup?(((T*4|0)&1)?255:150):200;
+  if(P==='jackpot'){lab='JACKPOT!';lv=((pt*8|0)&1)?255:70;}else if(P==='intro'){lab='CYCLONE';lv=200;}else if(P==='superin'){lab='SUPER STOP';lv=((pt*6|0)&1)?255:110;}
+  dLine(lab,D.ly,D.lf,lv);
+  if(P==='jackpot'&&pt<1.3)dBigText('WIN!',((pt*10|0)&1)||S.hs>0?255:140,pt<.2?1+.55*(1-pt/.2):1);
+  else if(BIG.t<BIG.dur)drawBig();
+  else if(P==='intro')dBigText('READY',(pt*6|0)&1?250:170);
+  else if(P==='end')dBigText('OVER',220);
+  else dCounter(S.jpd,P==='brake'?255:228);
+  let m='';
+  if(MSG.t<MSG.dur)m=MSG.s;
+  else if(P==='intro')m=STOPS+' STOPS';
+  else if(P==='ready')m=S.sup?'SUPER STOP':'STOP '+S.stop+' OF '+STOPS;
+  else if(P==='run'){
+    if(WH.st==='spin'&&CLK.gt>=WH.tr){const stp=touchy?'TAP TO STOP':'PRESS STOP';
+      if(S.stop===1&&!S.demo&&!S.sup)m=((T*3|0)&1)?stp:'';
+      else{const k=(T*1.2|0)%3;m=k===0?stp:S.sup?(k===1?'BACKWARDS!':'GO FOR IT!'):k===1||S.jpWon?'STOP '+S.stop+' OF '+STOPS:fitS(3,D.w-2,'* LIGHTS JACKPOT','* LIGHTS JP');}}
+    else m=S.sup?'BACKWARDS!':'';
+  }
+  else if(P==='jackpot')m=pt<3.6?(((pt*4|0)&1)?S.prize+' TICKETS':''):'+'+S.prize+' TICKETS';
+  else if(P==='superin')m=pt<1?'JACKPOT IS LIT':'BACKWARDS!';
+  else if(P==='end')m='GAME OVER';
+  if(m)dLine(m,D.my,3,P==='brake'?255:210);
+}
+function fitS(f,w,...opts){for(const o of opts)if(tws(o,f)<=w)return o;return opts[opts.length-1];}
+function logo(t){
+  const D=LY.dmd,s='CYCLONE',big=tws(s,10,1)<=D.w-2,f=big?10:5,w=tws(s,f,1),x0=Math.round(D.cx-w/2),y=big?D.cy:D.cy+3;
+  bt(s,x0,y,f,gr(150),null,1);
+  /* a highlight sweeps across the lettering every couple of seconds: brighten the lit dots under the band */
+  const band=((t*44)%(w+60))-30+x0;
+  for(let yy=y;yy<y+FH[f];yy++)for(let xx=x0;xx<x0+w;xx++){const i=yy*W+xx;if(RBUF[i]!==BLK){const dx=xx-band-(yy-y)*.5,k=Math.max(0,1-Math.abs(dx)/7);RBUF[i]=gr(150+105*k);}}
+  dLine('TICKET WHEEL',D.my,3,190);
+  bt('HYPERDOT',D.cx,y-7,3,gr(110),'c');
+}
+function dmdTitle(){
+  const D=LY.dmd,c=CARDS[AT.card][0],t=AT.ct,T=S.t;
+  if(AT.ph==='boot'){if(AT.t>2.7)logo(AT.t-2.7);return;}
+  if(S.ph==='jackpot'||S.ph==='superin'){dmdPlay();return;}
+  if(c==='logo')logo(t);
+  else if(c==='jp'){dLine('JACKPOT',D.ly,D.lf,230);dCounter(S.jpd,235);dLine('+3 EVERY STOP',D.my,3,180);}
+  else if(c==='how'){const f=D.w>=tws('TO LIGHT THE',5)+2?5:3,lh=FH[f]+2,y0=Math.round(D.cy0-lh*1.5+1);dLine('HIT THE *',y0,f,220);dLine('TO LIGHT THE',y0+lh,f,220);dLine('JACKPOT',y0+lh*2,f,255);}
+  else if(c==='near'){dLine('NEXT DOOR',D.ly,D.lf,210);dBigText('10',240);dLine('THEN 5 AND 3',D.my,3,180);}
+  else if(c==='super'){dLine('SUPER STOP',D.ly,D.lf,230);bzoom('*',D.cx,D.cy+7,3,gr(((t*6|0)&1)?255:180),3);dLine('RUNS BACKWARDS',D.my,3,190);}
+  else if(c==='start'){dLine('FREE PLAY',D.ly,D.lf,170);if((t*3|0)%3)dBigText(touchy?'TAP':'START',250);dLine(touchy?'TAP TO PLAY':'PRESS START',D.my,3,200);}
+  else if(c==='best'){dLine('BEST',D.ly,D.lf,210);dCounter(S.hi,235);dLine('TICKETS',D.my,3,180);}
+}
+function dmdOver(){
+  const D=LY.dmd,R=RES,done=R.shown>=R.total,ct=R.t-R.doneAt;
+  dLine(R.newHi&&done?(((R.t*4|0)&1)?'NEW BEST!':''):'TOTAL',D.ly,D.lf,230);
+  dCounter(R.shown,done?240:255);
+  const seq=['TICKETS',touchy?'TAP TO PLAY':'PRESS START',R.newHi?'NEW BEST!':'BEST '+S.hi];
+  dLine(!done?'TICKETS':seq[Math.floor(ct/2)%3],D.my,3,200);
+}
+/* the ticket strip spitting out of the dispenser on the results screen */
+function drawStrip(){
+  const pl=LY.pl,tw=Math.max(10,Math.round(H*.13)),th=Math.round(H*.06),x=Math.round(pl.cx-tw/2),y0=LY.y2,y1=LY.y3-3,pitch=th+1;
+  rect(x-2,y0-1,tw+4,1,pack(90,90,104));rect(x-1,y0,tw+2,1,pack(30,30,40));
+  const len=Math.min(y1-y0-1,Math.floor(RES.off)),off=Math.floor(RES.off)%pitch;
+  for(let k=-1;k*pitch<len+pitch;k++){const ty=y0+1+len-(k+1)*pitch+off;
+    for(let yy=Math.max(ty,y0+1);yy<Math.min(ty+th,y0+1+len);yy++){const edge=yy===ty||yy===ty+th-1;
+      for(let xx=x;xx<x+tw;xx++){const perf=(xx===x||xx===x+tw-1)&&((yy&1)===0);if(perf)continue;RBUF[yy*W+xx]=edge?pack(170,70,40):pack(230,110,46);}}
+    const sy=ty+((th-5)>>1);if(sy>y0&&sy+5<y0+1+len){clipR(x,y0+1,tw,len);bt('T',x+(tw>>1)-1,sy,3,pack(120,40,24));clipAll();}}
+}
+function drawSide(){
+  const pl=LY.pl,pr=LY.pr,T=S.t,m=S.mode,P=S.ph;
+  let lab='TICKETS';if(m==='title')lab=((T*.8|0)&1)?'FREE PLAY':'TICKETS';
+  bt(lab,pl.cx,LY.y1,3,pack(200,150,70),'c');
+  const nf=tws('000',10)<=pl.w?10:5;
+  if(m==='over')drawStrip();else odoC(S.tkd,pl.cx,LY.y2,3,nf,pack(255,206,96));
+  bt('STOPS',pl.cx,LY.y3,3,pack(200,140,60),'c');
+  const hiShown=m==='over'&&RES.shown<RES.total?RES.prevHi:S.hi,hiNew=m==='over'&&RES.newHi&&RES.shown>=RES.total;
+  bt(hiNew?'NEW BEST':'BEST',pl.cx,LY.y4,3,hiNew?pack(120,255,120):pack(140,140,160),'c');bt(''+hiShown,pl.cx,LY.y5,5,hiNew&&((T*4|0)&1)?pack(150,255,150):pack(220,224,240),'c');
+  bt(S.sup&&m==='play'?'SUPER':'SPEED',pr.cx,LY.y1,3,S.sup&&m==='play'?pack(255,96,210):pack(110,210,255),'c');
+  const ready=m==='play'&&P==='run'&&WH.st==='spin'&&CLK.gt>=WH.tr;
+  const bl=m==='title'?'START':m==='over'?'AGAIN':'STOP',lit=m==='title'?((T*1.6|0)&1):m==='over'?RES.shown>=RES.total:ready;
+  bt(bl,pr.cx,LY.yBL,3,lit?pack(255,90,70):pack(110,34,30),'c');
+  const sy=LY.yST;
+  if(m==='play'&&P==='jackpot'){if((T*6|0)&1)bt('WINNER!',pr.cx,sy,3,pack(255,220,90),'c');}
+  else if(m==='play'&&S.sup){if((T*4|0)&1)bt(fitS(3,pr.w,'JACKPOT LIT','JP LIT'),pr.cx,sy,3,pack(255,96,210),'c');}
+  else if(m==='play')bt(Math.round(speedNow())+' PER SEC',pr.cx,sy,3,pack(90,150,190),'c');
+  else if(m==='title')bt('TO PLAY',pr.cx,sy,3,pack(150,150,170),'c');
+}
+function drawRails(){
+  const n=RAIL_I.length,col=LM.col;
+  for(let i=0;i<n;i++){const k=RAIL_L[i],w=RAIL_W[i]*.55,j=k*4;
+    RBUF[RAIL_I[i]]=pack(13+235*Math.sqrt(Math.min(1,col[j]))*w,12+225*Math.sqrt(Math.min(1,col[j+1]))*w,15+210*Math.sqrt(Math.min(1,col[j+2]))*w);}
+}
+/* the legends glow with their own bulb's light. While the wheel brakes and pays, the legend of the lamp that was lit
+   at the instant of the press turns white: you can count the KSTEP lamps it ran on, so a near miss shows as one. */
+function drawLabels(){
+  const P=S.ph,won=(P==='result'||P==='jackpot')&&S.mode!=='over'?S.fin:-1,T=S.t;
+  const pk=S.mode==='play'&&(P==='brake'||P==='result'||P==='jackpot')&&WH.tb!==Infinity?mod(WH.base+WH.dir*Math.floor(WH.pe),RING):-1;
+  for(const L of LBL){let b=.26+.74*Math.min(1,LM.lum[L.k]*1.7);if(L.k===won)b=((T*8|0)&1)?1:.5;
+    bt(L.s,L.x+.5,L.y-2,3,L.k===pk?pack(255,255,255):pack(L.c[0]*b,L.c[1]*b,L.c[2]*b),'c');}
+}
+function renderPanel(){
+  RBUF.fill(BLK);clipAll();
+  drawRails();drawLabels();drawSide();
+  const D=LY.dmd;clipR(D.x,D.y,D.w,D.h);
+  if(S.paused){dLine('PAUSED',D.ly,D.lf,240);dCounter(S.jpd,120);dLine(touchy?'TAP TO RESUME':'ESC TO RESUME',D.my,3,200);}
+  else if(S.mode==='play')dmdPlay();else if(S.mode==='title')dmdTitle();else dmdOver();
+  clipAll();
+  if(S.flash>0&&!reduce){const f=S.flash*S.flash*70;for(let i=0;i<W*H;i++)if(IDX[i]===0)addPx(i,f,f*.8,f*.6);}
+}
+/* no WebGL: paint the lamps into the matrix so the cabinet still plays */
+function softLamps(){for(let i=0;i<LM.n;i++){const j=i*4,c=LM.col;disc(LM.x[i],LM.y[i],LM.r[i]*1.1,pack(255*Math.pow(Math.min(1,c[j]),.45),255*Math.pow(Math.min(1,c[j+1]),.45),255*Math.pow(Math.min(1,c[j+2]),.45)));}}
+function render(){lampColours();renderPanel();if(!gl)softLamps();commit();}
+/* the transformer hum follows the board's current draw: flash the whole board and you hear it */
+const HUM={g:null};
+function humUpdate(){
+  const c=AU.ctx;if(!c||c.state!=='running')return;
+  if(!HUM.g){try{const o=c.createOscillator(),o2=c.createOscillator(),fl=c.createBiquadFilter(),gn=c.createGain();o.type='sawtooth';o.frequency.value=60;o2.type='sine';o2.frequency.value=120;
+    fl.type='lowpass';fl.frequency.value=340;gn.gain.value=0;o.connect(fl);o2.connect(fl);fl.connect(gn);gn.connect(AU.sfx);o.start();o2.start();HUM.g=gn;}catch(e){return;}}
+  const lv=document.hidden||AU.muted?0:Math.min(.05,.002+SUP.i*.045);HUM.g.gain.setTargetAtTime(lv,c.currentTime,.06);
+}
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&HUM.g&&AU.ctx)HUM.g.gain.setTargetAtTime(0,AU.ctx.currentTime,.02);});
+
+/* =====================================================================================
+   10. FRAME LOOP — fixed 60 Hz rules (input -> rules -> lamp controller), and per display frame: map input
+       time to game time, integrate the filaments up to the instant on screen, render, schedule clicks, present.
+   ===================================================================================== */
+const TSL={A:false};$('bA').addEventListener('pointerdown',e=>{TSL.A=true;pressEvt(e.timeStamp);});
+const UIP={},EDGE={},EK=['ok','back','pause','a','b','m','start'],BTN={a:''};
+const PERF={tk:0,tn:0,tmax:0,rd:0,rn:0,rmax:0,pr:0,pn:0,pmax:0};
+function setPause(on){if(S.mode!=='play')on=false;if(S.paused&&!on)PQ.length=0;S.paused=on;$('pauseBtn').textContent=on?'Resume':'Pause';}
+function tick(dt){
+  const t0=performance.now();
+  const c=readCtl();c.m=K('KeyM');
+  if(TSL.A){c.a=c.ok=true;TSL.A=false;}                     // a touch-button tap shorter than a tick still counts
+  for(const k of EK){EDGE[k]=c[k]&&!UIP[k];UIP[k]=c[k];}
+  if(EDGE.m)toggleSound();
+  const tap=PTR.pressed;PTR.pressed=false;
+  const press=EDGE.a||EDGE.ok||tap;
+  if(!S.paused)CLK.gt+=dt;
+  if(S.mode==='title'){attractSim(dt);if(press||EDGE.start){audioInit();APP_start();}else if(EDGE.back&&EMBED)ARC.exit();}
+  else if(S.mode==='play'){
+    if(EDGE.pause){setPause(!S.paused);PQ.length=0;}
+    else if(S.paused){PQ.length=0;if(press)setPause(false);}
+    else playSim(dt,AUTO.on?botInput():playerInput(press));
+  }
+  else{overSim(dt,press||EDGE.b);if(EMBED&&RES.t>1.2&&EDGE.back)ARC.exit();}
+  if(S.mode!=='play')PQ.length=0;
+  if(!S.paused)mqTick(dt);
+  compose();
+  const la=S.mode==='title'?'START':S.mode==='over'?'AGAIN':'STOP';if(la!==BTN.a){BTN.a=la;$('bA').textContent=la;}
+  const ms=performance.now()-t0;PERF.tk+=ms;PERF.tn++;if(ms>PERF.tmax)PERF.tmax=ms;
+}
+let ACC=0,LAST=0;
+function step(ts,noPresent){
+  const dt=LAST?Math.min(.05,(ts-LAST)/1000):1/60;LAST=ts;
+  padPresses(ts);
+  ACC+=dt;let n=0;while(ACC>=1/60&&n<4){tick(1/60);ACC-=1/60;n++;}if(n===4)ACC=0;
+  if(n>0)endInputFrame();          /* only clear latched taps once a tick has seen them */
+  /* real time ts shows game time gt + ACC: that is both the instant this frame displays and the map for input stamps */
+  const lag=S.paused?0:ACC;CLK.disp=CLK.gt+lag;CLK.off=CLK.disp-ts/1000;
+  g.setTransform(1,0,0,1,0,0);
+  const r0=performance.now();lampsAdvance(CLK.disp,dt);render();const rm=performance.now()-r0;PERF.rd+=rm;PERF.rn++;if(rm>PERF.rmax)PERF.rmax=rm;
+  musicTick(S.paused);humUpdate();schedClicks();
+  if(noPresent)return;
+  const p0=performance.now();
+  /* screen shake nudges where the matrix is drawn (never the lamps themselves) */
+  const sk=reduce?0:S.shake*S.shake;
+  if(sk>0){const r0c=RECT,a=RECT.w/W*.5*sk*4;RECT={x:r0c.x+(Math.random()-.5)*a,y:r0c.y+(Math.random()-.5)*a,w:r0c.w,h:r0c.h};present();RECT=r0c;}else present();
+  const pm=performance.now()-p0;PERF.pr+=pm;PERF.pn++;if(pm>PERF.pmax)PERF.pmax=pm;
+}
+function frame(ts){if(!MANUAL)step(ts);requestAnimationFrame(frame);}
+/* ---------- chrome + boot ---------- */
+function toggleSound(){AU.muted=!AU.muted;store.set('hd-mute',AU.muted?'1':'0');setVolume();$('snd').textContent=AU.muted?'Sound off':'Sound on';try{if(AU.muted)speechSynthesis.cancel();}catch(e){}}
+$('snd').addEventListener('click',e=>{audioInit();toggleSound();e.currentTarget.blur();});
+$('res').addEventListener('click',e=>{setRes((resI+1)%CAB.res.length);layout();e.currentTarget.blur();});
+$('pauseBtn').addEventListener('click',e=>{audioInit();setPause(!S.paused);e.currentTarget.blur();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)setPause(true);});
+addEventListener('resize',resize);
+$('brand').firstChild.textContent=CAB.brand;$('brand').querySelector('span').textContent=CAB.sub;$('keys').innerHTML=CAB.keys;document.title='Cyclone';
+/* one-button cabinet: no stick and no B; A is the big red push-button */
+$('stL').hidden=true;$('bB').hidden=true;$('pad').classList.add('one');$('bA').textContent='START';
+if(!gl)$('err').style.display='grid';
+if(AU.muted)$('snd').textContent='Sound off';
+setRes(resI);resize();APP_attract();
+ARC.post('ready',{title:CAB.title,w:W,h:H,tickets:CAB.tickets});
+/*@@HOOK*/window.__game={S,AT,BOT,AUTO,RES,PERF,LY,LM,WH,CLK,JP,LOG,VAL,RING,KSTEP,VT,SUPER_LAMP,PQ,KEY,LATCH,PTR,TS,MQ,COM,
+  AU,tick,ff(sec){for(let i=0;i<sec*60;i++){tick(1/60);lampsAdvance(CLK.gt,1/60);}endInputFrame();},start:APP_start,attract:APP_attract,setRes,setPause,
+  phaseAt,lampOf,applyPress,jpSet,render,lampsAdvance,step,pressEvt,
+  manual(on,ts){MANUAL=!!on;if(ts!==undefined)LAST=ts;},dims:()=>[W,H],idx:()=>IDX};/*@@/HOOK*/
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

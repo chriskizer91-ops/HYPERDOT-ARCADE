@@ -1,0 +1,1585 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Ring Roller</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&display=swap">
+<style>
+/* =====================================================================================
+   HYPERDOT CABINET STARTER
+   One self-contained page: an offscreen W x H "matrix" canvas is drawn by the game, then
+   shown through a WebGL2 LED shader (round dots + bloom + tonemap). Everything visual is
+   drawn by code; all sound is synthesized. Copy this file, rename it, replace the GAME
+   section near the bottom. Dark-only by design (it is a lit sign in a dark arcade).
+   ===================================================================================== */
+:root{
+  --bg:#07060b;--ink:#efeaf6;--ink-2:#a39cb4;--accent:#ffb040;--accent-2:#4fe3ff;
+  --panel:rgba(18,15,24,.82);--edge:rgba(255,255,255,.14);
+  --f:"Chakra Petch","Arial Narrow",system-ui,sans-serif;color-scheme:dark;
+}
+[hidden]{display:none!important}           /* author display rules would otherwise beat the hidden attribute */
+html{height:100%;box-sizing:border-box;background:var(--bg)}
+*,*::before,*::after{box-sizing:inherit}
+body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:var(--f);overflow:hidden;overscroll-behavior:none;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+#gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#sa{position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+.bar{position:fixed;left:0;right:0;top:0;display:flex;align-items:center;justify-content:space-between;gap:10px;pointer-events:none;
+  padding-top:max(10px,env(safe-area-inset-top,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.brand{font:700 14px/1 var(--f);letter-spacing:.32em;color:var(--accent);text-shadow:0 0 12px rgba(255,176,64,.55);white-space:nowrap}
+.brand span{color:var(--ink-2);letter-spacing:.2em;font-weight:500;font-size:10px;margin-left:8px;text-shadow:none}
+@media (max-width:560px){.brand span{display:none}}
+@media (max-width:440px){.brand{font-size:12px;letter-spacing:.2em}.opts{gap:6px}.chip{padding:0 9px;font-size:10px;letter-spacing:.06em}.chip .lbl{display:none}}
+.opts{display:flex;gap:8px}
+.chip{pointer-events:auto;height:34px;padding:0 12px;border-radius:999px;border:1px solid var(--edge);background:var(--panel);color:var(--ink);cursor:pointer;
+  font:600 11px/1 var(--f);letter-spacing:.12em;text-transform:uppercase;font-variant-numeric:tabular-nums;white-space:nowrap}
+.chip:focus-visible,.ab:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+/* touch controls: a stick on the left, two buttons on the right (phones only) */
+#pad{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:space-between;align-items:flex-end;gap:10px;pointer-events:none;
+  padding-bottom:max(16px,env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.stk{pointer-events:auto;touch-action:none;position:relative;flex:none;width:var(--stick,150px);height:var(--stick,150px);border-radius:50%;
+  background:radial-gradient(circle,rgba(255,255,255,.05) 0 30%,transparent 31%),var(--panel);border:1px solid var(--edge)}
+.kn{position:absolute;left:50%;top:50%;width:40%;height:40%;margin:-20% 0 0 -20%;border-radius:50%;background:radial-gradient(circle at 40% 32%,#ffe0a0,#d0801a 62%,#5a3006);box-shadow:0 0 16px rgba(255,176,64,.4)}
+.acts{pointer-events:auto;display:flex;gap:12px;align-items:flex-end}
+.ab{touch-action:none;cursor:pointer;width:var(--b,64px);height:var(--b,64px);border-radius:50%;border:1px solid var(--edge);color:var(--ink);background:var(--panel);
+  font:700 11px/1 var(--f);letter-spacing:.06em;display:grid;place-items:center;padding:0;transition:transform .05s}
+#bA{border-color:rgba(255,176,64,.7);background:radial-gradient(circle at 50% 34%,rgba(255,176,64,.55),var(--panel) 74%);width:calc(var(--b,64px)*1.25);height:calc(var(--b,64px)*1.25)}
+#bB{border-color:rgba(79,227,255,.6);background:radial-gradient(circle at 50% 34%,rgba(79,227,255,.45),var(--panel) 74%)}
+.ab.on{transform:scale(.9);filter:brightness(1.5)}
+body.portrait #pad{top:var(--padTop,60%);align-items:center}
+body.land #pad{opacity:.8}
+.keys{position:fixed;left:0;right:0;bottom:max(10px,env(safe-area-inset-bottom,0px));margin:0;text-align:center;font:500 11px/1.5 var(--f);letter-spacing:.08em;color:var(--ink-2);pointer-events:none;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.keys b{color:var(--ink);font-weight:600}
+#turn{position:fixed;left:0;right:0;margin:0;text-align:center;font:500 11px/1.4 var(--f);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2);pointer-events:none}
+#err{position:fixed;inset:0;display:none;place-items:center;padding:24px;text-align:center;font:500 14px/1.6 var(--f);color:var(--ink-2)}
+/* embedded in the 3D arcade: no page chrome, the matrix fills the frame */
+body.embed .bar,body.embed .keys,body.embed #turn{display:none!important}
+@media (max-width:420px){.brand{font-size:11px;letter-spacing:.1em}.opts{gap:5px}.chip{padding:0 8px}}
+</style>
+</head>
+<body>
+<canvas id="gl" aria-label="LED matrix game display"></canvas>
+<div id="sa"></div>
+<div class="bar">
+  <span class="brand" id="brand">RING ROLLER<span>HYPERDOT ARCADE</span></span>
+  <div class="opts"><button class="chip" id="res" type="button"><span class="lbl">Dots </span><span id="resv">256×144</span></button><button class="chip" id="snd" type="button">Sound on</button><button class="chip" id="pauseBtn" type="button">Pause</button></div>
+</div>
+<div id="pad" hidden>
+  <div class="stk" id="stL" aria-label="Stick"><div class="kn" id="knL"></div></div>
+  <div class="acts"><button class="ab" id="bB" type="button">B</button><button class="ab" id="bA" type="button">A</button></div>
+</div>
+<p id="turn" hidden>Turn your phone sideways for a bigger screen</p>
+<p class="keys" id="keys"><b>Arrows</b> or <b>WASD</b> move · <b>Space</b> or <b>click</b> A · <b>Shift</b> B · <b>Esc</b> pause</p>
+<div id="err">This game needs WebGL2, which this browser has turned off.</div>
+<script>
+(()=>{
+'use strict';
+/* =====================================================================================
+   0. CABINET CONFIG — every cabinet sets these
+   ===================================================================================== */
+const CAB={
+  id:'roll',                    // file name in the arcade: games/<id>.html
+  title:'RING ROLLER',          // shown on the marquee and in the arcade
+  brand:'RING ROLLER',sub:'HYPERDOT ARCADE',
+  style:'color',                // colour 3D alley; the score panel is a software amber DMD inside the matrix
+  res:[[192,108],[256,144],[320,180]],
+  resDefault:1,
+  tickets:true,
+  keys:'<b>Drag back</b> and <b>flick up</b> to roll (curve the flick for spin) · <b>←→</b> aim · hold <b>Space</b> to charge · <b>↑↓</b> curve · <b>Shift</b>+<b>←→</b> move · <b>Esc</b> pause · <b>M</b> mute'
+};
+/* =====================================================================================
+   1. BASICS
+   ===================================================================================== */
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>v<a?a:v>b?b:v,lerp=(a,b,t)=>a+(b-a)*t,rnd=(a,b)=>a+Math.random()*(b-a),TAU=Math.PI*2;
+const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:v}catch(e){return d}},set(k,v){try{localStorage.setItem(k,String(v))}catch(e){}}};
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const touchy=matchMedia('(hover: none)').matches;
+const fmt=n=>Math.floor(n).toLocaleString('en-US');
+const pick=a=>a[(Math.random()*a.length)|0];
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function hexRGB(h){const n=parseInt(h.slice(1),16);return [n>>16&255,n>>8&255,n&255];}
+const c255=v=>v<0?0:v>255?255:v|0;
+/* pixels are stored ABGR little-endian in a Uint32Array view of ImageData */
+const pack=(r,g,b,a=255)=>(((a&255)<<24)|(c255(b)<<16)|(c255(g)<<8)|c255(r))>>>0;
+function rgba(c,a=1){return 'rgba('+c255(c[0])+','+c255(c[1])+','+c255(c[2])+','+a+')';}
+function mixC(a,b,t){return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];}
+const EMBED=/[?&]embed=1/.test(location.search);
+/* =====================================================================================
+   2. BITMAP FONTS — 5x7 (txt5) and 3x5 (txt3); col may be a CSS color or an array of 7 row colors (gradient)
+   ===================================================================================== */
+const F5SRC=`A 01110 10001 10001 11111 10001 10001 10001|B 11110 10001 10001 11110 10001 10001 11110|C 01110 10001 10000 10000 10000 10001 01110|D 11110 10001 10001 10001 10001 10001 11110|E 11111 10000 10000 11110 10000 10000 11111|F 11111 10000 10000 11110 10000 10000 10000|G 01110 10001 10000 10111 10001 10001 01111|H 10001 10001 10001 11111 10001 10001 10001|I 01110 00100 00100 00100 00100 00100 01110|J 00111 00010 00010 00010 00010 10010 01100|K 10001 10010 10100 11000 10100 10010 10001|L 10000 10000 10000 10000 10000 10000 11111|M 10001 11011 10101 10101 10001 10001 10001|N 10001 10001 11001 10101 10011 10001 10001|O 01110 10001 10001 10001 10001 10001 01110|P 11110 10001 10001 11110 10000 10000 10000|Q 01110 10001 10001 10001 10101 10010 01101|R 11110 10001 10001 11110 10100 10010 10001|S 01111 10000 10000 01110 00001 00001 11110|T 11111 00100 00100 00100 00100 00100 00100|U 10001 10001 10001 10001 10001 10001 01110|V 10001 10001 10001 10001 10001 01010 00100|W 10001 10001 10001 10101 10101 10101 01010|X 10001 10001 01010 00100 01010 10001 10001|Y 10001 10001 01010 00100 00100 00100 00100|Z 11111 00001 00010 00100 01000 10000 11111|0 01110 10001 10011 10101 11001 10001 01110|1 00100 01100 00100 00100 00100 00100 01110|2 01110 10001 00001 00010 00100 01000 11111|3 11111 00010 00100 00010 00001 10001 01110|4 00010 00110 01010 10010 11111 00010 00010|5 11111 10000 11110 00001 00001 10001 01110|6 00110 01000 10000 11110 10001 10001 01110|7 11111 00001 00010 00100 01000 01000 01000|8 01110 10001 10001 01110 10001 10001 01110|9 01110 10001 10001 01111 00001 00010 01100|! 00100 00100 00100 00100 00100 00000 00100|. 00000 00000 00000 00000 00000 01100 01100|, 00000 00000 00000 00000 01100 00100 01000|: 00000 01100 01100 00000 01100 01100 00000|- 00000 00000 00000 11111 00000 00000 00000|+ 00000 00100 00100 11111 00100 00100 00000|? 01110 10001 00001 00010 00100 00000 00100|' 00100 00100 01000 00000 00000 00000 00000|/ 00001 00001 00010 00100 01000 10000 10000|> 01000 00100 00010 00001 00010 00100 01000|< 00010 00100 01000 10000 01000 00100 00010|x 00000 00000 10001 01010 00100 01010 10001|_ 00000 00000 00000 00000 00000 00000 00000`;
+const G5={};for(const ln of F5SRC.split('|')){const p=ln.trim().split(/\s+/);G5[p[0]==='_'?' ':p[0]]=p.slice(1).map(r=>parseInt(r,2));}
+const F3SRC=`A 010 101 111 101 101|B 110 101 110 101 110|C 011 100 100 100 011|D 110 101 101 101 110|E 111 100 110 100 111|F 111 100 110 100 100|G 011 100 101 101 011|H 101 101 111 101 101|I 111 010 010 010 111|J 001 001 001 101 010|K 101 101 110 101 101|L 100 100 100 100 111|M 101 111 111 101 101|N 110 101 101 101 101|O 010 101 101 101 010|P 110 101 110 100 100|Q 010 101 101 110 011|R 110 101 110 101 101|S 011 100 010 001 110|T 111 010 010 010 010|U 101 101 101 101 111|V 101 101 101 101 010|W 101 101 111 111 101|X 101 101 010 101 101|Y 101 101 010 010 010|Z 111 001 010 100 111|0 111 101 101 101 111|1 010 110 010 010 111|2 111 001 111 100 111|3 111 001 011 001 111|4 101 101 111 001 001|5 111 100 111 001 111|6 111 100 111 101 111|7 111 001 001 010 010|8 111 101 111 101 111|9 111 101 111 001 111|x 000 101 010 101 000|+ 000 010 111 010 000|- 000 000 111 000 000|: 0 1 0 1 0|. 0 0 0 0 1|, 0 0 0 1 1|! 1 1 1 0 1|/ 001 001 010 100 100|' 1 1 0 0 0|> 100 010 001 010 100|< 001 010 100 010 001|? 111 001 011 000 010|( 01 10 10 10 01|) 10 01 01 01 10|% 101 001 010 100 101|# 101 111 101 111 101`;
+const G3={};for(const ln of F3SRC.split('|')){const p=ln.trim().split(/\s+/);G3[p[0]]=p.slice(1);}
+function tw5(s,sc=1){return s.length*6*sc-sc;}
+function txt5(g,s,x,y,col,sc=1,align,it=0){
+  if(align==='c')x=Math.round(x-tw5(s,sc)/2);else if(align==='r')x=x-tw5(s,sc);
+  const cols=Array.isArray(col)?col:null;if(!cols)g.fillStyle=col;
+  for(const ch of s){const gl5=G5[ch]||G5[ch.toUpperCase()]||G5[' '];
+    for(let r=0;r<7;r++){if(cols)g.fillStyle=cols[Math.min(cols.length-1,r)];const ox=it?Math.round((6-r)*it*sc):0;for(let c=0;c<5;c++)if((gl5[r]>>(4-c))&1)g.fillRect(x+c*sc+ox,y+r*sc,sc,sc);}
+    x+=6*sc;}
+}
+function tw3(s,sc=1){let w=0;for(const ch of s){const gg=G3[ch]||G3[ch.toUpperCase()];w+=((gg?gg[0].length:3)+1)*sc;}return Math.max(0,w-sc);}
+function txt3(g,s,x,y,col,sc=1,align){
+  if(align==='c')x=Math.round(x-tw3(s,sc)/2);else if(align==='r')x=x-tw3(s,sc);
+  g.fillStyle=col;
+  for(const ch of s){const gg=G3[ch]||G3[ch.toUpperCase()];if(!gg){x+=4*sc;continue;}for(let r=0;r<5;r++)for(let c=0;c<gg[r].length;c++)if(gg[r][c]==='1')g.fillRect(x+c*sc,y+r*sc,sc,sc);x+=(gg[0].length+1)*sc;}
+}
+const O8=[[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]];
+function otxt5(g,s,x,y,col,sc=1,align,it=0,ol='#000'){const o=Math.max(1,sc>>1);for(const [a,b] of O8)txt5(g,s,x+a*o,y+b*o,ol,sc,align,it);txt5(g,s,x,y,col,sc,align,it);}
+function otxt3(g,s,x,y,col,sc=1,align,ol='#000'){for(const [a,b] of O8)txt3(g,s,x+a,y+b,ol,sc,align);txt3(g,s,x,y,col,sc,align);}
+const GR={
+  volt:['#ffffff','#fff7cc','#ffe46a','#ffc21a','#ff9a10','#e2600a','#902c06'],
+  cyan:['#ffffff','#e6fbff','#a6f3ff','#4fe0ff','#22b4ff','#2a70ff','#3a36c8'],
+  red:['#ffffff','#ffe0e6','#ff9aab','#ff4a62','#ff1a3a','#c80d2a','#7a0618'],
+  steel:['#ffffff','#eef1f8','#cfd6e6','#a2adc6','#76829e','#4e5876','#2c3250'],
+  pink:['#ffffff','#ffe2f2','#ffa6d6','#ff5ab4','#ff2f9a','#c81476','#760a46'],
+  green:['#ffffff','#eaffe6','#b4ffaa','#6aff5a','#2ee04a','#1a9c3a','#0e5a26'],
+  violet:['#ffffff','#f0e6ff','#d0b4ff','#a878ff','#8048ff','#5a2ad8','#34168a']
+};
+/* =====================================================================================
+   3. THE MATRIX — draw into `g` (2D canvas, W x H) and/or write pixels into RBUF (Uint32, ABGR)
+      Typical frame: fill RBUF (or g) with the scene -> commit() -> draw HUD text on g -> present()
+   ===================================================================================== */
+let resI=parseInt(store.get('hd-'+CAB.id+'-res',CAB.resDefault),10);if(!(resI>=0&&resI<CAB.res.length))resI=CAB.resDefault;
+let W=CAB.res[resI][0],H=CAB.res[resI][1];
+/* willReadFrequently keeps these canvases on the CPU: getImageData/putImageData every frame on a GPU canvas costs 100ms+ */
+const mc=document.createElement('canvas'),g=mc.getContext('2d',{willReadFrequently:true});
+const ac=document.createElement('canvas'),acx=ac.getContext('2d',{willReadFrequently:true});
+let AIMG=null,RBUF=null,ZB=null;const RESCB=[];
+function setRes(i){
+  resI=i;W=CAB.res[i][0];H=CAB.res[i][1];mc.width=ac.width=W;mc.height=ac.height=H;g.imageSmoothingEnabled=false;acx.imageSmoothingEnabled=false;
+  AIMG=acx.createImageData(W,H);RBUF=new Uint32Array(AIMG.data.buffer);ZB=new Float32Array(W*H);
+  store.set('hd-'+CAB.id+'-res',i);$('resv').textContent=W+'×'+H;for(const f of RESCB)f();
+}
+/* copy RBUF onto the matrix canvas (then draw text / HUD on top with g) */
+function commit(){acx.putImageData(AIMG,0,0);g.drawImage(ac,0,0);}
+/* =====================================================================================
+   4. LED DISPLAY — WebGL2: round dots, unlit-dot floor, two-level bloom, ACES tonemap, vignette.
+      uStyle 0 = full color, 1 = classic amber DMD (16 brightness steps), 2 = big incandescent lamps.
+   ===================================================================================== */
+const cv=$('gl');
+const gl=cv.getContext('webgl2',{antialias:false,alpha:false,depth:false,powerPreference:'high-performance'});
+let g2=null;if(!gl)g2=cv.getContext('2d');
+const HDR=gl?!!gl.getExtension('EXT_color_buffer_float'):false;
+const STYLE_ID={color:0,amber:1,lamp:2}[(location.search.match(/[?&]style=(\w+)/)||[])[1]||CAB.style]||0; /* ?style=amber to preview another look */
+function prog(vs,fs){
+  const p=gl.createProgram();
+  for(const [t,src] of [[gl.VERTEX_SHADER,vs],[gl.FRAGMENT_SHADER,fs]]){const s=gl.createShader(t);gl.shaderSource(s,'#version 300 es\nprecision highp float;\n'+src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));gl.attachShader(p,s);}
+  gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));
+  const u={},n=gl.getProgramParameter(p,gl.ACTIVE_UNIFORMS);for(let i=0;i<n;i++){const inf=gl.getActiveUniform(p,i);u[inf.name]=gl.getUniformLocation(p,inf.name);}
+  return {p,u};
+}
+const VS=`out vec2 vT;void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));vT=p;gl_Position=vec4(p*2.0-1.0,0.0,1.0);}`;
+const FS_LED=`in vec2 vT;uniform sampler2D uTex;uniform vec2 uRes;uniform float uGain;uniform int uStyle;out vec4 o;
+void main(){
+  vec2 cell=vT*uRes;vec2 id=floor(cell);vec2 f=fract(cell)-.5;
+  vec3 c=texture(uTex,(id+.5)/uRes).rgb;c=pow(c,vec3(2.2));
+  float r=.43;
+  if(uStyle==1){float l=dot(c,vec3(.3,.59,.11));l=floor(pow(l,.8)*15.+.5)/15.;c=vec3(1.,.38,.06)*l*1.25;r=.4;}
+  if(uStyle==2){r=.47;}
+  float fw=max(fwidth(cell.x),fwidth(cell.y));
+  float d=length(f);
+  float dm=1.0-smoothstep(r-fw*.6-.03,r+fw*.6,d);
+  float hot=1.0-smoothstep(0.0,r,d);
+  float far=smoothstep(.38,.95,fw);
+  float m=mix(dm*(.74+.48*hot),.58,far);
+  if(uStyle==2){m=mix(dm*(.55+.9*hot*hot),.6,far);float spec=1.0-smoothstep(0.0,.12,length(f-vec2(-.13,.15)));c+=vec3(.35,.3,.25)*spec*dm*(.15+length(c));}
+  vec3 unlit=(uStyle==1?vec3(.6,.25,.08):vec3(.52,.5,.62))*.016;
+  vec3 col=(c*uGain+unlit)*m;
+  vec2 q=vT-vec2(.22,.9);col+=vec3(.010,.010,.014)*(1.0-smoothstep(0.0,.8,length(q)));
+  o=vec4(col,1.0);
+}`;
+const FS_BRIGHT=`in vec2 vT;uniform sampler2D uTex;uniform vec2 uPx;uniform float uThr;out vec4 o;
+void main(){vec3 c=texture(uTex,vT+uPx*vec2(-1,-1)).rgb+texture(uTex,vT+uPx*vec2(1,-1)).rgb+texture(uTex,vT+uPx*vec2(-1,1)).rgb+texture(uTex,vT+uPx*vec2(1,1)).rgb;
+c*=.25;float l=max(c.r,max(c.g,c.b));c*=max(l-uThr,0.0)/max(l,1e-4);o=vec4(c,1.0);}`;
+const FS_BLUR=`in vec2 vT;uniform sampler2D uTex;uniform vec2 uDir;out vec4 o;
+void main(){vec3 s=texture(uTex,vT).rgb*.227027;s+=(texture(uTex,vT+uDir*1.3846).rgb+texture(uTex,vT-uDir*1.3846).rgb)*.316216;
+s+=(texture(uTex,vT+uDir*3.2308).rgb+texture(uTex,vT-uDir*3.2308).rgb)*.070270;o=vec4(s,1.0);}`;
+const FS_COMP=`in vec2 vT;uniform sampler2D uScene;uniform sampler2D uB1;uniform sampler2D uB2;uniform float uBloom;out vec4 o;
+vec3 aces(vec3 x){return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.0,1.0);}
+void main(){vec3 c=texture(uScene,vT).rgb+(texture(uB1,vT).rgb*.8+texture(uB2,vT).rgb*1.2)*uBloom;c=aces(c*1.1);c=pow(c,vec3(1.0/2.2));vec2 q=vT-.5;c*=1.0-dot(q,q)*.5;o=vec4(c,1.0);}`;
+let P_LED,P_BR,P_BL,P_CO,VAO,MTEX;
+const FB={};let VW=1,VH=1,DPR=1,RECT={x:0,y:0,w:100,h:56};
+if(gl){
+  P_LED=prog(VS,FS_LED);P_BR=prog(VS,FS_BRIGHT);P_BL=prog(VS,FS_BLUR);P_CO=prog(VS,FS_COMP);
+  VAO=gl.createVertexArray();MTEX=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,MTEX);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+}
+function mkTarget(w,h){
+  const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texImage2D(gl.TEXTURE_2D,0,HDR?gl.RGBA16F:gl.RGBA8,w,h,0,gl.RGBA,HDR?gl.HALF_FLOAT:gl.UNSIGNED_BYTE,null);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  const f=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,f);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);
+  return {t,f,w,h};
+}
+function pass(p,src,dst,setup){
+  gl.bindFramebuffer(gl.FRAMEBUFFER,dst?dst.f:null);gl.viewport(0,0,dst?dst.w:VW,dst?dst.h:VH);
+  gl.useProgram(p.p);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,src.t);gl.uniform1i(p.u.uTex,0);
+  if(setup)setup(p.u);gl.bindVertexArray(VAO);gl.drawArrays(gl.TRIANGLES,0,3);
+}
+/* upload the matrix canvas and run the LED + bloom passes */
+function present(){
+  if(!gl){g2.fillStyle='#07050b';g2.fillRect(0,0,VW,VH);g2.imageSmoothingEnabled=false;g2.drawImage(mc,RECT.x*DPR,RECT.y*DPR,RECT.w*DPR,RECT.h*DPR);return;}
+  gl.bindTexture(gl.TEXTURE_2D,MTEX);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,mc);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,FB.scene.f);gl.viewport(0,0,VW,VH);gl.clearColor(.02,.015,.03,1);gl.clear(gl.COLOR_BUFFER_BIT);
+  const rx=Math.round(RECT.x*DPR),rw=Math.round(RECT.w*DPR),rh=Math.round(RECT.h*DPR),ry=VH-Math.round(RECT.y*DPR)-rh;
+  gl.viewport(rx,ry,rw,rh);gl.useProgram(P_LED.p);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,MTEX);
+  gl.uniform1i(P_LED.u.uTex,0);gl.uniform2f(P_LED.u.uRes,W,H);gl.uniform1f(P_LED.u.uGain,HDR?2.5:1.6);gl.uniform1i(P_LED.u.uStyle,STYLE_ID);
+  gl.bindVertexArray(VAO);gl.drawArrays(gl.TRIANGLES,0,3);
+  pass(P_BR,FB.scene,FB.a,u=>{gl.uniform2f(u.uPx,1/VW,1/VH);gl.uniform1f(u.uThr,HDR?1.0:.8);});
+  pass(P_BL,FB.a,FB.b,u=>gl.uniform2f(u.uDir,1/FB.a.w,0));pass(P_BL,FB.b,FB.a,u=>gl.uniform2f(u.uDir,0,1/FB.a.h));
+  pass(P_BR,FB.a,FB.c,u=>{gl.uniform2f(u.uPx,1/FB.a.w,1/FB.a.h);gl.uniform1f(u.uThr,0);});
+  pass(P_BL,FB.c,FB.d,u=>gl.uniform2f(u.uDir,2.2/FB.c.w,0));pass(P_BL,FB.d,FB.c,u=>gl.uniform2f(u.uDir,0,2.2/FB.c.h));
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,VW,VH);gl.useProgram(P_CO.p);
+  gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,FB.scene.t);gl.uniform1i(P_CO.u.uScene,0);
+  gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,FB.a.t);gl.uniform1i(P_CO.u.uB1,1);
+  gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,FB.c.t);gl.uniform1i(P_CO.u.uB2,2);
+  gl.uniform1f(P_CO.u.uBloom,HDR?1:.55);gl.bindVertexArray(VAO);gl.drawArrays(gl.TRIANGLES,0,3);gl.activeTexture(gl.TEXTURE0);
+}
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2.5);VW=Math.max(2,Math.round(innerWidth*DPR));VH=Math.max(2,Math.round(innerHeight*DPR));cv.width=VW;cv.height=VH;
+  if(gl){for(const k in FB){gl.deleteTexture(FB[k].t);gl.deleteFramebuffer(FB[k].f);}
+    FB.scene=mkTarget(VW,VH);FB.a=mkTarget(Math.max(1,VW>>2),Math.max(1,VH>>2));FB.b=mkTarget(Math.max(1,VW>>2),Math.max(1,VH>>2));
+    FB.c=mkTarget(Math.max(1,VW>>3),Math.max(1,VH>>3));FB.d=mkTarget(Math.max(1,VW>>3),Math.max(1,VH>>3));}
+  layout();
+}
+/* RECT = where the matrix sits on screen (CSS px). Phones upright: matrix on top, controls below. */
+function layout(){
+  const sa=getComputedStyle($('sa')),st=parseFloat(sa.paddingTop)||0,sb=parseFloat(sa.paddingBottom)||0,sl=parseFloat(sa.paddingLeft)||0,sr=parseFloat(sa.paddingRight)||0;
+  const vw=innerWidth,vh=innerHeight,portrait=touchy&&vh>vw*1.05,bs=document.body.style,asp=W/H;
+  document.body.classList.toggle('portrait',portrait);document.body.classList.toggle('land',touchy&&!portrait);document.body.classList.toggle('embed',EMBED);
+  $('pad').hidden=!touchy;$('keys').hidden=touchy||EMBED;$('turn').hidden=!portrait||EMBED;
+  const gutL=EMBED?Math.max(0,sl):Math.max(16,sl),gutR=EMBED?Math.max(0,sr):Math.max(16,sr),top=EMBED?Math.max(0,st):Math.max(10,st)+46;
+  if(portrait){
+    const w=vw-gutL-gutR,h=w/asp;RECT={x:gutL,y:top+4,w,h};
+    bs.setProperty('--stick',Math.min(156,vw*.36)+'px');bs.setProperty('--b',Math.min(64,vw*.16)+'px');
+    bs.setProperty('--padTop',(RECT.y+h+26)+'px');$('turn').style.top=(RECT.y+h+8)+'px';
+  }else{
+    const bottom=EMBED?Math.max(0,sb):touchy?Math.max(8,sb)+4:Math.max(10,sb)+30,aw=vw-gutL-gutR,ah=vh-top-bottom;let w=aw,h=w/asp;if(h>ah){h=ah;w=h*asp;}
+    RECT={x:gutL+(aw-w)/2,y:top+(ah-h)/2,w,h};
+    if(touchy){bs.setProperty('--stick',Math.min(140,vh*.34)+'px');bs.setProperty('--b',Math.min(56,vh*.13)+'px');}
+  }
+}
+/* =====================================================================================
+   5. AUDIO — tiny synth: tone() and noise() voices into a compressor, plus reverb and delay sends.
+      Nothing plays until the first user gesture calls audioInit().
+   ===================================================================================== */
+const AU={ctx:null,out:null,mus:null,sfx:null,rev:null,dly:null,noise:null,muted:store.get('hd-mute','0')==='1',next:0,step:0,track:null,want:null};
+const mtof=m=>440*Math.pow(2,(m-69)/12),now=()=>AU.ctx?AU.ctx.currentTime:0;
+function audioInit(){
+  try{
+    if(!AU.ctx){
+      const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const c=new C();AU.ctx=c;
+      const comp=c.createDynamicsCompressor();comp.threshold.value=-12;comp.ratio.value=5;comp.attack.value=.003;comp.release.value=.15;comp.connect(c.destination);
+      AU.out=c.createGain();AU.out.gain.value=AU.muted||ARC.muted?0:.62;AU.out.connect(comp);
+      AU.mus=c.createGain();AU.mus.gain.value=.26;AU.mus.connect(AU.out);
+      AU.sfx=c.createGain();AU.sfx.gain.value=.85;AU.sfx.connect(AU.out);
+      const len=c.sampleRate*2.2|0,ir=c.createBuffer(2,len,c.sampleRate);
+      for(let ch=0;ch<2;ch++){const d=ir.getChannelData(ch);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3.2);}
+      const cvn=c.createConvolver();cvn.buffer=ir;AU.rev=c.createGain();AU.rev.gain.value=.5;AU.rev.connect(cvn);cvn.connect(AU.out);
+      const dl=c.createDelay(1);dl.delayTime.value=.3;const fb=c.createGain();fb.gain.value=.32;const dlo=c.createGain();dlo.gain.value=.35;
+      dl.connect(fb);fb.connect(dl);dl.connect(dlo);dlo.connect(AU.mus);AU.dly=dl;
+      const nb=c.createBuffer(1,c.sampleRate,c.sampleRate),nd=nb.getChannelData(0);for(let i=0;i<nd.length;i++)nd[i]=Math.random()*2-1;AU.noise=nb;
+      AU.next=c.currentTime+.05;
+    }
+    if(AU.ctx.state==='suspended')AU.ctx.resume();
+  }catch(e){}
+}
+function setVolume(){if(AU.out)AU.out.gain.value=AU.muted||ARC.muted?0:.62;}
+function env(gn,t,a,peak,d){gn.gain.setValueAtTime(.0001,t);gn.gain.exponentialRampToValueAtTime(Math.max(.0002,peak),t+a);gn.gain.exponentialRampToValueAtTime(.0001,t+a+d);}
+/* tone(freq, start, dur, wave, vol, bus, slideTo, lowpassCut, reverbSend, attack) */
+function tone(f,t,dur,type,vol,bus,slide,cut,rv,att){
+  const c=AU.ctx;if(!c||AU.muted)return;const o=c.createOscillator();o.type=type||'square';o.frequency.setValueAtTime(f,t);
+  if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(20,slide),t+dur);
+  const gn=c.createGain();env(gn,t,att||.005,vol||.1,dur);let n=o;
+  if(cut){const fl=c.createBiquadFilter();fl.type='lowpass';fl.frequency.value=cut;fl.Q.value=3;o.connect(fl);n=fl;}
+  n.connect(gn);gn.connect(bus||AU.sfx);if(rv){const s=c.createGain();s.gain.value=rv;gn.connect(s);s.connect(AU.rev);}o.start(t);o.stop(t+dur+.08);
+}
+/* noise(start, dur, vol, filterFrom, filterTo, filterType, bus, reverbSend, Q) */
+function noise(t,dur,vol,f0,f1,type,bus,rv,q){
+  const c=AU.ctx;if(!c||AU.muted)return;const s=c.createBufferSource();s.buffer=AU.noise;s.loop=true;
+  const fl=c.createBiquadFilter();fl.type=type||'lowpass';fl.Q.value=q||1;fl.frequency.setValueAtTime(f0||4000,t);fl.frequency.exponentialRampToValueAtTime(Math.max(30,f1||200),t+dur);
+  const gn=c.createGain();env(gn,t,.003,vol,dur);s.connect(fl);fl.connect(gn);gn.connect(bus||AU.sfx);if(rv){const r=c.createGain();r.gain.value=rv;gn.connect(r);r.connect(AU.rev);}
+  s.start(t,Math.random()*.5);s.stop(t+dur+.08);
+}
+/* sound effects: keep them short and layered. Rate-limited below so 20 at once never clip. */
+/* sound effects: short and layered, synthesized. Rate-limited below so a rattle never clips. */
+const RING_HZ=[330,392,494,587,740,880,880];
+const SFX={
+  select(){tone(990,now(),.05,'square',.045);},
+  confirm(){const t=now();tone(880,t,.06,'square',.06);tone(1320,t+.06,.18,'square',.06,AU.sfx,0,0,.2);},
+  back(){const t=now();tone(660,t,.06,'square',.05);tone(440,t+.06,.1,'square',.05);},
+  /* ball leaving the hand: a soft wooden thump plus air */
+  release(k=1){const t=now();noise(t,.18,.12*k,900,300,'lowpass');tone(110,t,.12,'sine',.18*k,AU.sfx,70);noise(t,.22,.05*k,600,3000,'bandpass',0,0,.8);},
+  /* the hump: a hard wooden clack, brighter the faster the ball hits it */
+  clack(k=1){const t=now();noise(t,.05,.3*Math.min(1.4,k),5200,1600,'bandpass',0,.1,2.5);tone(640+k*90,t,.06,'triangle',.12*Math.min(1.4,k),AU.sfx,300);tone(1900,t,.02,'square',.03);},
+  launch(k=1){noise(now(),.3,.05*k,800,3600,'bandpass',0,.15,1.2);},
+  thud(k=1){const t=now();k=Math.min(1.6,k);noise(t,.12,.22*k,1400,120,'lowpass',0,.06);tone(86,t,.16,'sine',.3*k,AU.sfx,48);},
+  /* ring lips ring at their own pitch: rattles play little melodies */
+  tock(i=0,k=1){const t=now(),f=RING_HZ[i]||500;k=Math.min(1.5,k);tone(f*2,t,.05,'triangle',.11*k,AU.sfx,f*1.4,0,.08);tone(f,t,.09,'square',.035*k,AU.sfx,0,1800);noise(t,.025,.12*k,7000,2500,'bandpass',0,0,3);},
+  rim(k=1){const t=now();tone(1250,t,.03,'square',.03*Math.min(1,k));noise(t,.03,.08*Math.min(1,k),6000,3000,'bandpass',0,0,4);},
+  knock(k=1){const t=now();k=Math.min(1.3,k);noise(t,.06,.2*k,2200,500,'bandpass',0,.05,1.6);tone(220,t,.06,'triangle',.08*k,AU.sfx,140);},
+  click(){const t=now();tone(2600,t,.025,'square',.05);noise(t,.02,.1,9000,5000,'highpass');},
+  /* a dunk: the ball drops, a thunk, then a chime arpeggio that climbs with the value */
+  dunk(val=10){const t=now(),n=Math.min(6,Math.max(1,val/10|0));tone(150,t,.18,'sine',.35,AU.sfx,55);noise(t,.12,.22,1800,200,'lowpass');
+    for(let i=0;i<n;i++)tone(mtof(72+[0,4,7,12,16,19][i]),t+.06+i*.055,.22,'square',.045,AU.sfx,0,3600,.35);
+    if(val>=50)for(let i=0;i<6;i++)tone(mtof(91+(i%3)*5),t+.4+i*.04,.08,'triangle',.03,AU.sfx,0,0,.4);},
+  jackpot(){const t=now();[0,4,7,12,7,12,16,19,24].forEach((n,i)=>tone(mtof(67+n),t+.1+i*.075,.25,'square',.05,AU.sfx,0,0,.35));for(let i=0;i<10;i++)noise(t+.3+i*.09,.06,.08,9000,4000,'highpass');},
+  gutter(){const t=now();tone(260,t,.32,'sawtooth',.05,AU.sfx,120,900);tone(196,t+.3,.45,'sawtooth',.05,AU.sfx,90,700,.2);noise(t,.5,.06,1200,200,'lowpass');},
+  short(){const t=now();tone(500,t,.4,'triangle',.06,AU.sfx,140,0,.2);},
+  side(){const t=now();tone(mtof(72),t,.12,'square',.04,AU.sfx,0,2400);tone(mtof(76),t+.08,.18,'square',.04,AU.sfx,0,2400,.2);},
+  tick(){tone(1500,now(),.02,'square',.025);},
+  charge(p=0){tone(300+p*900,now(),.035,'square',.02,AU.sfx,0,2600);},
+  count(){tone(2100,now(),.018,'square',.018);},
+  ticket(){const t=now();for(let i=0;i<3;i++)tone(1600+i*200,t+i*.03,.03,'square',.022);noise(t,.04,.05,7000,3000,'bandpass',0,0,2);},
+  enter(){const t=now();noise(t,.35,.05,500,200,'lowpass');tone(130,t+.3,.08,'sine',.12,AU.sfx,80);},
+  final(){const t=now();for(let i=0;i<4;i++){tone(1568,t+i*.16,.12,'square',.04,AU.sfx,0,0,.3);tone(1175,t+i*.16+.08,.1,'square',.035);}},
+  nudge(){const t=now();tone(80,t,.2,'sawtooth',.08,AU.sfx,60,400);noise(t,.15,.12,800,200,'lowpass');},
+  win(){const t=now();[0,4,7,12,16].forEach((n,i)=>tone(mtof(72+n),t+i*.09,.32,'square',.05,AU.sfx,0,0,.3));},
+  lose(){const t=now();[12,7,3,0].forEach((n,i)=>tone(mtof(60+n),t+i*.22,.4,'sawtooth',.05,AU.sfx,0,1500,.3));}
+};
+{const lim={tock:.025,rim:.03,knock:.04,thud:.05,ticket:.035,count:.025,charge:.03,click:.03};const last={};for(const k of Object.keys(SFX)){const f=SFX[k],m=lim[k]||.02;SFX[k]=(...a)=>{const t=now();if(t-(last[k]||-9)<m)return;last[k]=t;f(...a);};}}
+/* optional announcer through the browser's speech engine */
+let VOICE=store.get('hd-voice','1')==='1';
+function say(txt,pitch=.6,rate=.95){if(AU.muted||ARC.muted||!VOICE)return;try{const s=window.speechSynthesis;if(!s)return;s.cancel();const u=new SpeechSynthesisUtterance(txt);u.pitch=pitch;u.rate=rate;
+  const vs=s.getVoices?s.getVoices():[];const v=vs.find(v=>/^en/i.test(v.lang));if(v)u.voice=v;s.speak(u);}catch(e){}}
+/* ---- step-sequencer music: one string per instrument, 16 steps per bar, chords by scale degree ----
+   bass: R=root O=octave F=fifth T=third  .=rest   lead: digits/letters = scale degree (1..g), '-' = hold
+   kick/snare/hat: x = hit.  prog = scale degree of each bar's chord.  arp '8'/'16' = arpeggio speed. */
+const SCALES={minor:[0,2,3,5,7,8,10],phryg:[0,1,3,5,7,8,10],harm:[0,2,3,5,7,8,11],dorian:[0,2,3,5,7,9,10],major:[0,2,4,5,7,9,11],penta:[0,3,5,7,10],mixo:[0,2,4,5,7,9,10]};
+function sdeg(tr,d){const sc=SCALES[tr.scale],n=sc.length,o=Math.floor(d/n),i=((d%n)+n)%n;return sc[i]+12*o;}
+const LEADCH='123456789abcdefg';
+const TRACKS={
+  /* attract: a laid-back boardwalk shuffle */
+  title:{bpm:100,root:45,scale:'dorian',prog:[0,3,0,4],bass:'R..R..O.R..F..O.',lead:'5-.6.5-3-.2.1---5-.6.8-7-.5.6---',kick:'x.....x...x.....',snare:'....x.......x...',hat:'x.xxx.xxx.xxx.xx',arp:'8',pad:1,lv:.032},
+  /* play: bright and bouncy, major with a mixolydian lilt */
+  play:{bpm:118,root:43,scale:'mixo',prog:[0,3,4,0],bass:'R.ORR.O.R.ORF.O.',lead:'1.3.5.3.6-5-3...1.3.5.8.7-5-6...',kick:'x...x...x...x...',snare:'....x.......x..x',hat:'.xx.xx.x.xx.xx.x',pad:1,lv:.034},
+  /* the final ball: tighter, minor, driving sixteenths */
+  final:{bpm:134,root:41,scale:'harm',prog:[0,5,3,4],bass:'RRORRFORRRORRFOR',lead:'5.5.6.5.4.3.2.5.5.5.8.7.6.5.7...',kick:'x...x...x...x.x.',snare:'....x.......x...',hat:'xxxxxxxxxxxxxxxx',arp:'16',pad:1,lv:.036},
+  over:{bpm:84,root:45,scale:'major',prog:[0,4,5,3],bass:'R.......F.......',lead:'3---2---1-------5---4---3---2---',kick:'x.......x.......',snare:'................',hat:'....x.......x...',pad:1,lv:.026}
+};
+function setTrack(name){AU.want=name;}
+function musicTick(paused){
+  const c=AU.ctx;if(!c||c.state!=='running')return;
+  if(AU.want!==AU.track){AU.track=AU.want;AU.step=0;AU.next=Math.max(AU.next,c.currentTime+.05);}
+  const tr=TRACKS[AU.track];if(!tr)return;
+  const sd=60/tr.bpm/4;if(AU.next<c.currentTime)AU.next=c.currentTime+.03;
+  while(AU.next<c.currentTime+.15){
+    const st=AU.step,s=st&15,bar=(st>>4)%tr.prog.length,d=tr.prog[bar],t=AU.next,R=tr.root;
+    if(!AU.muted&&!ARC.muted&&!paused){
+      const bc=tr.bass[s];
+      if(bc!=='.'){const n=R+sdeg(tr,d)+(bc==='O'?12:bc==='F'?sdeg(tr,d+4)-sdeg(tr,d):bc==='T'?sdeg(tr,d+2)-sdeg(tr,d):0);tone(mtof(n),t,sd*1.7,'sawtooth',.13,AU.mus,0,700);}
+      if(tr.kick[s]==='x'){const o=c.createOscillator();o.type='sine';o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(42,t+.12);const gn=c.createGain();env(gn,t,.002,.45,.16);o.connect(gn);gn.connect(AU.mus);o.start(t);o.stop(t+.22);}
+      if(tr.snare[s]==='x'){noise(t,.14,.24,2800,900,'bandpass',AU.mus);tone(190,t,.06,'triangle',.08,AU.mus,120);}
+      if(tr.hat[s]==='x')noise(t,.025,.06,9000,7000,'highpass',AU.mus);
+      const lc=tr.lead[st%32];
+      if(lc&&lc!=='.'&&lc!=='-'&&tr.lv){let len=1;while(tr.lead[(st+len)%32]==='-'&&len<16)len++;const dg=LEADCH.indexOf(lc);
+        const o=c.createOscillator();o.type='square';o.frequency.setValueAtTime(mtof(R+24+sdeg(tr,dg)),t);const fl=c.createBiquadFilter();fl.type='lowpass';fl.frequency.value=2600;
+        const gn=c.createGain();env(gn,t,.01,tr.lv,sd*len*.95);o.connect(fl);fl.connect(gn);gn.connect(AU.mus);gn.connect(AU.dly);o.start(t);o.stop(t+sd*len+.1);}
+      if(tr.arp){const ev=tr.arp==='16'?1:2;if(s%ev===0){const k=(s/ev|0)%4,deg=[0,2,4,7][k];tone(mtof(R+12+sdeg(tr,d+deg)),t,sd*ev*.9,'triangle',.035,AU.mus);}}
+      if(tr.pad&&s===0){for(const k of [0,2,4]){const f=mtof(R+12+sdeg(tr,d+k));tone(f,t,sd*15,'sawtooth',.018,AU.mus,0,900,0,sd*4);tone(f*1.006,t,sd*15,'sawtooth',.014,AU.mus,0,900,0,sd*4);}}
+    }
+    AU.next+=sd;AU.step++;
+  }
+}
+/* =====================================================================================
+   6. INPUT — one snapshot per simulation tick from keyboard, mouse/pen, touch stick + buttons, gamepads.
+      LATCH holds keys pressed since the last tick so very quick taps are never lost.
+   ===================================================================================== */
+const KEY={},LATCH=new Set();
+const GAMEKEYS=new Set(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Space','Tab']);
+addEventListener('keydown',e=>{if(GAMEKEYS.has(e.code))e.preventDefault();KEY[e.code]=true;if(e.repeat)return;LATCH.add(e.code);audioInit();});
+addEventListener('keyup',e=>{KEY[e.code]=false;});
+addEventListener('blur',()=>{for(const k in KEY)KEY[k]=false;PTR.down=false;});
+const K=c=>KEY[c]||LATCH.has(c);
+/* pointer in matrix pixels (works for mouse, pen and touch on the matrix itself) */
+const PTR={x:0,y:0,on:false,down:false,pressed:false,released:false,last:0,id:null,touch:false};
+const toM=e=>[(e.clientX-RECT.x)/RECT.w*W,(e.clientY-RECT.y)/RECT.h*H];
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('pointerdown',e=>{e.preventDefault();audioInit();[PTR.x,PTR.y]=toM(e);PTR.on=true;PTR.down=true;PTR.pressed=true;PTR.id=e.pointerId;PTR.touch=e.pointerType!=='mouse';PTR.last=performance.now();try{cv.setPointerCapture(e.pointerId);}catch(_){}});
+addEventListener('pointermove',e=>{if(e.pointerType==='mouse'||e.pointerId===PTR.id){[PTR.x,PTR.y]=toM(e);PTR.on=true;PTR.last=performance.now();}});
+addEventListener('pointerup',e=>{if(e.pointerId===PTR.id||e.pointerType==='mouse'){if(PTR.down)PTR.released=true;PTR.down=false;}});
+addEventListener('pointercancel',e=>{if(e.pointerId===PTR.id){PTR.down=false;PTR.released=true;}});
+function pads(){try{const gp=navigator.getGamepads?navigator.getGamepads():[];const out=[];for(const p of gp)if(p&&p.connected!==false)out.push(p);return out;}catch(e){return [];}}
+const TS={x:0,y:0,on:false,A:false,B:false};
+function stick(el,kn,cb){
+  let id=null,cx=0,cy=0;
+  const set=(x,y)=>{const dx=x-cx,dy=y-cy,r=el.clientWidth*.5,l=Math.hypot(dx,dy),k=l>r*.62?r*.62/l:1;kn.style.transform=`translate(${dx*k}px,${dy*k}px)`;const m=Math.min(1,l/(r*.62));cb(l>2?dx/l*m:0,l>2?dy/l*m:0,true);};
+  el.addEventListener('pointerdown',e=>{e.preventDefault();audioInit();id=e.pointerId;const r=el.getBoundingClientRect();cx=r.left+r.width/2;cy=r.top+r.height/2;try{el.setPointerCapture(id);}catch(_){}set(e.clientX,e.clientY);});
+  el.addEventListener('pointermove',e=>{if(e.pointerId===id)set(e.clientX,e.clientY);});
+  const end=e=>{if(e.pointerId!==id)return;id=null;kn.style.transform='';cb(0,0,false);};
+  el.addEventListener('pointerup',end);el.addEventListener('pointercancel',end);el.addEventListener('lostpointercapture',end);
+}
+stick($('stL'),$('knL'),(x,y,on)=>{TS.x=x;TS.y=y;TS.on=on;});
+for(const [bid,k] of [['bA','A'],['bB','B']]){
+  const el=$(bid);
+  el.addEventListener('pointerdown',e=>{e.preventDefault();audioInit();TS[k]=true;el.classList.add('on');try{el.setPointerCapture(e.pointerId);}catch(_){}});
+  const up=()=>{TS[k]=false;el.classList.remove('on');};
+  el.addEventListener('pointerup',up);el.addEventListener('pointercancel',up);el.addEventListener('lostpointercapture',up);
+}
+/* the control snapshot. x,y in -1..1 ; a = primary ; b = secondary ; ok/back for menus */
+function readCtl(){
+  const o={x:0,y:0,a:false,b:false,start:false,ok:false,back:false,pause:false,u:false,d:false,l:false,r:false};
+  if(K('ArrowLeft')||K('KeyA'))o.x-=1;if(K('ArrowRight')||K('KeyD'))o.x+=1;if(K('ArrowUp')||K('KeyW'))o.y-=1;if(K('ArrowDown')||K('KeyS'))o.y+=1;
+  if(K('Space')||K('KeyJ')||K('KeyZ'))o.a=true;if(K('ShiftLeft')||K('ShiftRight')||K('KeyK')||K('KeyX'))o.b=true;
+  if(TS.on&&(TS.x||TS.y)){o.x=TS.x;o.y=TS.y;}if(TS.A)o.a=true;if(TS.B)o.b=true;
+  for(const p of pads()){
+    const b=k=>!!(p.buttons[k]&&p.buttons[k].pressed),lx=p.axes[0]||0,ly=p.axes[1]||0;
+    if(Math.hypot(lx,ly)>.2){o.x=lx;o.y=ly;}if(b(14))o.x=-1;if(b(15))o.x=1;if(b(12))o.y=-1;if(b(13))o.y=1;
+    if(b(0)||b(7))o.a=true;if(b(1)||b(6))o.b=true;if(b(9))o.start=true;if(b(0))o.ok=true;if(b(1))o.back=true;
+  }
+  const l=Math.hypot(o.x,o.y);if(l>1){o.x/=l;o.y/=l;}
+  o.u=o.y<-.5;o.d=o.y>.5;o.l=o.x<-.5;o.r=o.x>.5;
+  o.ok=o.ok||K('Enter')||K('Space')||K('KeyJ')||TS.A;o.back=o.back||K('Escape');o.pause=K('Escape')||K('KeyP')||o.start;
+  return o;
+}
+function endInputFrame(){LATCH.clear();PTR.pressed=false;PTR.released=false;}
+/* =====================================================================================
+   7. ARCADE BRIDGE — the 3D arcade loads cabinets in an iframe with ?embed=1.
+      game -> arcade:  {src:'hyperdot',type:'ready'|'score'|'over'|'exit', id, ...}
+      arcade -> game:  {src:'hyperdot-arcade',cmd:'start'|'pause'|'resume'|'attract'|'mute'|'unmute'}
+      Same origin, so the arcade may also sample #gl directly for the cabinet screen in the 3D world.
+   ===================================================================================== */
+const ARC={muted:false,last:0,
+  post(type,data){if(window.parent===window)return;try{window.parent.postMessage(Object.assign({src:'hyperdot',type,id:CAB.id},data||{}),'*');}catch(e){}},
+  score(s){const t=performance.now();if(t-this.last>250){this.last=t;this.post('score',{score:s});}},
+  over(score,tickets){this.post('over',{score,tickets:CAB.tickets?Math.max(0,Math.round(tickets||0)):0});},
+  exit(){this.post('exit');}
+};
+addEventListener('message',e=>{const m=e.data;if(!m||m.src!=='hyperdot-arcade')return;
+  if(m.cmd==='start'){audioInit();APP_start();}
+  else if(m.cmd==='pause')setPause(true);
+  else if(m.cmd==='resume')setPause(false);
+  else if(m.cmd==='attract')APP_attract();
+  else if(m.cmd==='mute'){ARC.muted=true;setVolume();}
+  else if(m.cmd==='unmute'){ARC.muted=false;setVolume();}
+});
+window.HYPERDOT_GAME={id:CAB.id,title:CAB.title,tickets:CAB.tickets,version:1};
+
+/* =====================================================================================
+   8. SMALL DRAWING HELPERS on RBUF (fast) — rect, disc with soft dithered edge, additive glow, line
+   ===================================================================================== */
+const BAY4=new Float32Array([0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5].map(v=>(v+.5)/16));
+function clear(c){RBUF.fill(c);}
+function rect(x,y,w,h,c){x=Math.round(x);y=Math.round(y);w=Math.round(w);h=Math.round(h);const x0=Math.max(0,x),x1=Math.min(W,x+w);for(let j=Math.max(0,y);j<Math.min(H,y+h);j++)RBUF.fill(c,j*W+x0,j*W+x1);}
+function px(x,y,c){x|=0;y|=0;if(x>=0&&y>=0&&x<W&&y<H)RBUF[y*W+x]=c;}
+function addPx(i,r,g2,b){const c=RBUF[i],R=(c&255)+r,G=((c>>>8)&255)+g2,B=((c>>>16)&255)+b;RBUF[i]=(0xff000000|((B>255?255:B)<<16)|((G>255?255:G)<<8)|(R>255?255:R))>>>0;}
+function disc(cx,cy,r,c,alpha=1){const y0=Math.max(0,Math.floor(cy-r)),y1=Math.min(H-1,Math.ceil(cy+r));for(let y=y0;y<=y1;y++){const dy=y+.5-cy,br=(y&3)<<2;for(let x=Math.max(0,Math.floor(cx-r));x<=Math.min(W-1,Math.ceil(cx+r));x++){const dx=x+.5-cx,d=(dx*dx+dy*dy)/(r*r);if(d<1&&BAY4[br|(x&3)]<alpha*(1-d*d*.6))RBUF[y*W+x]=c;}}}
+function glow(cx,cy,r,col,k=1){const y0=Math.max(0,Math.floor(cy-r)),y1=Math.min(H-1,Math.ceil(cy+r));for(let y=y0;y<=y1;y++){const dy=(y+.5-cy)/r;for(let x=Math.max(0,Math.floor(cx-r));x<=Math.min(W-1,Math.ceil(cx+r));x++){const dx=(x+.5-cx)/r,d=dx*dx+dy*dy;if(d<1){const f=(1-d)*(1-d)*k;addPx(y*W+x,col[0]*f,col[1]*f,col[2]*f);}}}}
+function line(x0,y0,x1,y1,c){const n=Math.max(1,Math.round(Math.max(Math.abs(x1-x0),Math.abs(y1-y0))));for(let k=0;k<=n;k++)px(x0+(x1-x0)*k/n,y0+(y1-y0)*k/n,c);}
+
+/* =====================================================================================
+   9a. WORLD + BALL PHYSICS  (metres, seconds, y up, z up the lane away from the player)
+   The alley is an inclined plane that turns into a parabolic launch ramp (the hump), a
+   gutter slot, then a 30-degree target board carrying ring lips. Ring lips are true tori:
+   the closest point on a torus to a sphere centre is found analytically (project onto the
+   board plane, push out to the core circle), so rattling around a lip is exact contact
+   against a curved tube rather than against a polyline. Pocket holes are open cylinders:
+   their rim is a zero-thickness circle, their wall a cylinder, so a ball can teeter on a
+   rim, rattle across a hole and drop. A rolling sphere carries linear AND angular velocity;
+   every contact applies a normal impulse and a Coulomb friction impulse at the contact
+   point, which is what turns skid into roll and side-spin into a curving path.
+   ===================================================================================== */
+const PH={g:9.81,R:0.04,HW:0.42,ZS:-0.5,ZH0:1.1,ZL:1.4,SLOT:0.11,phi:25*Math.PI/180,VB:0.98,lane:9*Math.PI/180,launch:45*Math.PI/180,
+  hL:0.03,rt:0.018,rH:0.05,HOLED:0.13,SUB:8,ZHAND:0.1};
+const LS=Math.tan(PH.lane),LK=(Math.tan(PH.launch)-LS)/(2*(PH.ZL-PH.ZH0));
+/* lane profile y(z): a straight incline, then a parabola whose slope grows to the launch angle at the lip */
+const laneY=z=>z<PH.ZH0?LS*z:LS*z+LK*(z-PH.ZH0)*(z-PH.ZH0);
+const laneDY=z=>z<PH.ZH0?LS:LS+2*LK*(z-PH.ZH0);
+const Y_LIP=laneY(PH.ZL),ZB0=PH.ZL+PH.SLOT,YB0=Y_LIP-0.08;
+const SINP=Math.sin(PH.phi),COSP=Math.cos(PH.phi);
+const ZTOP=ZB0+PH.VB*COSP,YTOP=YB0+PH.VB*SINP;
+/* board frame: origin at the bottom-centre edge, u across (=x), v up the slope, w out of the board */
+const toBoard=(x,y,z,o)=>{const dy=y-YB0,dz=z-ZB0;o[0]=x;o[1]=dy*SINP+dz*COSP;o[2]=dy*COSP-dz*SINP;return o;};
+const fromBoard=(u,v,w,o)=>{o[0]=u;o[1]=YB0+v*SINP+w*COSP;o[2]=ZB0+v*COSP-w*SINP;return o;};
+/* targets: ring lips are nested circles whose bottoms are a ball-and-a-bit apart (so each crescent
+   funnels into its own hole) and whose tops nearly touch. Pockets sit in the top corners. */
+const RCOL={10:[70,150,255],20:[60,235,130],30:[255,214,60],40:[255,128,36],50:[255,48,80],100:[255,70,230]};
+const RINGS=[],HOLES=[];
+{
+  /* bottom gaps are a ball plus lip clearance; tops almost touch; ring 10 leaves a free channel
+     (wider than a ball) to each side wall so nothing can wedge outside the nest */
+  const gap=0.12,top=0.005,r50=0.065,b10=0.12,c50=b10+4*gap+r50;
+  const rr=[[50,c50,r50]];
+  let bot=c50-r50,tp=c50+r50;
+  for(const val of [40,30,20,10]){bot-=gap;tp+=top;rr.push([val,(bot+tp)/2,(tp-bot)/2]);}
+  rr.reverse();                                   /* 10,20,30,40,50 */
+  for(const [val,v,r] of rr)RINGS.push({val,u:0,v,r,col:RCOL[val],flash:0,glow:0});
+  for(let i=0;i<4;i++){const a=RINGS[i],b=RINGS[i+1];HOLES.push({val:a.val,u:0,v:((a.v-a.r)+(b.v-b.r))/2,r:PH.rH,ring:i});}
+  HOLES.push({val:50,u:0,v:c50,r:PH.rH,ring:4});
+  for(const s of [-1,1]){RINGS.push({val:100,u:s*0.25,v:0.87,r:0.06,col:RCOL[100],flash:0,glow:0});HOLES.push({val:100,u:s*0.25,v:0.87,r:0.046,ring:RINGS.length-1});}
+}
+/* ---- the ball ---- */
+function newBall(){return {px:0,py:0,pz:0,vx:0,vy:0,vz:0,wx:0,wy:0,wz:0,qw:1,qx:0,qy:0,qz:0,st:'hand',t:0,hole:-1,res:null,
+  sup:0,supK:0,roll:0,air:0,still:0,onHump:false,launched:false,maxZ:0,sinkT:0,glow:0,firstV:null,firstU:0};}
+function spinQ(b,ax,ay,az,ang){const s=Math.sin(ang/2),c=Math.cos(ang/2),w=b.qw,x=b.qx,y=b.qy,z=b.qz;
+  b.qw=c*w-s*(ax*x+ay*y+az*z);b.qx=c*x+s*(ax*w+ay*z-az*y);b.qy=c*y+s*(ay*w+az*x-ax*z);b.qz=c*z+s*(az*w+ax*y-ay*x);}
+/* impulse response at one contact: n = unit normal out of the surface, pen = penetration depth.
+   Returns the closing speed (for sound). Friction impulse per unit mass is capped at mu*jn and
+   sized to cancel contact-point slip: for a solid sphere that is 2/7 of the slip speed. */
+const IMP={v:0};
+function contact(b,nx,ny,nz,pen,e,mu){
+  b.px+=nx*pen;b.py+=ny*pen;b.pz+=nz*pen;
+  const vn=b.vx*nx+b.vy*ny+b.vz*nz;if(vn>=0)return 0;
+  const jn=-(1+(vn<-0.3?e:0))*vn;             /* slow (resting) contacts do not bounce: kills jitter */
+  b.vx+=nx*jn;b.vy+=ny*jn;b.vz+=nz*jn;
+  const R=PH.R,rx=-nx*R,ry=-ny*R,rz=-nz*R;
+  let cx=b.vx+(b.wy*rz-b.wz*ry),cy=b.vy+(b.wz*rx-b.wx*rz),cz=b.vz+(b.wx*ry-b.wy*rx);
+  const cn=cx*nx+cy*ny+cz*nz;cx-=nx*cn;cy-=ny*cn;cz-=nz*cn;
+  const sl=Math.sqrt(cx*cx+cy*cy+cz*cz);
+  if(sl>1e-7){
+    let j=sl*(2/7);const jm=mu*jn;if(j>jm)j=jm;
+    const jx=-cx/sl*j,jy=-cy/sl*j,jz=-cz/sl*j,k=2.5/(R*R);
+    b.vx+=jx;b.vy+=jy;b.vz+=jz;
+    b.wx+=(ry*jz-rz*jy)*k;b.wy+=(rz*jx-rx*jz)*k;b.wz+=(rx*jy-ry*jx)*k;
+  }
+  return -vn;
+}
+/* rolling resistance + pivot friction while supported by a surface with normal n */
+function rollDrag(b,nx,ny,nz,crr,dt){
+  const vn=b.vx*nx+b.vy*ny+b.vz*nz,tx=b.vx-nx*vn,ty=b.vy-ny*vn,tz=b.vz-nz*vn,s=Math.sqrt(tx*tx+ty*ty+tz*tz);
+  if(s>1e-5){const k=Math.max(0,1-crr*PH.g*dt/s);b.vx=nx*vn+tx*k;b.vy=ny*vn+ty*k;b.vz=nz*vn+tz*k;
+    const wn=b.wx*nx+b.wy*ny+b.wz*nz;b.wx=(b.wx-nx*wn)*k+nx*wn*(1-3*dt);b.wy=(b.wy-ny*wn)*k+ny*wn*(1-3*dt);b.wz=(b.wz-nz*wn)*k+nz*wn*(1-3*dt);}
+  return s;
+}
+const BC=[0,0,0],WP=[0,0,0];
+/* surface materials: [restitution, friction, rolling resistance] */
+const MAT={lane:[.25,.14,.010],board:[.26,.22,.020],lip:[.36,.16,0],wall:[.5,.1,0],rim:[.3,.2,0]};
+/* one substep for one ball; events go to ev(kind, speed, ball, extra) */
+function stepBall(b,dt,ev){
+  const R=PH.R;
+  b.vy-=PH.g*dt;b.vx*=1-.03*dt;b.vy*=1-.03*dt;b.vz*=1-.03*dt;
+  b.px+=b.vx*dt;b.py+=b.vy*dt;b.pz+=b.vz*dt;
+  const wl=Math.sqrt(b.wx*b.wx+b.wy*b.wy+b.wz*b.wz);if(wl>1e-6)spinQ(b,b.wx/wl,b.wy/wl,b.wz/wl,wl*dt);
+  let sup=0,supK=0,roll=0,s;
+  /* --- lane + hump: closest point on the profile curve (Newton-style foot-point iteration) --- */
+  if(b.pz<PH.ZL+R&&b.py<laneY(Math.min(b.pz,PH.ZL))+R*1.5&&b.st!=='sink'){
+    let z=b.pz;
+    for(let i=0;i<3;i++){const y=laneY(z),d=laneDY(z),il=1/Math.sqrt(1+d*d),nz=-d*il,ny=il,dist=(b.pz-z)*nz+(b.py-y)*ny;z=b.pz-nz*dist;if(z>PH.ZL)z=PH.ZL;if(z<PH.ZS)z=PH.ZS;}
+    const dz=b.pz-z,dy=b.py-laneY(z),dist=Math.sqrt(dz*dz+dy*dy);
+    if(dist<R&&dist>1e-6&&(dy>0||b.pz>PH.ZL)){
+      const ny=dy/dist,nz=dz/dist,m=MAT.lane;s=contact(b,0,ny,nz,R-dist,m[0],m[1]);
+      if(s>.6)ev('thud',s,b,0);
+      roll=rollDrag(b,0,ny,nz,m[2],dt);sup=1;supK=1;
+      if(!b.onHump&&b.pz>PH.ZH0){b.onHump=true;ev('hump',Math.sqrt(b.vz*b.vz+b.vy*b.vy),b,0);}
+    }
+  }
+  if(!b.launched&&b.pz>PH.ZL){b.launched=true;ev('launch',Math.sqrt(b.vz*b.vz+b.vy*b.vy),b,0);}
+  /* --- lip face (vertical, faces the board) and board front face (faces the player): the gutter slot --- */
+  if(b.py<Y_LIP&&b.pz>PH.ZL&&b.pz<PH.ZL+R){const m=MAT.wall;s=contact(b,0,0,1,PH.ZL+R-b.pz,m[0],m[1]);if(s>.4)ev('knock',s,b,0);}
+  if(b.py<YB0&&b.pz<ZB0&&b.pz>ZB0-R){const m=MAT.wall;s=contact(b,0,0,-1,b.pz-(ZB0-R),m[0],m[1]);if(s>.4)ev('knock',s,b,0);}
+  /* --- target board --- */
+  toBoard(b.px,b.py,b.pz,BC);let u=BC[0],v=BC[1],w=BC[2];
+  if(w<R+.08&&w>-PH.HOLED-.1){
+    let hole=-1;
+    for(let i=0;i<HOLES.length;i++){const h=HOLES[i],du=u-h.u,dv=v-h.v;if(du*du+dv*dv<h.r*h.r){hole=i;break;}}
+    if(b.st==='sink')hole=b.hole;
+    if(hole>=0){
+      /* inside a hole: above the plane the rim circle holds the ball, below it the cylinder wall does */
+      const h=HOLES[hole],du=u-h.u,dv=v-h.v,ql=Math.sqrt(du*du+dv*dv)||1e-6,eu=du/ql,evv=dv/ql;
+      if(w>0){const dr=ql-h.r,d=Math.sqrt(dr*dr+w*w);
+        if(d<R){const nu=dr/d,nw=w/d,nx=nu*eu,ny=nu*evv*SINP+nw*COSP,nz=nu*evv*COSP-nw*SINP,m=MAT.rim;s=contact(b,nx,ny,nz,R-d,m[0],m[1]);if(s>.25)ev('rim',s,b,hole);sup=1;supK=2;}}
+      else if(ql+R>h.r){const nx=-eu,ny=-evv*SINP,nz=-evv*COSP,m=MAT.rim;s=contact(b,nx,ny,nz,ql+R-h.r,m[0],m[1]);if(s>.25)ev('rim',s,b,hole);}
+      if(b.st==='live'&&w<-R*1.05){b.st='sink';b.hole=hole;b.sinkT=0;ev('dunk',Math.sqrt(b.vx*b.vx+b.vy*b.vy+b.vz*b.vz),b,hole);}
+    }else if(v>=0&&v<=PH.VB&&w<R&&w>-R){
+      const m=MAT.board;s=contact(b,0,COSP,-SINP,R-w,m[0],m[1]);
+      if(s>.5)ev('thud',s,b,1);
+      if(b.firstV===null&&b.st==='live'){b.firstV=v;b.firstU=u;}
+      roll=rollDrag(b,0,COSP,-SINP,m[2],dt);sup=1;supK=2;
+    }else if(v<0&&w>-R){
+      /* the board's bottom edge: a straight corner the ball can roll over into the slot */
+      const d=Math.sqrt(v*v+w*w);if(d<R&&d>1e-6){const nv=v/d,nw=w/d,m=MAT.wall;s=contact(b,0,nv*SINP+nw*COSP,nv*COSP-nw*SINP,R-d,m[0],m[1]);sup=1;supK=2;if(s>.4)ev('knock',s,b,0);}
+    }
+    /* --- ring lips: tori lying on the board. Closest point on the core circle = push the in-plane
+       offset out to radius r at height hL; then it is a sphere-vs-sphere test with radius R+rt --- */
+    if(w<PH.hL+PH.rt+R)for(let i=0;i<RINGS.length;i++){
+      const ri=RINGS[i],du=u-ri.u,dv=v-ri.v,ql=Math.sqrt(du*du+dv*dv),lim=R+PH.rt;
+      if(Math.abs(ql-ri.r)>lim||ql<1e-6)continue;
+      const dr=ql-ri.r,dw=w-PH.hL,d=Math.sqrt(dr*dr+dw*dw);
+      if(d<lim){const eu=du/ql,evv=dv/ql,nu=dr/d,nw=dw/d,nx=nu*eu,ny=nu*evv*SINP+nw*COSP,nz=nu*evv*COSP-nw*SINP,m=MAT.lip;
+        s=contact(b,nx,ny,nz,lim-d,m[0],m[1]);if(s>.12)ev('lip',s,b,i);if(nw>.5){sup=1;supK=2;}}
+    }
+  }
+  /* --- side walls, back wall, the player's end --- */
+  if(b.px>PH.HW-R){s=contact(b,-1,0,0,b.px-(PH.HW-R),MAT.wall[0],MAT.wall[1]);if(s>.3)ev('wall',s,b,0);}
+  else if(b.px<-PH.HW+R){s=contact(b,1,0,0,(-PH.HW+R)-b.px,MAT.wall[0],MAT.wall[1]);if(s>.3)ev('wall',s,b,0);}
+  if(b.pz>ZTOP-R){s=contact(b,0,0,-1,b.pz-(ZTOP-R),MAT.wall[0],MAT.wall[1]);if(s>.3)ev('back',s,b,0);}
+  if(b.pz<PH.ZS+R){contact(b,0,0,1,PH.ZS+R-b.pz,.3,.1);}
+  b.sup=sup;b.supK=supK;b.roll=sup?roll:0;b.air=sup?0:b.air+dt;
+}
+/* sphere-sphere impulse between two live balls (equal mass, e=.8, no friction) */
+function ballPair(a,b,ev){
+  const dx=b.px-a.px,dy=b.py-a.py,dz=b.pz-a.pz,d2=dx*dx+dy*dy+dz*dz,D=2*PH.R;if(d2>=D*D||d2<1e-10)return;
+  const d=Math.sqrt(d2),nx=dx/d,ny=dy/d,nz=dz/d,pen=(D-d)/2;
+  a.px-=nx*pen;a.py-=ny*pen;a.pz-=nz*pen;b.px+=nx*pen;b.py+=ny*pen;b.pz+=nz*pen;
+  const vr=(b.vx-a.vx)*nx+(b.vy-a.vy)*ny+(b.vz-a.vz)*nz;if(vr>=0)return;
+  const j=-(1.8)*vr/2;a.vx-=nx*j;a.vy-=ny*j;a.vz-=nz*j;b.vx+=nx*j;b.vy+=ny*j;b.vz+=nz*j;if(-vr>.2)ev('click',-vr,a,0);
+}
+/* advance every live ball one simulation tick (PH.SUB substeps) and run outcome detection */
+function physTick(balls,dt,ev){
+  const h=dt/PH.SUB;
+  for(let k=0;k<PH.SUB;k++){
+    for(const b of balls)if(b.st==='live'||b.st==='sink'||b.st==='out')stepBall(b,h,ev);
+    for(let i=0;i<balls.length;i++){const a=balls[i];if(a.st!=='live')continue;for(let j=i+1;j<balls.length;j++)if(balls[j].st==='live')ballPair(a,balls[j],ev);}
+  }
+  for(const b of balls){
+    if(b.st==='hand')continue;
+    b.t+=dt;const n=Math.sqrt(b.qw*b.qw+b.qx*b.qx+b.qy*b.qy+b.qz*b.qz);b.qw/=n;b.qx/=n;b.qy/=n;b.qz/=n;
+    if(b.pz>b.maxZ)b.maxZ=b.pz;
+    const sp=Math.sqrt(b.vx*b.vx+b.vy*b.vy+b.vz*b.vz);
+    if(b.st==='live'){
+      /* the slot under the board is split into three bins: the side bins (fed by the side channels) pay 10 */
+      if(b.py<YB0-0.07&&b.pz>PH.ZL-.01&&b.pz<ZB0+.01){b.st='out';b.res=Math.abs(b.px)>PH.BIN?'side':'gutter';ev(b.res,sp,b,0);}
+      else if(b.vz<-.05&&b.pz<PH.ZH0-.25&&b.maxZ>PH.ZH0-.2&&!b.launched){b.st='out';b.res='short';ev('short',sp,b,0);}
+      else if(b.vz<-.05&&b.pz<PH.ZH0-.6&&b.t>.8&&!b.launched){b.st='out';b.res='short';ev('short',sp,b,0);}
+      else if(b.launched&&b.vz<-.05&&b.pz<PH.ZH0-.15){b.st='out';b.res='bounce';ev('short',sp,b,1);}
+      /* a ball that stops on a lip top gets a nudge (the cabinet "shakes"), and is ruled on after 7 s */
+      b.still=sp<.04?b.still+dt:0;
+      if(b.still>1.1){b.vx+=(Math.random()-.5)*.3;b.vy+=.05;b.vz-=.12;b.still=0;ev('nudge',0,b,0);}
+      if(b.t>9){b.st='out';b.res='gutter';ev('gutter',0,b,0);}
+    }else if(b.st==='sink'){b.sinkT+=dt;if(b.sinkT>.5)b.st='gone';}
+    else if(b.st==='out'){b.sinkT+=dt;if(b.sinkT>1.6||b.pz<PH.ZS+.08||b.py<YB0-.45)b.st='gone';}
+  }
+}
+/* put a ball on the lane at (x, z) and roll it: speed (m/s), aim (rad, + = right), spin (-1..1 side roll).
+   The hand imparts 85% of natural roll, so the ball skids briefly, then friction locks it into rolling. */
+function launchBall(b,x,z,speed,aim,spin){
+  const ny=Math.cos(PH.lane),nz=-Math.sin(PH.lane);
+  b.px=x;b.pz=z;b.py=laneY(z)+PH.R/ny;
+  const dx=Math.sin(aim),dz=Math.cos(aim)*Math.cos(PH.lane),dy=Math.cos(aim)*Math.sin(PH.lane);
+  b.vx=dx*speed;b.vy=dy*speed;b.vz=dz*speed;
+  /* natural roll: w = n x v / R */
+  const k=.85/PH.R;b.wx=(ny*b.vz-nz*b.vy)*k;b.wy=(nz*b.vx)*k;b.wz=(-ny*b.vx)*k;
+  /* side roll about the travel direction; friction turns it into sideways drift (a curve) */
+  const sw=-spin*PH.SPIN;b.wx+=dx*sw;b.wy+=dy*sw;b.wz+=dz*sw;
+  Object.assign(b,{st:'live',t:0,hole:-1,res:null,onHump:false,launched:false,maxZ:z,still:0,sinkT:0,air:0,firstV:null});
+}
+PH.SPIN=30;PH.BIN=0.25;
+/* =====================================================================================
+   9b. SOFTWARE 3D: scene mesh, camera, and a flat-shaded triangle rasterizer that writes a
+   G-buffer (1/z depth + face id per dot). The camera only moves while a ball is in play, so
+   the G-buffer is cached and re-rasterized only when the camera changes. Lighting, lamps,
+   ball shadows and procedural paint are then shaded per dot every frame from that buffer
+   (a tiny deferred renderer), and the balls are ray-cast analytically into the same depth.
+   ===================================================================================== */
+const PITCH=1.02;   /* neighbouring alleys sit at x = +-PITCH */
+const MT={BG:0,LANE:1,HUMP:2,RAILIN:3,RAILTOP:4,DARK:5,SLOT:6,BOARD:7,LIP:8,SIDE:9,BACK:10,CHROME:11,DIV:12,FLOOR:13,CAP:14,WALL:15};
+const RAIL_H=.055,RAIL_W=.05,SLOT_Y=YB0-.24,SIDE_H=.5,SIDE_F=.26;   /* target box: back / front wall heights */
+const LIGHT=(()=>{const x=.22,y=1,z=-.5,l=Math.hypot(x,y,z);return [x/l,y/l,z/l];})();
+let NV=0,NT=0,TLN,VX,VY,VZ,VCX,VCY,VCZ,SXA,SYA,TA,TB,TC,TMAT,TAUX,TNX,TNY,TNZ,TR,TG,TBL,TLIT;
+const LAMPZ=[];             /* rail lamp positions along the lane (shared by both sides) */
+function buildScene(){
+  const V=[],T=[];let LN=0,OX=0,LO=false;
+  const vt=(x,y,z)=>{V.push(x,y,z);return V.length/3-1;};
+  /* triangle with a facing hint: the winding is fixed so the normal points along (hx,hy,hz) */
+  const tri=(a,b,c,m,col,aux,hx,hy,hz)=>{
+    const ax=V[a*3],ay=V[a*3+1],az=V[a*3+2],ux=V[b*3]-ax,uy=V[b*3+1]-ay,uz=V[b*3+2]-az,wx=V[c*3]-ax,wy=V[c*3+1]-ay,wz=V[c*3+2]-az;
+    let nx=uy*wz-uz*wy,ny=uz*wx-ux*wz,nz=ux*wy-uy*wx;const l=Math.hypot(nx,ny,nz);if(l<1e-12)return;nx/=l;ny/=l;nz/=l;
+    if(nx*hx+ny*hy+nz*hz<0){T.push(a,c,b,m,aux,-nx,-ny,-nz,col[0],col[1],col[2],LN);}else T.push(a,b,c,m,aux,nx,ny,nz,col[0],col[1],col[2],LN);
+  };
+  const quad=(p,m,col,aux,h)=>{const a=vt(p[0][0]+OX,p[0][1],p[0][2]),b=vt(p[1][0]+OX,p[1][1],p[1][2]),c=vt(p[2][0]+OX,p[2][1],p[2][2]),d=vt(p[3][0]+OX,p[3][1],p[3][2]);tri(a,b,c,m,col,aux,...h);tri(a,c,d,m,col,aux,...h);};
+  const HW=PH.HW,X2=HW+RAIL_W;
+  /* one complete alley; neighbours (lo) get coarser rings */
+  const alley=(ln,lo)=>{LN=ln;OX=ln*PITCH;LO=lo;
+  /* lane + hump as strips following the profile; rails ride on top of the same profile */
+  const zs=[];for(let i=0;i<=5;i++)zs.push(lerp(PH.ZS,PH.ZH0,i/5));for(let i=1;i<=9;i++)zs.push(lerp(PH.ZH0,PH.ZL,i/9));
+  for(let i=0;i<zs.length-1;i++){
+    const z0=zs[i],z1=zs[i+1],y0=laneY(z0),y1=laneY(z1),hump=z0>=PH.ZH0-1e-6,last=i===zs.length-2;
+    const m=last?MT.CHROME:hump?MT.HUMP:MT.LANE,col=last?[200,205,220]:hump?[150,98,54]:[168,116,64],n=[0,1,-laneDY((z0+z1)/2)];
+    quad([[-HW,y0,z0],[HW,y0,z0],[HW,y1,z1],[-HW,y1,z1]],m,col,0,n);
+    for(const s of [-1,1]){
+      quad([[s*HW,y0,z0],[s*HW,y0+RAIL_H,z0],[s*HW,y1+RAIL_H,z1],[s*HW,y1,z1]],MT.RAILIN,[120,28,44],0,[-s,0,0]);
+      quad([[s*HW,y0+RAIL_H,z0],[s*X2,y0+RAIL_H,z0],[s*X2,y1+RAIL_H,z1],[s*HW,y1+RAIL_H,z1]],MT.RAILTOP,[60,56,70],s,[0,1,0]);
+      quad([[s*X2,y0+RAIL_H,z0],[s*X2,-.45,z0],[s*X2,-.45,z1],[s*X2,y1+RAIL_H,z1]],MT.RAILIN,[90,20,34],0,[s,0,0]);
+    }
+  }
+  if(!ln)for(let z=.05;z<PH.ZL-.02;z+=.15)LAMPZ.push(z);
+  /* the player's end of the lane: a padded bumper */
+  quad([[-X2,laneY(PH.ZS),PH.ZS],[X2,laneY(PH.ZS),PH.ZS],[X2,-.45,PH.ZS],[-X2,-.45,PH.ZS]],MT.RAILIN,[90,20,34],0,[0,0,-1]);
+  /* gutter slot: lip face, slot floor, board front face, two bin dividers */
+  quad([[-HW,Y_LIP,PH.ZL],[HW,Y_LIP,PH.ZL],[HW,SLOT_Y,PH.ZL],[-HW,SLOT_Y,PH.ZL]],MT.DARK,[70,40,30],0,[0,0,1]);
+  quad([[-HW,SLOT_Y,PH.ZL],[HW,SLOT_Y,PH.ZL],[HW,SLOT_Y,ZB0],[-HW,SLOT_Y,ZB0]],MT.SLOT,[30,26,40],0,[0,1,0]);
+  quad([[-HW,YB0,ZB0],[HW,YB0,ZB0],[HW,SLOT_Y,ZB0],[-HW,SLOT_Y,ZB0]],MT.DARK,[36,30,60],0,[0,0,-1]);
+  for(const s of [-1,1])for(const e of [-1,1]){const x=s*PH.BIN+e*.006;
+    quad([[x,SLOT_Y,PH.ZL],[x,YB0-.03,PH.ZL],[x,YB0-.03,ZB0],[x,SLOT_Y,ZB0]],MT.DIV,[150,150,170],0,[e,0,0]);}
+  for(const s of [-1,1])quad([[s*PH.BIN-.006,YB0-.03,PH.ZL],[s*PH.BIN+.006,YB0-.03,PH.ZL],[s*PH.BIN+.006,YB0-.03,ZB0],[s*PH.BIN-.006,YB0-.03,ZB0]],MT.DIV,[200,200,220],0,[0,1,0]);
+  /* target board */
+  const bp=(u,v,w)=>{const o=[0,0,0];fromBoard(u,v,w,o);return o;};
+  quad([bp(-HW,0,0),bp(HW,0,0),bp(HW,PH.VB,0),bp(-HW,PH.VB,0)],MT.BOARD,[34,36,72],0,[0,COSP,-SINP]);
+  /* ring lips: a wall-and-bead profile swept round each ring (the physics torus is the bead) */
+  const NA=lo?2:4,prof=[[-PH.rt,0,-1,0]];for(let k=0;k<=NA;k++){const a=Math.PI*(1-k/NA);prof.push([PH.rt*Math.cos(a),PH.hL+PH.rt*Math.sin(a),Math.cos(a),Math.sin(a)]);}prof.push([PH.rt,0,1,0]);
+  RINGS.forEach((ri,idx)=>{
+    const N=Math.round((ri.val===100?14:12+ri.r*80)*(lo?.55:1));
+    for(let j=0;j<N;j++){const t0=j/N*TAU,t1=(j+1)/N*TAU,tm=(j+.5)/N*TAU;
+      for(let k=0;k<prof.length-1;k++){const p0=prof[k],p1=prof[k+1];
+        const P=(t,p)=>bp(ri.u+(ri.r+p[0])*Math.cos(t),ri.v+(ri.r+p[0])*Math.sin(t),p[1]);
+        /* facing hint: average profile normal, rotated into world */
+        const hr=(p0[2]+p1[2])/2,hw=k===0?0:k===prof.length-2?0:(p0[3]+p1[3])/2;
+        const hu=hr*Math.cos(tm),hv=hr*Math.sin(tm);
+        quad([P(t0,p0),P(t1,p0),P(t1,p1),P(t0,p1)],MT.LIP,ri.col,idx,[hu,hv*SINP+hw*COSP,hv*COSP-hw*SINP]);
+      }}
+  });
+  /* target box side walls (tall), their caps, and the back wall */
+  const zt0=PH.ZL,yt0=Y_LIP+SIDE_F,zt1=ZTOP,yt1=YTOP+SIDE_H;
+  for(const s of [-1,1]){
+    quad([[s*HW,SLOT_Y,zt0],[s*HW,yt0,zt0],[s*HW,yt1,zt1],[s*HW,SLOT_Y,zt1]],MT.SIDE,[70,34,110],s,[-s,0,0]);
+    quad([[s*HW,yt0,zt0],[s*X2,yt0,zt0],[s*X2,yt1,zt1],[s*HW,yt1,zt1]],MT.CAP,[60,56,70],s,[0,1,0]);
+    quad([[s*X2,yt0,zt0],[s*X2,-.45,zt0],[s*X2,-.45,zt1],[s*X2,yt1,zt1]],MT.RAILIN,[60,24,80],0,[s,0,0]);
+    quad([[s*HW,yt0,zt0],[s*X2,yt0,zt0],[s*X2,-.45,zt0],[s*HW,-.45,zt0]],MT.RAILIN,[90,20,34],0,[0,0,-1]);
+    /* front post of the box, standing on the rail */
+    quad([[s*HW,Y_LIP+RAIL_H,zt0],[s*HW,yt0,zt0],[s*HW,yt0,zt0-.04],[s*HW,Y_LIP+RAIL_H,zt0-.04]],MT.CAP,[60,56,70],0,[-s,0,0]);
+  }
+  quad([[-HW,YTOP-.02,ZTOP],[HW,YTOP-.02,ZTOP],[HW,yt1,ZTOP],[-HW,yt1,ZTOP]],MT.BACK,[40,30,80],0,[0,0,-1]);
+  quad([[-X2,yt1,ZTOP],[X2,yt1,ZTOP],[X2,yt1,ZTOP+.06],[-X2,yt1,ZTOP+.06]],MT.CAP,[60,56,70],0,[0,1,0]);
+  };
+  alley(0,false);alley(-1,true);alley(1,true);LN=0;OX=0;
+  /* the arcade around the alley: carpet and a far wall */
+  quad([[-4,-.45,PH.ZS-2],[4,-.45,PH.ZS-2],[4,-.45,ZTOP+.07],[-4,-.45,ZTOP+.07]],MT.FLOOR,[40,30,60],0,[0,1,0]);
+  quad([[-4,-.45,ZTOP+.07],[4,-.45,ZTOP+.07],[4,2.6,ZTOP+.07],[-4,2.6,ZTOP+.07]],MT.WALL,[30,24,50],0,[0,0,-1]);
+  /* pack into typed arrays */
+  NV=V.length/3;NT=T.length/12;
+  VX=new Float32Array(NV);VY=new Float32Array(NV);VZ=new Float32Array(NV);VCX=new Float32Array(NV);VCY=new Float32Array(NV);VCZ=new Float32Array(NV);SXA=new Float32Array(NV);SYA=new Float32Array(NV);
+  for(let i=0;i<NV;i++){VX[i]=V[i*3];VY[i]=V[i*3+1];VZ[i]=V[i*3+2];}
+  TLN=new Int8Array(NT);TA=new Int32Array(NT);TB=new Int32Array(NT);TC=new Int32Array(NT);TMAT=new Uint8Array(NT);TAUX=new Int8Array(NT);
+  TNX=new Float32Array(NT);TNY=new Float32Array(NT);TNZ=new Float32Array(NT);TR=new Float32Array(NT);TG=new Float32Array(NT);TBL=new Float32Array(NT);TLIT=new Float32Array(NT);
+  for(let t=0;t<NT;t++){const o=t*12;TLN[t]=T[o+11];TA[t]=T[o];TB[t]=T[o+1];TC[t]=T[o+2];TMAT[t]=T[o+3];TAUX[t]=T[o+4];TNX[t]=T[o+5];TNY[t]=T[o+6];TNZ[t]=T[o+7];TR[t]=T[o+8];TG[t]=T[o+9];TBL[t]=T[o+10];
+    /* baked light per face: key (lambert) + sky/ground hemisphere + ambient */
+    const nd=Math.max(0,TNX[t]*LIGHT[0]+TNY[t]*LIGHT[1]+TNZ[t]*LIGHT[2]);TLIT[t]=.18+.72*nd+.16*(TNY[t]*.5+.5);}
+}
+/* ---- camera ---- */
+const CAM={ex:0,ey:0,ez:0,fx:0,fy:0,fz:1,rx:1,ry:0,rz:0,ux:0,uy:1,uz:0,F:100,cx:0,cy:0,sig:''};
+let Y0=0,VH3=1,DH=0;   /* 3D viewport rows: Y0..H-1; the DMD panel owns rows 0..DH-1 */
+function setCam(ex,ey,ez,tx,ty,tz,F,roll){
+  let fx=tx-ex,fy=ty-ey,fz=tz-ez;const l=Math.hypot(fx,fy,fz);fx/=l;fy/=l;fz/=l;
+  let rx=fz,ry=0,rz=-fx;const rl=Math.hypot(rx,rz);rx/=rl;rz/=rl;
+  let ux=fy*rz-fz*ry,uy=fz*rx-fx*rz,uz=fx*ry-fy*rx;   /* up = forward x right */
+  if(roll){const c=Math.cos(roll),s=Math.sin(roll),r2x=rx*c+ux*s,r2y=ry*c+uy*s,r2z=rz*c+uz*s;ux=ux*c-rx*s;uy=uy*c-ry*s;uz=uz*c-rz*s;rx=r2x;ry=r2y;rz=r2z;}
+  Object.assign(CAM,{ex,ey,ez,fx,fy,fz,rx,ry,rz,ux,uy,uz,F,cx:W/2,cy:Y0+VH3/2});
+}
+/* world -> matrix pixel; returns depth (<=0 when behind the camera) */
+const PJ=[0,0,0];
+function project(x,y,z){const dx=x-CAM.ex,dy=y-CAM.ey,dz=z-CAM.ez,cz=dx*CAM.fx+dy*CAM.fy+dz*CAM.fz;
+  if(cz<.02){PJ[2]=0;return PJ;}PJ[0]=CAM.cx+CAM.F*(dx*CAM.rx+dy*CAM.ry+dz*CAM.rz)/cz;PJ[1]=CAM.cy-CAM.F*(dx*CAM.ux+dy*CAM.uy+dz*CAM.uz)/cz;PJ[2]=cz;return PJ;}
+/* ---- G-buffer ---- */
+let GZ=null,GF=null,GH=null,GHD=null;   /* 1/z, face id, hole id (-1), depth below the board inside a hole */
+RESCB.push(()=>{GZ=new Float32Array(W*H);GF=new Int32Array(W*H);GH=new Int8Array(W*H);GHD=new Float32Array(W*H);CAM.sig='';});
+/* rasterize one screen triangle (x,y in matrix px, w = 1/z). Row spans come from solving the three
+   edge functions for x, so no pixel outside the triangle is ever visited. */
+function rtri(x0,y0,w0,x1,y1,w1,x2,y2,w2,id){
+  let ar=(x1-x0)*(y2-y0)-(x2-x0)*(y1-y0);if(ar>-1e-9&&ar<1e-9)return;
+  if(ar<0){let t=x1;x1=x2;x2=t;t=y1;y1=y2;y2=t;t=w1;w1=w2;w2=t;ar=-ar;}
+  const dwx=((w1-w0)*(y2-y0)-(w2-w0)*(y1-y0))/ar,dwy=((w2-w0)*(x1-x0)-(w1-w0)*(x2-x0))/ar;
+  let ya=Math.ceil(Math.min(y0,y1,y2)-.5),yb=Math.floor(Math.max(y0,y1,y2)-.5);if(ya<Y0)ya=Y0;if(yb>H-1)yb=H-1;
+  const ax=-(y1-y0),bx=-(y2-y1),cx=-(y0-y2);
+  for(let y=ya;y<=yb;y++){
+    const py=y+.5;let xl=-1e9,xr=1e9,A,Bc,q;
+    Bc=(x1-x0)*(py-y0)+(y1-y0)*x0;A=ax;if(A>1e-12){q=-Bc/A;if(q>xl)xl=q;}else if(A<-1e-12){q=-Bc/A;if(q<xr)xr=q;}else if(Bc<0)continue;
+    Bc=(x2-x1)*(py-y1)+(y2-y1)*x1;A=bx;if(A>1e-12){q=-Bc/A;if(q>xl)xl=q;}else if(A<-1e-12){q=-Bc/A;if(q<xr)xr=q;}else if(Bc<0)continue;
+    Bc=(x0-x2)*(py-y2)+(y0-y2)*x2;A=cx;if(A>1e-12){q=-Bc/A;if(q>xl)xl=q;}else if(A<-1e-12){q=-Bc/A;if(q<xr)xr=q;}else if(Bc<0)continue;
+    let xa=Math.ceil(xl-.5),xe=Math.floor(xr-.5);if(xa<0)xa=0;if(xe>W-1)xe=W-1;if(xa>xe)continue;
+    let w=w0+dwx*(xa+.5-x0)+dwy*(py-y0),i=y*W+xa;
+    for(let x=xa;x<=xe;x++,i++,w+=dwx)if(w>GZ[i]){GZ[i]=w;GF[i]=id;}
+  }
+}
+const NEAR=.03,CLP=new Float32Array(30);
+function rasterScene(){
+  const {ex,ey,ez,fx,fy,fz,rx,ry,rz,ux,uy,uz,F,cx,cy}=CAM;
+  for(let i=0;i<NV;i++){const dx=VX[i]-ex,dy=VY[i]-ey,dz=VZ[i]-ez,z=dx*fx+dy*fy+dz*fz,x=dx*rx+dy*ry+dz*rz,y=dx*ux+dy*uy+dz*uz;
+    VCX[i]=x;VCY[i]=y;VCZ[i]=z;if(z>NEAR){SXA[i]=cx+F*x/z;SYA[i]=cy-F*y/z;}}
+  GZ.fill(0,Y0*W);GF.fill(-1,Y0*W);GH.fill(-1,Y0*W);
+  for(let t=0;t<NT;t++){
+    const a=TA[t],b=TB[t],c=TC[t];
+    /* back-face cull in world space */
+    if((VX[a]-ex)*TNX[t]+(VY[a]-ey)*TNY[t]+(VZ[a]-ez)*TNZ[t]>=0)continue;
+    const za=VCZ[a],zb=VCZ[b],zc=VCZ[c];
+    if(za>NEAR&&zb>NEAR&&zc>NEAR){rtri(SXA[a],SYA[a],1/za,SXA[b],SYA[b],1/zb,SXA[c],SYA[c],1/zc,t);continue;}
+    if(za<=NEAR&&zb<=NEAR&&zc<=NEAR)continue;
+    /* near-plane clip (Sutherland-Hodgman, one plane), then fan */
+    let n=0;const vs=[a,b,c];
+    for(let k=0;k<3;k++){const p=vs[k],q=vs[(k+1)%3],zp=VCZ[p],zq=VCZ[q];
+      if(zp>NEAR){CLP[n*3]=VCX[p];CLP[n*3+1]=VCY[p];CLP[n*3+2]=zp;n++;}
+      if((zp>NEAR)!==(zq>NEAR)){const s=(NEAR-zp)/(zq-zp);CLP[n*3]=VCX[p]+(VCX[q]-VCX[p])*s;CLP[n*3+1]=VCY[p]+(VCY[q]-VCY[p])*s;CLP[n*3+2]=NEAR;n++;}}
+    for(let k=1;k<n-1;k++){const P=(j,o)=>o===0?cx+F*CLP[j*3]/CLP[j*3+2]:cy-F*CLP[j*3+1]/CLP[j*3+2];
+      rtri(P(0,0),P(0,1),1/CLP[2],P(k,0),P(k,1),1/CLP[k*3+2],P(k+1,0),P(k+1,1),1/CLP[k*3+5],t);}
+  }
+  holePass();
+}
+/* holes are cut analytically: a board dot inside a hole circle is replaced by the far inside wall
+   of an open cylinder (ray vs cylinder), and the depth buffer gets that deeper depth, so a ball
+   sinking into a pocket is depth-tested against the real hole, not against the flat board. */
+function holePass(){
+  const {ex,ey,ez,fx,fy,fz,rx,ry,rz,ux,uy,uz,F,cx,cy}=CAM;const B=[0,0,0];
+  for(let y=Y0;y<H;y++)for(let x=0;x<W;x++){const i=y*W+x,id=GF[i];if(id<0||TMAT[id]!==MT.BOARD)continue;
+    const z=1/GZ[i],px=(x+.5-cx)/F,py=-(y+.5-cy)/F,dx=fx+px*rx+py*ux,dy=fy+px*ry+py*uy,dz=fz+px*rz+py*uz;
+    toBoard(ex+dx*z-TLN[id]*PITCH,ey+dy*z,ez+dz*z,B);
+    for(let h=0;h<HOLES.length;h++){const ho=HOLES[h],ou=B[0]-ho.u,ov=B[1]-ho.v;if(ou*ou+ov*ov>=ho.r*ho.r)continue;
+      /* ray direction in board coords (u, v, w) */
+      const du=dx,dv=dy*SINP+dz*COSP,dw=dy*COSP-dz*SINP;
+      const a=du*du+dv*dv,b=2*(ou*du+ov*dv),c=ou*ou+ov*ov-ho.r*ho.r;let s=(-b+Math.sqrt(Math.max(0,b*b-4*a*c)))/(2*a);
+      let dep=-s*dw;if(dep>PH.HOLED){dep=PH.HOLED;s=PH.HOLED/-dw;}
+      GH[i]=h;GHD[i]=dep;GZ[i]=1/(z+s);break;}
+  }
+}
+/* =====================================================================================
+   9c. DEFERRED SHADING in two passes.
+   STATIC (only when the camera moves, alongside the raster): every dot gets its lit base colour
+   from the G-buffer (face light, procedural planks / arrows / ring zones / painted numbers / hole
+   tubes) plus a one-byte "dynamic code", an index and a weight saying what live light it carries
+   (a rail lamp, a lamp's spill on the wood, a ring lip, a neon letter...).
+   DYNAMIC (every frame): base + the live part of its code, ball shadow (shadow ray vs sphere) and
+   contact occlusion inside the shadow's screen rect, coloured point lights inside their rects,
+   then ordered dither to 6 bits per channel. Holding still, a frame costs about one pass of adds.
+   ===================================================================================== */
+const LAMPN=()=>LAMPZ.length;
+let LAMPV=null,LAMPT=null,LAMPC=null;   /* brightness (lagged), target, colour index; [side*N+k] */
+const LAMPCOL=[[255,176,64],[255,255,240],[255,60,90],[70,200,255],[110,255,120],[255,80,220]];
+const CHEV=new Float32Array(6);          /* side-wall chase lamps (target box), brightness */
+const SIGN=new Float32Array(3);          /* back wall neon: 100 L, 100 R, title */
+const LIGHTS=[];                         /* {x,y,z,r,g,b,i,k} transient point lights */
+let CASTN=0;const CAST=new Float32Array(3*8);
+/* glyph masks for paint / neon: string -> {w,h,m} using the 3x5 font */
+function mask3(s){const w=tw3(s),m=new Uint8Array(w*5);let x=0;for(const ch of s){const gg=G3[ch];if(!gg){x+=4;continue;}for(let r=0;r<5;r++)for(let c=0;c<gg[r].length;c++)if(gg[r][c]==='1')m[r*w+x+c]=1;x+=gg[0].length+1;}return {w,h:5,m};}
+const PAINT=[];   /* numbers painted on the board, in board (u,v) */
+const NEON=[];    /* neon lettering on the back wall, in wall (x,y) */
+const glyphSpot=(cx,cy,cell,mk,ring,sig,col)=>({cx,cy,cell,mk,ring,sig,col,hw:mk.w*cell/2,hh:2.5*cell});
+function buildPaint(){
+  PAINT.length=0;NEON.length=0;
+  for(let h=0;h<4;h++){const ho=HOLES[h],mk=mask3(String(ho.val));for(const s of [-1,1])PAINT.push(glyphSpot(s*.106,ho.v+.02,.0105,mk,ho.ring,0,null));}
+  const m10=mask3('10');for(const s of [-1,1])PAINT.push(glyphSpot(s*.335,.055,.012,m10,0,0,null));
+  const m1=mask3('100');for(const s of [0,1])NEON.push(glyphSpot((s?1:-1)*.25,YTOP+.085,.017,m1,0,s,RCOL[100]));
+  NEON.push(glyphSpot(0,YTOP+.215,.0145,mask3('RING ROLLER'),0,2,[80,220,255]));
+}
+/* which glyph spot covers (a,b)? bounding-box reject first, then one mask lookup */
+function paintAt(list,a,b){
+  for(let k=0;k<list.length;k++){const p=list[k],dx=a-p.cx+p.hw;if(dx<0||dx>=2*p.hw)continue;const dy=p.cy-b+p.hh;if(dy<0||dy>=2*p.hh)continue;
+    if(p.mk.m[((dy/p.cell)|0)*p.mk.w+((dx/p.cell)|0)])return k;}return -1;}
+const hash1=n=>{n=Math.imul(n^61^(n>>>16),9);n^=n>>>4;n=Math.imul(n,0x27d4eb2d);return ((n^n>>>15)>>>0)/4294967296;};
+const nlamp=(k,s,ln,t)=>{const v=Math.sin(k*.8-t*(2.6+ln*.4)+s*1.3+ln);return .12+.6*(v>0?v*v*v:0);};
+const DY={NONE:0,LAMP:1,HALO:2,SPILL:3,LIP:4,ZONE:5,HOLE:6,PAINT:7,NEON:8,CHEV:9,TOPB:10,WALLB:11,NLAMP:12,NHALO:13,NSPILL:14,CHROME:15,CHEVH:16};
+let SR=null,SG=null,SBL=null,DT=null,DA=null,DK=null;
+RESCB.push(()=>{const n=W*H;SR=new Float32Array(n);SG=new Float32Array(n);SBL=new Float32Array(n);DT=new Uint8Array(n);DA=new Int16Array(n);DK=new Float32Array(n);});
+function shadeStatic(){
+  const {ex,ey,ez,fx,fy,fz,rx,ry,rz,ux,uy,uz,F,cx,cy}=CAM,HW=PH.HW,N=LAMPN();
+  const B=[0,0,0],pitch=Math.asin(clamp(fy,-1,1));
+  for(let y=Y0;y<H;y++){
+    const py=-(y+.5-cy)/F;
+    for(let x=0;x<W;x++){
+      const i=y*W+x,id=GF[i];let r,g,b,er=0,eg=0,eb=0,lit,dt=0,da=0,dk=0;
+      if(id<0){ /* backdrop: dark gradient with soft distant arcade glows */
+        const px=(x+.5-cx)/F,el=py+pitch;let k=.5+.5*clamp(el*2,-1,1);r=10+14*k;g=6+8*k;b=18+26*k;
+        const gl=Math.exp(-((px+.9)*(px+.9)*6+(el-.25)*(el-.25)*40))*60+Math.exp(-((px-1.1)*(px-1.1)*5+(el-.3)*(el-.3)*30))*50;
+        SR[i]=r+gl*.9;SG[i]=g+gl*.2;SBL[i]=b+gl;DT[i]=0;continue;}
+      const z=1/GZ[i],px=(x+.5-cx)/F,dx=fx+px*rx+py*ux,dy=fy+px*ry+py*uy,dz=fz+px*rz+py*uz;
+      const XW=ex+dx*z,Y=ey+dy*z,Z=ez+dz*z,m=TMAT[id],ln=TLN[id],X=XW-ln*PITCH;   /* X is lane-local */
+      r=TR[id];g=TG[id];b=TBL[id];lit=TLIT[id];
+      switch(m){
+        case MT.LANE:case MT.HUMP:{
+          const pl=(X+HW)/.0525,pi=Math.floor(pl),fp=pl-pi,tone=.86+.14*hash1(pi*7+3),gr=.93+.07*Math.sin(Z*41+pi*7.1+Math.sin(Z*6.3+pi)*2.2);
+          const fw=z/F/.0525*.55;let k=tone*gr*(.66+.24*Math.exp(-X*X*9));
+          if(fw<.45&&(fp<fw||fp>1-fw))k*=.62+.3*(fw/.45);
+          r*=k;g*=k;b*=k;
+          if(m===MT.LANE){
+            if(Z>.235&&Z<.25){r=225;g=40;b=56;er=40;}
+            const dzc=.74-Z;if(dzc>0&&dzc<.11)for(let a=-2;a<=2;a++){const d=Math.abs(X-a*.12);if(d<dzc*.42&&d>dzc*.42-.02){r=255;g=180;b=60;er=60;eg=36;eb=6;}}
+          }else{const tt=(Z-PH.ZH0)/(PH.ZL-PH.ZH0);if((tt>.3&&tt<.37)||(tt>.6&&tt<.67)){r=250;g=205;b=70;er=50;eg=40;eb=10;}}
+          const dr=HW-Math.abs(X);if(dr<.12&&N){const s=X<0?0:1;let kk=Math.round((Z-LAMPZ[0])/.15);if(kk<0)kk=0;if(kk>=N)kk=N-1;
+            const f=1-dr/.12;dk=f*f*Math.max(0,1-Math.abs(Z-LAMPZ[kk])/.12)*.9;if(dk>.004){dt=ln?DY.NSPILL:DY.SPILL;da=ln?kk|s<<5|(ln+1)<<6:s*N+kk;}}
+          break;}
+        case MT.CHROME:dt=DY.CHROME;dk=X*30;break;
+        case MT.RAILIN:{const hy=Y-laneY(Math.min(Z,PH.ZL));if(Z<PH.ZL-.005&&hy>RAIL_H-.01&&hy<=RAIL_H+.001){er=150;eg=30;eb=80;}break;}
+        case MT.RAILTOP:{
+          const s=X<0?0:1;let kk=Math.round((Z-LAMPZ[0])/.15);if(kk<0)kk=0;if(kk>=N)kk=N-1;
+          const lx=(s?1:-1)*(HW+RAIL_W/2),ddx=X-lx,ddz=Z-LAMPZ[kk],d=Math.sqrt(ddx*ddx+ddz*ddz);da=ln?kk|s<<5|(ln+1)<<6:s*N+kk;
+          if(d<.017){dt=ln?DY.NLAMP:DY.LAMP;dk=1-d/.017;r=g=b=40;}else if(d<.05){dt=ln?DY.NHALO:DY.HALO;dk=1-d/.05;}
+          break;}
+        case MT.SIDE:{
+          const hb=Y-(YB0+(Z-ZB0)*SINP/COSP),yt=lerp(Y_LIP+SIDE_F,YTOP+SIDE_H,(Z-PH.ZL)/(ZTOP-PH.ZL));
+          if(Y>yt-.012){er=160;eg=40;eb=200;}
+          else{let k=Math.round((Z-ZB0-.06)/.155);if(k<0)k=0;if(k>5)k=5;const dzl=Z-(ZB0+.06+k*.155),dhl=hb-.17,d=Math.sqrt(dzl*dzl+dhl*dhl);
+            if(d<.021){r=g=b=40;if(ln){er=30;eg=60;eb=70;}else{dt=DY.CHEV;da=k;dk=1-d/.021;}}else if(d<.06&&!ln){dt=DY.CHEVH;da=k;dk=1-d/.06;}}
+          const v2=(Y*7+Z*3)%.2;if(v2<.01){r*=1.25;g*=1.25;b*=1.25;}
+          break;}
+        case MT.BACK:{
+          const k=paintAt(NEON,X,Y);
+          if(k>=0){const n=NEON[k],q=ln?.62:.35;er=n.col[0]*q;eg=n.col[1]*q;eb=n.col[2]*q;r=n.col[0]*.3;g=n.col[1]*.3;b=n.col[2]*.3;if(!ln){dt=DY.NEON;da=k;}}
+          else{const bx=Math.floor((X+HW)/.035);if(Y>YTOP+SIDE_H-.03&&Math.abs(((X+HW)/.035-bx)-.5)<.32){dt=DY.TOPB;da=bx+(ln+1)*7;}}
+          break;}
+        case MT.BOARD:{
+          const hh=GH[i];
+          if(hh>=0){ /* inside a hole: far wall of the tube, lit at the rim by the ring's colour */
+            const ho=HOLES[hh],c=RINGS[ho.ring].col,dep=GHD[i]/PH.HOLED,f=(1-dep)*(1-dep);
+            r=c[0]*f*.35*.5;g=c[1]*f*.35*.5;b=c[2]*f*.35*.5;lit=1;if(dep<.08){er=c[0]*.5;eg=c[1]*.5;eb=c[2]*.5;}
+            if(dep>=.999){r=g=b=2;}else if(!ln){dt=DY.HOLE;da=ho.ring;dk=f*.5;}break;}
+          toBoard(X,Y,Z,B);const u=B[0],v=B[1];
+          let zone=-1;for(let k=4;k>=0;k--){const ri=RINGS[k],du=u-ri.u,dv=v-ri.v;if(du*du+dv*dv<ri.r*ri.r){zone=k;break;}}
+          if(zone<0)for(let k=5;k<7;k++){const ri=RINGS[k],du=u-ri.u,dv=v-ri.v;if(du*du+dv*dv<ri.r*ri.r){zone=k;break;}}
+          if(zone>=0){const c=RINGS[zone].col;r=r*.6+c[0]*.22;g=g*.6+c[1]*.22;b=b*.6+c[2]*.22;if(!ln){dt=DY.ZONE;da=zone;dk=lit;}}
+          else{const sb=Math.abs(Math.sin(u*40+v*14));if(sb<.08){r*=1.2;g*=1.2;b*=1.3;}}
+          const pk=paintAt(PAINT,u,v);if(pk>=0){const c=RINGS[PAINT[pk].ring].col;r=c[0]*.7;g=c[1]*.7;b=c[2]*.7;er=c[0]*.275;eg=c[1]*.275;eb=c[2]*.275;if(!ln){dt=DY.PAINT;da=PAINT[pk].ring;}}
+          if(v<.012){r=150;g=150;b=175;dt=0;}
+          break;}
+        case MT.LIP:{const c=RINGS[TAUX[id]].col,q=ln?.08:.3;r=c[0]*.55;g=c[1]*.55;b=c[2]*.55;er=c[0]*q;eg=c[1]*q;eb=c[2]*q;if(!ln){dt=DY.LIP;da=TAUX[id];}break;}
+        case MT.FLOOR:{const cxk=Math.floor(XW/.14),czk=Math.floor(Z/.14),hsh=hash1(cxk*73856093^czk*19349663);
+          r=22;g=18;b=40;if(hsh<.3){const fxx=XW/.14-cxk-.5,fzz=Z/.14-czk-.5,dd=fxx*fxx+fzz*fzz;if(dd<.06){const pc=LAMPCOL[(hsh*20|0)%6];r=pc[0]*.32;g=pc[1]*.32;b=pc[2]*.32;}}
+          break;}
+        case MT.WALL:{const k=(Y+.45)/3;r=26-12*k;g=18-8*k;b=44-16*k;lit=1;
+          /* a row of marquee bulbs high on the arcade wall, chasing slowly */
+          if(Y>1.25&&Y<1.33){const bx=XW/.11,bi=Math.floor(bx),fb=bx-bi-.5,fy2=(Y-1.29)/.04;if(fb*fb+fy2*fy2<.12){dt=DY.WALLB;da=bi;dk=((bi%6)+6)%6;}}
+          break;}
+        default:break;
+      }
+      if(ln){lit*=.36;er*=.38;eg*=.38;eb*=.38;}
+      SR[i]=r*lit+er;SG[i]=g*lit+eg;SBL[i]=b*lit+eb;DT[i]=dt;DA[i]=da;DK[i]=dk;
+    }
+  }
+}
+/* screen rect of a world sphere of radius rad (for bounding shadow / light work) */
+const RC=[0,0,0,0];
+function sphereRect(x,y,z,rad,o,first){const p=project(x,y,z);if(p[2]<.05)return false;const rr=CAM.F*rad/p[2]+2;
+  const a=p[0]-rr,b=p[1]-rr,c=p[0]+rr,d=p[1]+rr;if(first){o[0]=a;o[1]=b;o[2]=c;o[3]=d;}else{o[0]=Math.min(o[0],a);o[1]=Math.min(o[1],b);o[2]=Math.max(o[2],c);o[3]=Math.max(o[3],d);}return true;}
+function shadeScene(t){
+  const {ex,ey,ez,fx,fy,fz,rx,ry,rz,ux,uy,uz,F,cx,cy}=CAM,R=PH.R,L0=LIGHT[0],L1=LIGHT[1],L2=LIGHT[2],N=LAMPN();
+  /* live colours for this frame */
+  const t6=(t*6)|0,t3=(t*3)|0;
+  /* shadow rect: the ball and its shadow cast along the light down to 0.8 m below it */
+  let sx0=1,sy0=1,sx1=0,sy1=0;
+  if(CASTN){const ok=sphereRect(CAST[0],CAST[1],CAST[2],R*2.6,RC,true);if(ok){for(let k=1;k<=4;k++)sphereRect(CAST[0]-L0*k*.2,CAST[1]-L1*k*.2,CAST[2]-L2*k*.2,R*2.2,RC,false);sx0=Math.max(0,RC[0]|0);sy0=Math.max(Y0,RC[1]|0);sx1=Math.min(W-1,RC[2]|0);sy1=Math.min(H-1,RC[3]|0);}}
+  let lx0=1,ly0=1,lx1=0,ly1=0;const nl=LIGHTS.length;
+  if(nl){let first=true;for(const L of LIGHTS){if(sphereRect(L.x,L.y,L.z,.5,RC,first))first=false;}if(!first){lx0=Math.max(0,RC[0]|0);ly0=Math.max(Y0,RC[1]|0);lx1=Math.min(W-1,RC[2]|0);ly1=Math.min(H-1,RC[3]|0);}}
+  for(let y=Y0;y<H;y++){
+    const brow=(y&3)<<2,inS=y>=sy0&&y<=sy1,inL=y>=ly0&&y<=ly1,py=-(y+.5-cy)/F;
+    for(let x=0;x<W;x++){
+      const i=y*W+x;let r=SR[i],g=SG[i],b=SBL[i];
+      const d=DT[i];
+      if(d){
+        switch(d){
+          case DY.LAMP:{const li=DA[i],c=LAMPCOL[LAMPC[li]],q=.18+LAMPV[li]*(.8+.6*DK[i]);r+=c[0]*q;g+=c[1]*q;b+=c[2]*q;break;}
+          case DY.HALO:{const li=DA[i],c=LAMPCOL[LAMPC[li]],q0=LAMPV[li]*DK[i],q=q0*q0*.5;r+=c[0]*q;g+=c[1]*q;b+=c[2]*q;break;}
+          case DY.SPILL:{const li=DA[i],c=LAMPCOL[LAMPC[li]],q=LAMPV[li]*DK[i];r+=c[0]*q;g+=c[1]*q;b+=c[2]*q;break;}
+          case DY.NLAMP:case DY.NHALO:case DY.NSPILL:{const a=DA[i],kk=a&31,s=(a>>5)&1,ln=((a>>6)&3)-1,c=LAMPCOL[(kk+(ln>0?2:4))%6],lb=nlamp(kk,s,ln,t);
+            let q=d===DY.NLAMP?.18+lb*(.8+.6*DK[i]):d===DY.NHALO?(lb*DK[i])*(lb*DK[i])*.5:lb*DK[i];q*=.4;r+=c[0]*q;g+=c[1]*q;b+=c[2]*q;break;}
+          case DY.LIP:{const ri=RINGS[DA[i]],fl=ri.flash,c=ri.col,q=ri.glow*.5+fl*1.4,w=255*fl*fl;r+=c[0]*q+w;g+=c[1]*q+w;b+=c[2]*q+w;break;}
+          case DY.ZONE:{const ri=RINGS[DA[i]],q=ri.flash*.5*DK[i];if(q>0){r+=ri.col[0]*q;g+=ri.col[1]*q;b+=ri.col[2]*q;}break;}
+          case DY.HOLE:{const ri=RINGS[DA[i]],q=DK[i]*(ri.glow*.6+ri.flash*1.6);r+=ri.col[0]*q;g+=ri.col[1]*q;b+=ri.col[2]*q;break;}
+          case DY.PAINT:{const ri=RINGS[DA[i]],q=ri.flash*.5;if(q>0){r+=ri.col[0]*q;g+=ri.col[1]*q;b+=ri.col[2]*q;}break;}
+          case DY.NEON:{const n=NEON[DA[i]],q=SIGN[n.sig]*.9;r+=n.col[0]*q;g+=n.col[1]*q;b+=n.col[2]*q;break;}
+          case DY.CHEV:{const q=.12+CHEV[DA[i]]*(.85+.5*DK[i]);r+=90*q;g+=220*q;b+=255*q;break;}
+          case DY.CHEVH:{const q0=CHEV[DA[i]]*DK[i],q=q0*q0*.45;r+=90*q;g+=220*q;b+=255*q;break;}
+          case DY.TOPB:{const on=(DA[i]+t6)%4===0?.7:.105;r+=255*on;g+=180*on;b+=80*on;break;}
+          case DY.WALLB:{const on=((DA[i]+t3)%5+5)%5===0?.8:.18,c=LAMPCOL[DK[i]];r+=c[0]*on;g+=c[1]*on;b+=c[2]*on;break;}
+          case DY.CHROME:{const k=.8+.4*Math.sin(DK[i]+t*2);r+=40*k;g+=42*k;b+=50*k;break;}
+        }
+      }
+      if((inS&&x>=sx0&&x<=sx1)||(inL&&x>=lx0&&x<=lx1)){
+        const id=GF[i];
+        if(id>=0){
+          const z=1/GZ[i],px=(x+.5-cx)/F,X=ex+(fx+px*rx+py*ux)*z,Y=ey+(fy+px*ry+py*uy)*z,Z=ez+(fz+px*rz+py*uz)*z;
+          if(inS&&x>=sx0&&x<=sx1){let sh=1;
+            /* ball shadow: does the ray toward the key light pass through the sphere? soft edge by miss distance */
+            const qx=CAST[0]-X,qy=CAST[1]-Y,qz=CAST[2]-Z,d2=qx*qx+qy*qy+qz*qz;
+            if(d2<.36){const tt=qx*L0+qy*L1+qz*L2;if(tt>0){const pd=Math.sqrt(Math.max(0,d2-tt*tt)),s=clamp((pd-R*.72)/(R*.62),0,1);sh*=.4+.6*s;}
+              const dd=Math.sqrt(d2);if(dd<R*2.4){const a=clamp(1-(dd-R)/(R*1.4),0,1);sh*=1-.5*a*a;}}
+            r*=sh;g*=sh;b*=sh;}
+          if(inL&&x>=lx0&&x<=lx1)for(let k=0;k<nl;k++){const L=LIGHTS[k],qx=L.x-X,qy=L.y-Y,qz=L.z-Z,d2=qx*qx+qy*qy+qz*qz,il=1/Math.sqrt(d2+1e-6),nd=(qx*TNX[id]+qy*TNY[id]+qz*TNZ[id])*il;
+            if(nd>0){const q=L.i*nd/(1+d2*L.k)*(TLN[id]?.3:1);r+=L.r*q*(TR[id]/255+.25);g+=L.g*q*(TG[id]/255+.25);b+=L.b*q*(TBL[id]/255+.25);}}
+        }
+      }
+      const bay=BAY4[brow|(x&3)];
+      let R8=((r*.247+bay)|0)*4.05,G8=((g*.247+bay)|0)*4.05,B8=((b*.247+bay)|0)*4.05;if(R8>255)R8=255;if(G8>255)G8=255;if(B8>255)B8=255;
+      RBUF[i]=(0xff000000|(B8<<16)|(G8<<8)|R8)>>>0;
+    }
+  }
+}
+/* ---- balls: analytic ray-sphere per dot, depth-tested against the G-buffer ---- */
+const BM=new Float32Array(9);
+function ballMatrix(b){const w=b.qw,x=b.qx,y=b.qy,z=b.qz;
+  BM[0]=1-2*(y*y+z*z);BM[1]=2*(x*y-w*z);BM[2]=2*(x*z+w*y);BM[3]=2*(x*y+w*z);BM[4]=1-2*(x*x+z*z);BM[5]=2*(y*z-w*x);BM[6]=2*(x*z-w*y);BM[7]=2*(y*z+w*x);BM[8]=1-2*(x*x+y*y);}
+function drawBall(b){
+  const {ex,ey,ez,fx,fy,fz,rx,ry,rz,ux,uy,uz,F,cx,cy}=CAM,R=PH.R,L0=LIGHT[0],L1=LIGHT[1],L2=LIGHT[2];
+  const p=project(b.px,b.py,b.pz);if(p[2]<.06)return;
+  ballMatrix(b);
+  const rp=F*R/p[2]*1.2+2,x0=Math.max(0,Math.floor(p[0]-rp)),x1=Math.min(W-1,Math.ceil(p[0]+rp)),y0=Math.max(Y0,Math.floor(p[1]-rp)),y1=Math.min(H-1,Math.ceil(p[1]+rp));
+  const ox=ex-b.px,oy=ey-b.py,oz=ez-b.pz,cc=ox*ox+oy*oy+oz*oz-R*R,B=[0,0,0];
+  toBoard(b.px,b.py,b.pz,B);const sinkW=B[2],inHole=b.st==='sink'||(b.hole>=0);
+  const nl=LIGHTS.length,glow=b.glow||0;
+  for(let y=y0;y<=y1;y++){const py=-(y+.5-cy)/F,brow=(y&3)<<2;
+    for(let x=x0;x<=x1;x++){
+      const px=(x+.5-cx)/F,dx=fx+px*rx+py*ux,dy=fy+px*ry+py*uy,dz=fz+px*rz+py*uz;
+      const a=dx*dx+dy*dy+dz*dz,hb=dx*ox+dy*oy+dz*oz,disc=hb*hb-a*cc;if(disc<0)continue;
+      const t=(-hb-Math.sqrt(disc))/a,i=y*W+x;if(t<NEAR||t*GZ[i]>=1)continue;
+      const nx=(ox+dx*t)/R,ny=(oy+dy*t)/R,nz=(oz+dz*t)/R;
+      /* surface pattern in the ball's own frame, so it turns as the ball rolls */
+      const lx=BM[0]*nx+BM[3]*ny+BM[6]*nz,ly=BM[1]*nx+BM[4]*ny+BM[7]*nz,lz=BM[2]*nx+BM[5]*ny+BM[8]*nz;
+      let ar=214,ag=200,ab=176;
+      if(ly>-.3&&ly<.3){ar=200;ag=30;ab=48;if(ly>-.07&&ly<.07){ar=250;ag=200;ab=70;}}
+      else if(lx>-.17&&lx<.17){ar=34;ag=58;ab=176;}
+      if(lz>.9||lz<-.9){ar=40;ag=36;ab=60;}
+      const il=1/Math.sqrt(a),vx=-dx*il,vy=-dy*il,vz=-dz*il,nd=nx*L0+ny*L1+nz*L2,dif=nd>0?nd:0;
+      let hx=L0+vx,hy=L1+vy,hz=L2+vz;const hl=1/Math.sqrt(hx*hx+hy*hy+hz*hz),sp=Math.max(0,(nx*hx+ny*hy+nz*hz)*hl),spec=sp*sp*sp*sp,spec2=spec*spec*spec*spec*spec;
+      const fr=1-Math.abs(nx*vx+ny*vy+nz*vz),rim=fr*fr*fr;
+      let k=.2+.82*dif+.14*(ny*.5+.5);
+      if(inHole){const wv=sinkW+(ny*COSP-nz*SINP)*R;if(wv<0)k*=clamp(1+wv/.07,0,1);}
+      let r=ar*k+spec2*255+spec*30+rim*(40+glow*200),g=ag*k+spec2*250+spec*28+rim*(30+glow*120),bb=ab*k+spec2*240+spec*26+rim*(50+glow*40);
+      for(let q=0;q<nl;q++){const L=LIGHTS[q],qx=L.x-b.px,qy=L.y-b.py,qz=L.z-b.pz,d2=qx*qx+qy*qy+qz*qz,d=Math.sqrt(d2),nd2=(nx*qx+ny*qy+nz*qz)/d;if(nd2>0){const s=L.i*nd2/(1+d2*L.k);r+=L.r*s;g+=L.g*s;bb+=L.b*s;}}
+      const bay=BAY4[brow|(x&3)];RBUF[i]=pack(((r*.247+bay)|0)*4.05,((g*.247+bay)|0)*4.05,((bb*.247+bay)|0)*4.05);
+      GZ2[i]=1/t;
+    }}
+}
+let GZ2=null;RESCB.push(()=>{GZ2=new Float32Array(W*H);});
+/* additive world-space dot (sparks, trails, aim guide), depth-tested against scene and balls */
+function addDot(x,y,z,r,g,b,sz){
+  const p=project(x,y,z);if(p[2]<.05)return;const X=p[0]|0,Y=p[1]|0;if(X<0||X>=W||Y<Y0||Y>=H)return;
+  const i=Y*W+X;if(p[2]*GZ[i]>=1.002||p[2]*GZ2[i]>=1.002)return;
+  addPx(i,r,g,b);const rr=sz*CAM.F/p[2];
+  if(rr>.6){const h=.45;if(X>0)addPx(i-1,r*h,g*h,b*h);if(X<W-1)addPx(i+1,r*h,g*h,b*h);if(Y>Y0)addPx(i-W,r*h,g*h,b*h);if(Y<H-1)addPx(i+W,r*h,g*h,b*h);}
+  if(rr>1.4){const h=.2;if(X>0&&Y>Y0)addPx(i-W-1,r*h,g*h,b*h);if(X<W-1&&Y>Y0)addPx(i-W+1,r*h,g*h,b*h);if(X>0&&Y<H-1)addPx(i+W-1,r*h,g*h,b*h);if(X<W-1&&Y<H-1)addPx(i+W+1,r*h,g*h,b*h);}
+}
+/* =====================================================================================
+   9d. AMBER DMD SCORE PANEL — the top rows of the matrix are a classic 1990s pinball DMD:
+   a float brightness buffer drawn with chunky scaled glyphs, sparkles, rays and wipes, then
+   quantized to 16 amber steps (ordered dither between steps) independently of the colour lane.
+   Scenes queue up (a dunk, a gutter, the final ball) and play over the base scoreboard.
+   ===================================================================================== */
+let DG=null,DSC=2;
+const AMB=new Uint32Array(16);
+for(let l=0;l<16;l++){const k=l/15,lin=Math.pow(k,1.15);AMB[l]=l===0?pack(14,5,2):pack(255*Math.pow(lin,1/2.2),255*Math.pow(lin*.42,1/2.2),255*Math.pow(lin*.075,1/2.2));}
+RESCB.unshift(()=>{DH=Math.round(H*.19);Y0=DH+1;VH3=H-Y0;DG=new Float32Array(W*DH);DSC=Math.max(2,Math.floor((DH-5)/7));});
+function dClear(){DG.fill(0);}
+function dFill(x0,y0,x1,y1,v,set){x0=Math.max(0,x0|0);y0=Math.max(0,y0|0);x1=Math.min(W,x1|0);y1=Math.min(DH,y1|0);
+  for(let y=y0;y<y1;y++){let i=y*W+x0;for(let x=x0;x<x1;x++,i++){if(set)DG[i]=v;else if(v>DG[i])DG[i]=v;}}}
+function dPx(x,y,v){x|=0;y|=0;if(x>=0&&y>=0&&x<W&&y<DH){const i=y*W+x;if(v>DG[i])DG[i]=v;}}
+/* scaled glyph text (scale may be fractional: that is what makes the zooms chunky).
+   flags: 1 = bevel (top rows brighter), 2 = knock out a 1-dot outline first, 4 = italic lean */
+function dTxt(s,x,y,sc,v,al,f,fl){
+  const w=f===3?tw3(s,1):tw5(s,1);if(al==='c')x-=w*sc/2;else if(al==='r')x-=w*sc;
+  const rows=f===3?5:7;
+  for(let pass=(fl&2)?0:1;pass<2;pass++){let cx=0;
+    for(const ch of s){
+      if(f===3){const gg=G3[ch]||G3[ch.toUpperCase()];if(!gg){cx+=4;continue;}
+        for(let r=0;r<5;r++)for(let c=0;c<gg[r].length;c++)if(gg[r][c]==='1')cell(cx+c,r);cx+=gg[0].length+1;}
+      else{const gl=G5[ch]||G5[ch.toUpperCase()]||G5[' '];for(let r=0;r<7;r++)for(let c=0;c<5;c++)if((gl[r]>>(4-c))&1)cell(cx+c,r);cx+=6;}
+    }
+    function cell(c,r){const lean=(fl&4)?(rows-1-r)*sc*.22:0,X0=Math.round(x+c*sc+lean),X1=Math.round(x+(c+1)*sc+lean),Y0_=Math.round(y+r*sc),Y1_=Math.round(y+(r+1)*sc);
+      if(pass===0)dFill(X0-1,Y0_-1,X1+1,Y1_+1,0,true);
+      else dFill(X0,Y0_,X1,Y1_,(fl&1)?v*(1-.42*r/(rows-1)):v,false);}
+  }
+  return w*sc;
+}
+/* four-point sparkle */
+function dStar(x,y,s,v){dPx(x,y,v);for(let k=1;k<=s;k++){const q=v*(1-k/(s+1));dPx(x+k,y,q);dPx(x-k,y,q);dPx(x,y+k,q);dPx(x,y-k,q);}if(s>1){dPx(x+1,y+1,v*.35);dPx(x-1,y-1,v*.35);dPx(x+1,y-1,v*.35);dPx(x-1,y+1,v*.35);}}
+/* rotating sunburst behind a zoom */
+function dRays(cx,cy,t,v,n){for(let y=0;y<DH;y++)for(let x=0;x<W;x++){const a=Math.atan2(y-cy,(x-cx)*.45),f=(a/Math.PI*n+t)%2;if((f<0?f+2:f)<1){const i=y*W+x;if(v>DG[i])DG[i]=v;}}}
+/* expanding dithered ring (fireworks) */
+function dRing(cx,cy,r,v){const n=Math.max(8,r*6|0);for(let k=0;k<n;k++){const a=k/n*TAU;dPx(cx+Math.cos(a)*r*1.6,cy+Math.sin(a)*r,v);}}
+/* lamp chase around the DMD border */
+function dBorder(t,v){const per=2*(W+DH),n=per/4|0;for(let k=0;k<n;k++){const on=((k+Math.floor(t*14))%4)===0;let p=k*4;let x,y;
+  if(p<W){x=p;y=0;}else if((p-=W)<DH){x=W-1;y=p;}else if((p-=DH)<W){x=W-1-p;y=DH-1;}else{p-=W;x=0;y=DH-1-p;}dPx(x,y,on?v:v*.18);}}
+function dmdCommit(){
+  for(let y=0;y<DH;y++){const br=(y&3)<<2;for(let x=0;x<W;x++){const i=y*W+x;let l=(DG[i]*15+BAY4[br|(x&3)]*.98)|0;if(l>15)l=15;if(l<0)l=0;RBUF[i]=AMB[l];}}
+  const bz=pack(36,30,40);for(let y=DH;y<Y0;y++)RBUF.fill(bz,y*W,(y+1)*W);
+}
+const easeOutBack=(t,s=1.9)=>{t-=1;return t*t*((s+1)*t+s)+1;};
+const easeBounce=t=>{const n=7.5625,d=2.75;if(t<1/d)return n*t*t;if(t<2/d)return n*(t-=1.5/d)*t+.75;if(t<2.5/d)return n*(t-=2.25/d)*t+.9375;return n*(t-=2.625/d)*t+.984375;};
+/* ---- DMD scenes ---- */
+const DQ=[];let DCUR=null;
+function dmdPush(type,data,dur){DQ.push({type,data:data||{},dur,t:0});}
+function dmdTick(dt){if(!DCUR&&DQ.length)DCUR=DQ.shift();if(DCUR){DCUR.t+=dt;if(DCUR.t>=DCUR.dur)DCUR=DQ.length?DQ.shift():null;}}
+function dmdBusy(){return !!DCUR||DQ.length>0;}
+function dmdBase(){
+  /* the scoreboard: ball pips on the left, big score centre, high score and last ball on the right */
+  const sc=DSC,ys=Math.round((DH-7*sc)/2);
+  dTxt(String(S.disp),W/2,ys,sc,1,'c',5,1);
+  const shown=S.mode==='over'?S.balls:Math.min(S.balls,S.thrown+(S.ballReady?1:0));
+  dTxt('BALL '+Math.max(1,Math.min(S.balls,shown)),4,3,1,.75,'l',3,0);
+  const pip=DH>=30?4:3,gap=pip+2;for(let k=0;k<S.balls;k++){const x=4+k*gap,y=DH-pip-3,used=k<S.thrown,cur=k===S.thrown&&S.ballReady;
+    const v=used?.13:cur?(Math.sin(S.t*10)>0?1:.45):.8;for(let yy=0;yy<pip;yy++)for(let xx=0;xx<pip;xx++)dPx(x+xx,y+yy,(xx===0||xx===pip-1)&&(yy===0||yy===pip-1)&&pip>3?v*.45:v);}
+  dTxt('HI '+fmt(S.hi),W-4,3,1,.62,'r',3,0);
+  if(S.last!==null)dTxt('LAST '+S.last,W-4,DH-8,1,.85,'r',3,0);
+}
+function dmdScene(sc){
+  const t=sc.t,d=sc.data,big=DSC,cx=W/2,cy=DH/2;
+  switch(sc.type){
+    case 'score':{ /* "40!" punches in over a sunburst, sparkles, then flies home into the score */
+      const val=d.val,p=val/50;
+      if(t<.1){dFill(0,0,W,DH,(t*30|0)%2?1:.55,true);dTxt(val+'!',cx,cy-3.5*big*1.25,big*1.25,0,'c',5,0);break;}
+      dRays(cx,cy,t*2.5,.1+.08*p,6+val/10);
+      const zt=Math.min(1,(t-.1)/.35),s=big*(.35+.95*easeOutBack(zt)),ft=clamp((t-1.0)/.3,0,1);
+      const s2=lerp(s,big*.5,ft*ft),y=lerp(cy-3.5*s2,cy-3.5*s2,ft),x=lerp(cx,cx,ft);
+      dTxt(val+'!',x,y,s2,1-ft*.6,'c',5,1|2|4);
+      const n=3+val/5|0;for(let k=0;k<n;k++){const a=k*2.4+t*1.3,rr=(W*.18+k*3)*(.7+.3*Math.sin(t*5+k)),tw=Math.sin(t*14+k*1.7);if(tw>.2)dStar(cx+Math.cos(a)*rr,cy+Math.sin(a)*rr*.35,tw>.8?2:1,tw);}
+      if(d.sub)dTxt(d.sub,6,cy-2,1,.7*(1-ft),'l',3,0),dTxt(d.sub,W-6,cy-2,1,.7*(1-ft),'r',3,0);
+      break;}
+    case 'jackpot':{
+      const st=t<.5&&((t*24|0)%2);if(st)dFill(0,0,W,DH,.8,true);
+      for(let k=0;k<5;k++){const tt=(t*1.4+k*.37)%1,fx=(hash1(k*91+((t*1.4+k*.37)|0)*7)*.8+.1)*W,fy=hash1(k*13+((t*1.4+k*.37)|0))*DH;dRing(fx,fy,tt*DH*.45,(1-tt)*.7);}
+      const zt=Math.min(1,t/.4),s=big*(.3+1.0*easeOutBack(zt,2.4));dTxt('100',cx,cy-3.5*s,s,st?0:1,'c',5,1|2);
+      const tx=W-((t*W*.9)%(W+140));dTxt('POCKET JACKPOT',tx,DH-6,1,.9,'l',3,2);dBorder(t,1);break;}
+    case 'gutter':{
+      const yy=-DH+(DH*.5+DH*.5*easeBounce(Math.min(1,t/.7)))-3.5*big*.75;dTxt(d.txt||'GUTTER',cx,yy,big*.75|0||1,1,'c',5,1|2);
+      const bx=(t/1.1)*W*.6+W*.2,by=DH-4+(bx>W*.62?Math.min(8,(bx-W*.62)*.4):0);for(let a=0;a<TAU;a+=.5)dPx(bx+Math.cos(a)*2,by+Math.sin(a)*2,.8);
+      dFill(0,DH-1,W*.6,DH,.5);dFill(W*.72,DH-1,W,DH,.5);break;}
+    case 'short':{
+      const k=easeOutBack(Math.min(1,t/.45),1.2),x=lerp(W*1.5,cx,k);dTxt(d.txt,x,cy-3.5*big*.75,Math.max(1,big*.75|0),1,'c',5,1|2|4);
+      for(let q=0;q<6;q++)dPx(x+tw5(d.txt,Math.max(1,big*.75|0))/2+4+q*3+((t*40)%3),cy+3+(q%3),.4*(1-t));break;}
+    case 'ball':{
+      const k=Math.min(1,t/.25),wx=k*W;dTxt('BALL '+d.n,cx,cy-3.5*big,big,1,'c',5,1|2);
+      for(let y=0;y<DH;y++)for(let x=Math.max(0,wx|0);x<W;x++){const i=y*W+x;if(BAY4[((y&3)<<2)|(x&3)]>(x-wx)/12)DG[i]=0;}break;}
+    case 'final':{
+      dBorder(t,1);const on=(t*6|0)%2===0||t>1;dTxt('FINAL BALL',cx,cy-3.5*Math.max(1,big-1),Math.max(1,big-1),on?1:.25,'c',5,1|2);break;}
+    case 'perfect':{dFill(0,0,W,DH,(t*20|0)%2?.6:0,true);dTxt('PERFECT 900',cx,cy-3.5*Math.max(1,big-1),Math.max(1,big-1),1,'c',5,1|2);dBorder(t,1);break;}
+  }
+}
+/* attract pages cycle on the DMD while the alley plays itself */
+function dmdAttract(t){
+  const pages=['logo','start','hi','howto','start','tix'],per=[5,2.2,2.6,3.4,2.2,2.6],tot=per.reduce((a,b)=>a+b,0);let tt=t%tot,pg=0;while(tt>per[pg]){tt-=per[pg];pg++;}
+  const cx=W/2,cy=DH/2,big=DSC;
+  if(pages[pg]==='logo'){
+    const sc=Math.min(big,Math.floor((W-8)/tw5('RING ROLLER',1))),w=tw5('RING ROLLER',sc),x0=Math.round(cx-w/2),y0=Math.round(cy-3.5*sc);
+    dTxt('RING ROLLER',cx+1,y0+1,sc,.22,'c',5,0);dTxt('RING ROLLER',cx,y0,sc,.78,'c',5,1|2);
+    /* shine sweep: a bright diagonal band passing over the lettering */
+    const sp=((tt*.7)%1.4-.2)*(w+DH*2)+x0-DH;for(let y=y0;y<y0+7*sc&&y<DH;y++)for(let x=x0;x<x0+w;x++){const i=y*W+x;if(DG[i]>.3){const q=Math.abs(x+(y-y0)*.6-sp);if(q<4)DG[i]=Math.min(1,DG[i]+.35*(1-q/4));}}
+    for(let k=0;k<6;k++){const tw=Math.sin(t*9+k*2.1);if(tw>.5)dStar((hash1(k*31+(t*.7|0))*W)|0,(hash1(k*17+(t*.7|0))*DH)|0,1,tw);}
+  }else if(pages[pg]==='hi'){dTxt('HIGH SCORE',cx,2,1,.7,'c',3,0);dTxt(fmt(S.hi),cx,DH-7*Math.max(1,big-1)-2,Math.max(1,big-1),1,'c',5,1|2);}
+  else if(pages[pg]==='start'){const on=(t*3|0)%2===0;dBorder(t,.8);dTxt(touchy?'TAP TO PLAY':'PRESS START',cx,cy-3.5*Math.max(1,big-1),Math.max(1,big-1),on?1:.35,'c',5,1|2);}
+  else if(pages[pg]==='howto'){const a=tt<1.7;dTxt(a?(touchy?'SWIPE UP':'DRAG BACK'):'CURVE THE FLICK',cx,3,1,.85,'c',3,0);dTxt(a?'AND FLICK':'FOR SPIN',cx,DH-7*Math.max(1,big-1)-2,Math.max(1,big-1),1,'c',5,1|2);}
+  else{dTxt('9 BALLS',cx,2,1,.7,'c',3,0);dTxt('ROLL FOR 900',cx,DH-7*Math.max(1,big-1)-2,Math.max(1,big-1),1,'c',5,1|2);}
+}
+function dmdOver(t){
+  const cx=W/2,cy=DH/2,big=DSC,tt=t%7;
+  if(tt<2.4){dTxt('GAME OVER',cx,cy-3.5*Math.max(1,big-1),Math.max(1,big-1),(t*4|0)%2||t>1.2?1:.3,'c',5,1|2);}
+  else if(tt<4.8){dTxt('FINAL SCORE',cx,2,1,.7,'c',3,0);dTxt(fmt(S.score),cx,DH-7*Math.max(1,big-1)-2,Math.max(1,big-1),1,'c',5,1|2);}
+  else{dTxt('TICKETS',cx,2,1,.7,'c',3,0);dTxt(String(S.tixShown),cx,DH-7*Math.max(1,big-1)-2,Math.max(1,big-1),1,'c',5,1|2);}
+}
+function renderDMD(){
+  dClear();
+  if(DCUR)dmdScene(DCUR);
+  else if(S.mode==='title')dmdAttract(S.t);
+  else if(S.mode==='over')dmdOver(S.t);
+  else dmdBase();
+  if(S.paused){dClear();dTxt('PAUSED',W/2,DH/2-3.5*Math.max(1,DSC-1),Math.max(1,DSC-1),(S.rt*2|0)%2?1:.5,'c',5,1|2);}
+  dmdCommit();
+}
+/* =====================================================================================
+   9e. GAME — nine balls per game. Each ball: roll in from the return, aim, roll; the camera
+   follows the ball up the alley and settles on the board for the landing, then comes back.
+   ===================================================================================== */
+const S={mode:'title',t:0,rt:0,score:0,disp:0,hi:parseInt(store.get('hd-'+CAB.id+'-hi','0'),10)||0,balls:9,thrown:0,ballReady:false,last:null,
+  results:[],phase:'enter',pt:0,cur:null,handX:0,handZ:PH.ZHAND,aim:0,spin:0,pw:0,pdir:1,charging:false,drag:null,
+  demo:true,auto:false,paused:false,tickets:0,tixShown:0,newHi:false,hitstop:0,shake:0,flash:0,flashC:[255,255,255],
+  camT:0,camX:0,lastIn:touchy?'ptr':'key',ai:null,popups:[],parts:[],trails:[],final:false,hint:0,games:0,lastRes:null};
+const BALL=newBall();
+/* ---- launch table: straight rolls simulated once at boot; inverted for the AI and the power meter ---- */
+const TAB=[];let SPMIN=2.45,SPMAX=4.9;const METER=[];
+function buildTable(){
+  const b=newBall(),bc=[0,0,0];TAB.length=0;
+  for(let s=2.3;s<=5.3;s+=.05){launchBall(b,0,PH.ZHAND,s,0,0);let land=null;
+    for(let i=0;i<200&&!land&&b.st==='live';i++)physTick([b],1/60,(k,sp,bb,e)=>{if(!land&&(k==='lip'||k==='thud'&&e===1||k==='rim'||k==='back')){toBoard(b.px,b.py,b.pz,bc);land=bc[1];}});
+    if(land!==null)TAB.push([s,land]);}
+  for(let i=1;i<TAB.length;i++)if(TAB[i][1]<TAB[i-1][1])TAB[i][1]=TAB[i-1][1];   /* force monotone */
+  SPMIN=speedFor(-.1);SPMAX=speedFor(1.02)*1.03;
+  METER.length=0;for(let h=0;h<5;h++){const dv=[-.05,-.02,0,0,0][h];METER.push({val:HOLES[h].val,p:(speedFor(HOLES[h].v+dv)-SPMIN)/(SPMAX-SPMIN),ring:h});}
+  b.st='gone';
+}
+function speedFor(v){if(!TAB.length)return 3.5;if(v<=TAB[0][1])return TAB[0][0]-(TAB[0][1]-v)*2;
+  for(let i=1;i<TAB.length;i++)if(TAB[i][1]>=v){const a=TAB[i-1],b=TAB[i];return a[0]+(b[0]-a[0])*(v-a[1])/Math.max(1e-6,b[1]-a[1]);}return TAB[TAB.length-1][0];}
+const powerSpeed=p=>SPMIN+clamp(p,0,1.06)*(SPMAX-SPMIN);
+/* ---- flow ---- */
+function newGame(demo){
+  Object.assign(S,{t:0,score:0,disp:0,thrown:0,ballReady:false,last:null,results:[],phase:'enter',pt:0,demo,tickets:0,tixShown:0,newHi:false,
+    final:false,aim:0,spin:0,pw:0,charging:false,drag:null,ai:null,camT:0,camX:0,popups:[]});
+  S.parts.length=0;DQ.length=0;DCUR=null;BALL.st='gone';S.cur=null;S.handX=0;S.handZ=PH.ZHAND;
+  for(const r of RINGS){r.flash=0;r.glow=0;}
+  nextBall();
+}
+function APP_start(){newGame(false);S.mode='play';S.games++;setTrack('play');SFX.confirm();say('Roll!');TIX.reset();}
+function APP_attract(){newGame(true);S.mode='title';setTrack('title');TIX.reset();}
+function nextBall(){
+  if(S.thrown>=S.balls){endGame();return;}
+  S.phase='enter';S.pt=0;S.ballReady=true;S.cur=BALL;BALL.st='hand';BALL.hole=-1;BALL.res=null;BALL.glow=0;
+  S.aim*=.5;S.charging=false;S.pw=0;S.drag=null;S.ai=null;
+  if(S.thrown===S.balls-1&&!S.final){S.final=true;if(!S.demo){dmdPush('final',{},1.5);SFX.final();setTrack('final');}}
+  else if(!S.demo&&S.thrown>0)dmdPush('ball',{n:S.thrown+1},.7);
+  SFX.enter();
+}
+function endGame(){
+  if(S.demo){S.mode='title';newGame(true);return;}
+  S.mode='over';S.t=0;S.ballReady=false;
+  const sc=S.score;S.tickets=Math.max(2,Math.floor(sc/30))+(sc>=400?10:0)+(sc>=600?15:0)+(sc>=900?250:0);
+  if(sc>S.hi){S.hi=sc;store.set('hd-'+CAB.id+'-hi',sc);S.newHi=true;}else S.newHi=false;
+  setTrack('over');if(sc>=900){dmdPush('perfect',{},2.4);SFX.jackpot();say('Perfect game!');}else if(S.newHi){SFX.win();say('New high score');}else{SFX.lose();say('Game over');}
+  ARC.over(sc,S.tickets);TIX.start(S.tickets);
+}
+/* ---- throwing ---- */
+function throwBall(speed,aim,spin){
+  const b=BALL;b.qw=1;b.qx=b.qy=b.qz=0;spinQ(b,Math.random()-.5,Math.random()-.5,Math.random()-.5,Math.random()*6);
+  launchBall(b,clamp(S.handX,-PH.HW+PH.R+.01,PH.HW-PH.R-.01),S.handZ,speed,aim,spin);
+  S.thrown++;S.ballReady=false;S.phase='roll';S.pt=0;S.lastRes=null;S.hint++;
+  SFX.release(speed/4);S.trails.length=0;
+}
+/* the attract-mode / autopilot bowler: picks a target, inverts the launch table, adds human error,
+   and plays the throw out as a visible pull-back and flick of the hand */
+function aiPlan(){
+  const r=Math.random(),pocket=r<.1,target=pocket?HOLES[5+(Math.random()<.5?0:1)]:HOLES[r<.22?1:r<.42?2:r<.68?3:4];
+  const x0=pocket?Math.sign(target.u)*.1:(Math.random()-.5)*.08,dv=pocket?-.06:target.val===20?-.02:0;
+  const zt=ZB0+(target.v+dv)*COSP,aim=Math.atan((target.u-x0)/(zt-PH.ZHAND));
+  const err=S.demo?1:1.1;
+  return {x0,aim:aim+(Math.random()-.5)*2*.006*err,speed:speedFor(target.v+dv)*(1+(Math.random()-.5)*2*.012*err),spin:0,wait:rnd(.35,.8),t:0};
+}
+function aiTick(dt){
+  if(!S.ai)S.ai=aiPlan();const a=S.ai;a.t+=dt;
+  if(a.t<a.wait){S.handX+=(a.x0*.4-S.handX)*Math.min(1,dt*3);return;}
+  const k=clamp((a.t-a.wait)/.32,0,1);S.handX=lerp(S.handX,a.x0,Math.min(1,dt*10));S.handZ=PH.ZHAND-.09*Math.sin(k*Math.PI*.5);
+  if(k>=1){S.handZ=PH.ZHAND-.04;S.aim=a.aim;throwBall(a.speed,a.aim,a.spin);}
+}
+/* pointer: grab anywhere, drag back, flick forward. Only the forward stroke counts (from the lowest
+   point of the pull-back to release): its chord gives the aim, its last 100 ms the power (in CSS px
+   relative to the screen, so phones and monitors feel alike), and how much it bends gives side spin
+   in the same direction as the bend. */
+const FS=[],FSR=[];let FDOWN=false;
+/* raw pointer samples with event timestamps (coalesced moves included), so a fast flick that
+   lands between two display frames is still measured exactly */
+{const push=e=>{const m=toM(e);FSR.push([m[0],m[1],e.timeStamp/1000]);if(FSR.length>160)FSR.shift();};
+  cv.addEventListener('pointerdown',e=>{FSR.length=0;FDOWN=true;push(e);});
+  addEventListener('pointermove',e=>{if(!FDOWN||e.pointerId!==PTR.id)return;const ev=e.getCoalescedEvents?e.getCoalescedEvents():null;if(ev&&ev.length)for(const c of ev)push(c);else push(e);});
+  const up=e=>{if(FDOWN&&e.pointerId===PTR.id){push(e);FDOWN=false;}};addEventListener('pointerup',up);addEventListener('pointercancel',up);}
+function flickRead(){
+  const A=FSR.length>=3?FSR:FS;let n=A.length;if(n<2)return null;
+  /* the release event repeats the last position; ignore it if it follows a move closely */
+  while(n>2&&Math.abs(A[n-1][0]-A[n-2][0])+Math.abs(A[n-1][1]-A[n-2][1])<.25&&A[n-1][2]-A[n-2][2]<.06)n--;
+  const tl=A[n-1][2];
+  let j=n-1;while(j>0&&A[j-1][1]>=A[j][1]-.5&&tl-A[j-1][2]<=.4)j--;
+  let v0=j;while(v0<n-3&&tl-A[v0][2]>.1)v0++;   /* last 100 ms of the stroke, but never fewer than 3 samples */
+  const a=A[v0],b=A[n-1],dt=Math.max(1/120,b[2]-a[2]),k=RECT.w/W/Math.max(300,Math.min(900,Math.min(innerWidth,innerHeight)));
+  const vx=(b[0]-a[0])/dt*k,vy=(b[1]-a[1])/dt*k,chx=b[0]-A[j][0],chy=A[j][1]-b[1];
+  let turn=0;
+  if(n-1-j>=3){const m=(j+n-1)>>1,a1=Math.atan2(A[m][0]-A[j][0],A[j][1]-A[m][1]),a2=Math.atan2(A[n-1][0]-A[m][0],A[m][1]-A[n-1][1]);
+    turn=a2-a1;if(turn>Math.PI)turn-=TAU;if(turn<-Math.PI)turn+=TAU;}
+  return {vx,vy,up:-vy,turn,chx,chy};
+}
+function aimInput(dt,c,e){
+  const hx=PH.HW-PH.R-.02;
+  /* --- pointer drag / flick --- */
+  if(PTR.pressed&&!S.drag){S.drag={x0:PTR.x,y0:PTR.y,hx0:S.handX};FS.length=0;S.lastIn='ptr';S.charging=false;
+    if(FSR.length){S.drag.x0=FSR[0][0];S.drag.y0=FSR[0][1];}}
+  else if(PTR.down&&!S.drag&&FDOWN){S.drag={x0:PTR.x,y0:PTR.y,hx0:S.handX};FS.length=0;const t=performance.now()/1000-.02;while(FSR.length&&FSR[0][2]<t)FSR.shift();S.lastIn='ptr';S.charging=false;}
+  if(S.drag){
+    FS.push([PTR.x,PTR.y,S.rt]);if(FS.length>40)FS.shift();
+    const zh=2.0,mpp=zh/CAM.F;S.handX=clamp(S.drag.hx0+(PTR.x-S.drag.x0)*mpp,-hx,hx);
+    S.handZ=PH.ZHAND-clamp((PTR.y-S.drag.y0)*mpp*.9,0,.2)+clamp((S.drag.y0-PTR.y)*mpp*.25,0,.04);
+    if(!PTR.down){const f=flickRead();S.lastFlick=f;S.drag=null;FSR.length=0;
+      if(f&&f.up>.55&&f.chy>1){const p=clamp((f.up-.6)/3.2,0,1.06),aim=clamp(Math.atan2(f.chx,f.chy)*.42,-.17,.17),spin=clamp(f.turn*1.6,-1,1);
+        S.aim=aim;S.spin=spin;throwBall(powerSpeed(p),aim,spin);}
+      else S.handZ=PH.ZHAND;}
+    return;
+  }
+  /* --- keys / pad: aim, curve, slide, hold A to charge, release to roll --- */
+  if(Math.abs(c.x)>.15||Math.abs(c.y)>.5)S.lastIn='key';
+  if(c.b){S.handX=clamp(S.handX+c.x*dt*.5,-hx,hx);}else{const pa=S.aim;S.aim=clamp(S.aim+c.x*dt*.22,-.17,.17);if(Math.abs(S.aim-pa)>1e-4&&((S.rt*12)|0)!==((S.rt*12-dt*12)|0))SFX.tick();}
+  if(c.u)S.spin=clamp(S.spin+dt*1.6,-1,1);if(c.d)S.spin=clamp(S.spin-dt*1.6,-1,1);
+  const pd=pads()[0];if(pd&&Math.abs(pd.axes[2]||0)>.25)S.spin=clamp(S.spin+(pd.axes[2])*dt*1.8,-1,1);
+  if(e.a&&!S.charging){S.charging=true;S.pw=0;S.pdir=1;S.lastIn=TS.A?'ptr':'key';}
+  if(S.charging){
+    if(c.a){const pp=S.pw;S.pw+=S.pdir*dt*.78;if(S.pw>=1.04){S.pw=1.04;S.pdir=-1;}if(S.pw<=0){S.pw=0;S.pdir=1;}if(((pp*16)|0)!==((S.pw*16)|0))SFX.charge(S.pw);
+      S.handZ=PH.ZHAND-S.pw*.06;}
+    else{S.charging=false;S.handZ=PH.ZHAND-.03;throwBall(powerSpeed(S.pw),S.aim,S.spin);}
+  }
+}
+/* ---- physics events -> sound, light and particles ---- */
+function onEv(k,s,b,e){
+  const vol=S.demo&&S.mode==='title'?.55:1;
+  switch(k){
+    case 'thud':if(e===1){SFX.thud(s/3*vol);if(s>1.6){S.shake=Math.max(S.shake,.08*s);puff(b,6);}}else if(s>.8)SFX.thud(s/5*vol);break;
+    case 'hump':SFX.clack(s/3.5*vol);break;
+    case 'launch':SFX.launch(s/3*vol);for(let i=0;i<LAMPN();i++){LAMPV[i]=Math.max(LAMPV[i],.8);LAMPV[LAMPN()+i]=Math.max(LAMPV[LAMPN()+i],.8);}break;
+    case 'lip':SFX.tock(e,s/1.6*vol);RINGS[e].glow=Math.min(1,RINGS[e].glow+s*.5);if(s>1.2)spark(b,RINGS[e].col,3);break;
+    case 'rim':SFX.rim(s*vol);break;
+    case 'knock':case 'wall':case 'back':SFX.knock(s/2.5*vol);if(k==='back'&&s>1.5)S.shake=Math.max(S.shake,.1);break;
+    case 'click':SFX.click();break;
+    case 'nudge':SFX.nudge();S.shake=Math.max(S.shake,.25);break;
+    case 'dunk':score(HOLES[e].val,HOLES[e]);break;
+    case 'side':score(10,null,'side');break;
+    case 'gutter':score(0,null,'gutter');break;
+    case 'short':score(0,null,e?'bounce':'short');break;
+  }
+}
+const BCP=[0,0,0];
+function score(val,hole,how){
+  if(S.lastRes!==null)return;S.lastRes=val;
+  S.score+=val;S.last=val;S.results.push(val);if(!S.demo)ARC.score(S.score);
+  const b=BALL;
+  if(hole){
+    const ri=RINGS[hole.ring];ri.flash=1;fromBoard(hole.u,hole.v,.02,BCP);
+    const big=val>=50;S.hitstop=big?(val>=100?.16:.09):.03;S.flash=val>=100?.9:big?.45:.18;S.flashC=ri.col;
+    burst(BCP[0],BCP[1],BCP[2],ri.col,8+val/4|0,val>=100);S.shake=Math.max(S.shake,val>=100?.6:big?.3:.08);
+    S.popups.push({txt:'+'+val,x:BCP[0],y:BCP[1]+.05,z:BCP[2],t:0,col:ri.col});
+    if(val>=100){SIGN[hole.u<0?0:1]=1.5;dmdPush('jackpot',{},2.2);SFX.dunk(100);SFX.jackpot();if(!S.demo)say('Pocket! One hundred!',.7,1.05);}
+    else{dmdPush('score',{val,sub:val>=40?'RING '+val:''},1.35);SFX.dunk(val);if(val>=50&&!S.demo)say('Fifty!',.7,1.05);}
+    lampFlash();
+  }else if(how==='side'){RINGS[0].flash=.8;dmdPush('score',{val:10,sub:'SIDE'},1.1);SFX.side();S.popups.push({txt:'+10',x:b.px,y:YB0+.04,z:ZB0-.02,t:0,col:RCOL[10]});}
+  else{dmdPush(how==='gutter'?'gutter':'short',{txt:how==='gutter'?'GUTTER':how==='bounce'?'BOUNCED':'TOO SHORT'},1.15);if(how==='gutter')SFX.gutter();else SFX.short();}
+}
+/* ---- particles ---- */
+function burst(x,y,z,col,n,confetti){for(let i=0;i<n;i++){const a=Math.random()*TAU,v=rnd(.3,1.3)*(confetti?1.4:1);
+  S.parts.push({x,y,z,vx:Math.cos(a)*v*.6,vy:rnd(.8,2.2)*(confetti?1.3:1),vz:Math.sin(a)*v*.5-.3,life:rnd(.5,1.1)*(confetti?1.6:1),max:1.1,col:confetti?LAMPCOL[i%6]:col,sz:.006});}}
+function spark(b,col,n){for(let i=0;i<n;i++)S.parts.push({x:b.px,y:b.py,z:b.pz,vx:rnd(-.6,.6),vy:rnd(.2,1),vz:rnd(-.6,.3),life:rnd(.15,.35),max:.35,col,sz:.003});}
+function puff(b,n){for(let i=0;i<n;i++)S.parts.push({x:b.px,y:b.py-PH.R*.8,z:b.pz,vx:rnd(-.4,.4),vy:rnd(.05,.3),vz:rnd(-.4,.2),life:rnd(.2,.45),max:.45,col:[120,110,150],sz:.004});}
+function partTick(dt){const P=S.parts;let j=0;for(let i=0;i<P.length;i++){const p=P[i];p.vy-=4*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.z+=p.vz*dt;p.life-=dt;if(p.life>0)P[j++]=p;}P.length=j;
+  for(const p of S.popups)p.t+=dt;S.popups=S.popups.filter(p=>p.t<1.1);}
+/* ---- lamps: targets by pattern, brightness lags like a filament (fast up, slow down) ---- */
+let LFLASH=0;
+function lampFlash(){LFLASH=1;}   /* all lamps strobe together after a dunk */
+function lampTick(dt){
+  const N=LAMPN(),t=S.rt,b=BALL,live=b.st==='live'||b.st==='sink',fin=S.final&&S.mode==='play';
+  for(let s=0;s<2;s++)for(let k=0;k<N;k++){const i=s*N+k;let v,c=0;
+    if(S.mode==='title'){v=.25+.75*Math.max(0,Math.sin(k*.55-t*4+s*Math.PI));c=(k+((t*.5)|0))%6;}
+    else if(S.mode==='over'){v=((k+((t*8)|0))%3===0)?1:.1;c=2*(s&1)+ (k&1);}
+    else if(fin){v=((k+((t*14)|0)+s*2)%4===0)?1:.12;c=((k+((t*14)|0))%8<4)?2:1;}
+    else if(live&&b.pz<PH.ZL+.2){v=.12+Math.exp(-Math.abs(LAMPZ[k]-b.pz)*7)*.95+Math.exp(-Math.abs(LAMPZ[k]-b.pz+.35)*5)*.3;c=0;}
+    else{v=.16+((k+((t*3)|0))%6===0?.5:0);c=0;}
+    if(LFLASH>0){const on=(LFLASH*8|0)%2;if(on){v=1;c=-1;}}
+    LAMPT[i]=v;LAMPC[i]=c<0?LAMPC[i]:c;
+    const tau=LAMPT[i]>LAMPV[i]?.025:.11;LAMPV[i]+=(LAMPT[i]-LAMPV[i])*(1-Math.exp(-dt/tau));
+  }
+  if(LFLASH>0){LFLASH-=dt*1.4;if((LFLASH*8|0)%2){for(let i=0;i<2*N;i++)LAMPC[i]=5;}}
+  /* target-box lamps: run upward while the ball flies, breathe otherwise; flash with the rails */
+  const fly=b.st==='live'&&b.launched&&b.air>0;
+  for(let k=0;k<6;k++){let v=fly?((((t*14)|0)-k)%6===0?1:.12):S.mode==='title'?.2+.8*Math.max(0,Math.sin(t*3-k*.9)):(k===((t*1.5)|0)%6?.55:.1);if(LFLASH>0&&(LFLASH*8|0)%2)v=1;
+    CHEV[k]+=(v-CHEV[k])*(1-Math.exp(-dt/(v>CHEV[k]?.025:.1)));}
+  for(let k=0;k<2;k++){SIGN[k]=Math.max(.35+.25*Math.sin(t*3+k*1.7),SIGN[k]-dt*.9);}
+  SIGN[2]=S.mode==='title'&&S.t<1.2?((Math.sin(S.t*60)>.2||S.t>.8)?1:.05):.75+.2*Math.sin(t*1.7);
+  for(const r of RINGS){r.flash=Math.max(0,r.flash-dt*1.1);r.glow=Math.max(.25+.15*Math.sin(t*2+r.v*9),r.glow-dt*2.5);}
+}
+/* ---- the follow camera: two framed poses (aiming / board) blended by how far up the ball is ---- */
+const POSE={a:null,b:null};
+function fitPose(E,pts,mx){
+  /* pitch so the highest and lowest points sit symmetric about the centre row; F from the span */
+  let lo=1e9,hi=-1e9;for(const p of pts){const a=Math.atan2(p[1]-E[1],p[2]-E[2]);if(a<lo)lo=a;if(a>hi)hi=a;}
+  const pitch=(lo+hi)/2,half=(hi-lo)/2,Fv=(VH3/2-mx)/Math.tan(half);
+  let Fh=1e9;const c=Math.cos(pitch),s=Math.sin(pitch);for(const p of pts){const dz=(p[2]-E[2])*c+(p[1]-E[1])*s,dx=Math.abs(p[0]-E[0]);if(dx>0)Fh=Math.min(Fh,(W/2-1)*dz/dx);}
+  return {E,T:[E[0],E[1]+Math.sin(pitch)*3,E[2]+Math.cos(pitch)*3],F:Math.min(Fv,Fh)};
+}
+function fitCams(){
+  /* low and well back: the lane foreshortens and the board reads big, with the ball in hand at the bottom */
+  POSE.a=fitPose([0,.45,-1.9],[[0,laneY(PH.ZHAND-PH.R*1.4),PH.ZHAND-PH.R*1.4],[0,YTOP+.135,ZTOP]],.5);
+  const bot=[0,0,0],tp=[0,0,0];fromBoard(0,-.04,0,bot);
+  POSE.b=fitPose([0,YTOP+.3,ZB0-.55],[[0,bot[1],bot[2]],[0,YTOP+.31,ZTOP],[-PH.HW,bot[1],bot[2]],[PH.HW,bot[1],bot[2]]],.5);
+}
+function camTick(dt){
+  const b=BALL;let tgt=0,tx=0;
+  if(S.phase==='roll'){
+    if(b.st==='live')tgt=clamp((b.pz-.25)/(PH.ZL-.15),0,1);else if(b.st==='sink')tgt=1;else if(b.st==='out')tgt=b.res==='short'||b.res==='bounce'?0:1;
+    if(S.pt>9)tgt=0;tx=clamp(b.px,-.3,.3)*.5;
+  }else if(S.phase==='settle'){tgt=S.pt<.55?S.camT:0;}
+  S.camT+=(tgt-S.camT)*(1-Math.exp(-dt*(tgt>S.camT?3.2:2.6)));S.camX+=(tx*S.camT-S.camX)*(1-Math.exp(-dt*3));
+  /* snap the tails of the eases: a still camera means the cached G-buffer is reused */
+  if(Math.abs(tgt-S.camT)<.004)S.camT=tgt;if(Math.abs(tx*S.camT-S.camX)<.0015)S.camX=tx*S.camT;
+}
+function applyCam(){
+  const k=S.camT*S.camT*(3-2*S.camT),A=POSE.a,B=POSE.b,E=[0,1,2].map(i=>lerp(A.E[i],B.E[i],k)),T=[0,1,2].map(i=>lerp(A.T[i],B.T[i],k));
+  setCam(E[0]+S.camX,E[1],E[2],T[0]+S.camX*1.2,T[1],T[2],lerp(A.F,B.F,k),0);
+}
+/* ---- one simulation tick of the alley (shared by play, attract and the autopilot) ---- */
+function simTick(dt,c,e){
+  S.t+=dt;S.pt+=dt;
+  if(S.flash>0)S.flash-=dt*2.5;if(S.shake>0)S.shake=Math.max(0,S.shake-dt*1.8);
+  dmdTick(dt);lampTick(dt);
+  if(S.disp<S.score){S.disp=Math.min(S.score,S.disp+Math.max(1,Math.ceil((S.score-S.disp)*dt*6)));if(!S.demo)SFX.count();}
+  if(S.hitstop>0){S.hitstop-=dt;partTick(dt*.2);return;}
+  partTick(dt);
+  const b=BALL;
+  if(S.phase==='enter'){
+    /* the next ball rolls out of the return channel into the hand, turning as it goes */
+    const k=clamp(S.pt/.55,0,1),e2=1-(1-k)*(1-k)*(1-k),x0=PH.HW-PH.R-.005,z0=PH.ZHAND-.12;
+    const nx=lerp(x0,S.handX,e2),nz=lerp(z0,PH.ZHAND,e2),vx=(nx-b.px)/dt,vz=(nz-b.pz)/dt;
+    if(S.pt>dt*1.5){const w=Math.hypot(vx,vz)/PH.R;if(w>1e-3)spinQ(b,vz/(w*PH.R),0,-vx/(w*PH.R),w*dt);b.roll=Math.hypot(vx,vz);}
+    b.px=nx;b.pz=nz;b.py=laneY(nz)+PH.R;S.handZ=PH.ZHAND;
+    if(k>=1){S.phase='aim';S.pt=0;b.roll=0;}
+  }else if(S.phase==='aim'){
+    if(S.demo||S.auto)aiTick(dt);else aimInput(dt,c,e);
+    if(S.phase==='aim'){const nx=S.handX,nz=S.handZ,vx=(nx-b.px)/dt,vz=(nz-b.pz)/dt,w=Math.hypot(vx,vz)/PH.R;if(w>1e-3)spinQ(b,vz/(w*PH.R),0,-vx/(w*PH.R),w*dt);b.px=nx;b.pz=nz;b.py=laneY(nz)+PH.R;b.roll=0;}
+  }else if(S.phase==='roll'){
+    physTick([b],dt,onEv);
+    if(b.st==='live'&&(b.air>0||Math.hypot(b.vx,b.vy,b.vz)>2.2)){S.trails.push(b.px,b.py,b.pz);if(S.trails.length>24)S.trails.splice(0,3);}else if(S.trails.length)S.trails.splice(0,3);
+    if(b.st==='gone'||S.pt>12){if(S.lastRes===null)score(0,null,'gutter');S.phase='settle';S.pt=0;}
+  }else if(S.phase==='settle'){
+    if(S.trails.length)S.trails.splice(0,3);
+    if(S.pt>1.05&&(!dmdBusy()||S.pt>3.2)&&S.camT<.08)nextBall();
+  }
+}
+/* =====================================================================================
+   9f. VIEW — compose a frame: cached G-buffer -> deferred shade -> ray-cast ball -> sparks,
+   trail, aim guide -> DMD panel -> HUD. Plus the ticket strip on the results screen.
+   ===================================================================================== */
+/* tickets feed out of a slot as a chain of verlet links that sways and piles on the floor */
+const TIX={pts:[],rest:[],n:0,target:0,feed:0,rate:10,ax:0,ay:0,done:false,
+  reset(){this.pts.length=0;this.rest.length=0;this.n=0;this.target=0;this.feed=0;this.done=false;S.tixShown=0;},
+  start(n){this.reset();this.target=n;this.rate=clamp(n/2.4,7,60);this.ax=W/2;this.ay=Y0+Math.round(VH3*.54);this.pts.push({x:this.ax,y:this.ay,ox:this.ax,oy:this.ay});this.pts.push({x:this.ax,y:this.ay,ox:this.ax,oy:this.ay});this.rest.push(0);},
+  tick(dt){
+    if(!this.pts.length)return;const L=Math.max(3,Math.round(W/56));
+    if(this.n<this.target&&S.t>.9){this.feed+=this.rate*dt;
+      while(this.feed>=1&&this.n<this.target){this.feed-=1;this.n++;S.tixShown=this.n;SFX.ticket();
+        if(this.pts.length<64){this.rest[0]=L;this.pts.splice(1,0,{x:this.ax,y:this.ay+.5,ox:this.ax,oy:this.ay+.5});this.rest.unshift(0);}}
+      this.rest[0]=Math.min(L,this.feed*L);
+    }else if(this.n>=this.target&&!this.done&&S.t>.9){this.done=true;this.rest[0]=L;}
+    const P=this.pts,g2=260*dt*dt,fl=H-2;
+    for(let i=1;i<P.length;i++){const p=P[i],vx=(p.x-p.ox)*.985,vy=(p.y-p.oy)*.985;p.ox=p.x;p.oy=p.y;p.x+=vx+Math.sin(S.rt*1.7+i*.4)*.012;p.y+=vy+g2;
+      if(p.y>fl){p.y=fl;p.x-=vx*.4;}if(p.x<2)p.x=2;if(p.x>W-3)p.x=W-3;}
+    for(let it=0;it<8;it++){P[0].x=this.ax;P[0].y=this.ay;
+      for(let i=0;i<P.length-1;i++){const a=P[i],b=P[i+1],dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1e-6,df=(d-this.rest[i])/d;
+        if(i===0){b.x-=dx*df;b.y-=dy*df;}else{a.x+=dx*df*.5;a.y+=dy*df*.5;b.x-=dx*df*.5;b.y-=dy*df*.5;}}}
+  },
+  draw(){
+    const P=this.pts;if(!P.length)return;
+    /* a ribbon of tickets: each link is one ticket, perforated where it joins the next */
+    const hw=Math.max(2,Math.round(W/70));
+    for(let i=P.length-2;i>=0;i--){const a=P[i],b=P[i+1],dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);if(d<.3)continue;
+      const nx=-dy/d,ny=dx/d,c1=i%2?pack(255,150,48):pack(255,96,72),c0=i%2?pack(190,96,26):pack(180,56,44),c2=pack(70,30,14),st=Math.ceil(d*2);
+      for(let s=0;s<=st;s++){const x=a.x+dx*s/st,y=a.y+dy*s/st;for(let k=-hw;k<=hw;k++)px(x+nx*k,y+ny*k,s===st&&i>0?c2:(k===-hw||k===hw)?c0:(k===0&&s===st>>1)?c0:c1);}}
+    const sw=Math.round(W*.07);rect(this.ax-sw,this.ay-2,sw*2,3,pack(10,8,14));rect(this.ax-sw-1,this.ay-3,sw*2+2,1,pack(190,190,210));rect(this.ax-sw-1,this.ay+1,sw*2+2,1,pack(90,90,110));
+  }
+};
+const GHOST=newBall();
+function aimGuide(){
+  /* keys/pad: preview the first stretch of the roll (straight or curving) with the current power */
+  launchBall(GHOST,S.handX,S.handZ,powerSpeed(S.charging?S.pw:.55),S.aim,S.spin);
+  for(let i=0;i<30;i++){physTick([GHOST],1/60,()=>{});if(GHOST.pz>PH.ZH0-.05)break;if(i%2===1){const p=project(GHOST.px,GHOST.py-PH.R*.8,GHOST.pz);if(p[2]>0){const x=p[0]|0,y=p[1]|0,a=1-i/36;
+      if(y>Y0&&y<H-1&&x>0&&x<W-1){const d=pack(10,20,40);px(x-1,y,d);px(x+1,y,d);px(x,y-1,d);px(x,y+1,d);px(x,y,pack(120*a+60,230*a+20,255));}}}}
+  GHOST.st='gone';
+}
+function shiftView(sx,sy){
+  if(!sx&&!sy)return;const z=pack(4,3,8);
+  if(sy>0){for(let y=H-1;y>=Y0;y--){const s=y-sy;if(s>=Y0)RBUF.copyWithin(y*W,s*W,s*W+W);else RBUF.fill(z,y*W,y*W+W);}}
+  else if(sy<0){for(let y=Y0;y<H;y++){const s=y-sy;if(s<H)RBUF.copyWithin(y*W,s*W,s*W+W);else RBUF.fill(z,y*W,y*W+W);}}
+  if(sx)for(let y=Y0;y<H;y++){const o=y*W;if(sx>0){RBUF.copyWithin(o+sx,o,o+W-sx);RBUF.fill(z,o,o+sx);}else{RBUF.copyWithin(o,o-sx,o+W);RBUF.fill(z,o+W+sx,o+W);}}
+}
+function meterDraw(){
+  const x=W-8,y0=Y0+6,y1=H-10,h=y1-y0,p=S.pw;
+  rect(x-2,y0-1,6,h+2,pack(20,16,30));
+  for(let y=y1-1;y>=y0;y--){const k=(y1-y)/h;if(k>p)break;const c=k<.5?mixC([60,140,255],[255,214,60],k*2):mixC([255,214,60],[255,48,80],(k-.5)*2);rect(x-1,y,4,1,pack(c[0],c[1],c[2]));}
+  for(const m of METER){const y=Math.round(y1-m.p*h);rect(x-4,y,2,1,pack(...RINGS[m.ring].col));}
+}
+let PERF={tick:0,render:0,shade:0,raster:0,n:0};
+function render(){
+  const t0=performance.now();
+  applyCam();
+  const sig=CAM.ex.toFixed(4)+CAM.ey.toFixed(4)+CAM.ez.toFixed(4)+CAM.fx.toFixed(5)+CAM.fy.toFixed(5)+CAM.F.toFixed(2)+W;
+  if(sig!==CAM.sig){const r0=performance.now();rasterScene();shadeStatic();CAM.sig=sig;PERF.raster=performance.now()-r0;}
+  /* transient lights: flashing rings light the board around them */
+  LIGHTS.length=0;
+  for(const r of RINGS)if(r.flash>.04){const o=[0,0,0];fromBoard(r.u,r.v,.12,o);LIGHTS.push({x:o[0],y:o[1],z:o[2],r:r.col[0]*r.flash*1.4,g:r.col[1]*r.flash*1.4,b:r.col[2]*r.flash*1.4,i:1,k:40});}
+  CASTN=0;const b=BALL;if(b.st!=='gone'&&b.st!=='sink'){CAST[0]=b.px;CAST[1]=b.py;CAST[2]=b.pz;CASTN=1;}
+  const s0=performance.now();shadeScene(S.rt);PERF.shade=performance.now()-s0;
+  GZ2.fill(0,Y0*W);
+  if(b.st!=='gone')drawBall(b);
+  /* light trail behind a fast or flying ball, sparks, the aim guide */
+  const T=S.trails;for(let i=0;i<T.length;i+=3){const a=(i/T.length)*.8;addDot(T[i],T[i+1],T[i+2],255*a,170*a,70*a,.002);}
+  for(const p of S.parts){const a=clamp(p.life/p.max,0,1);addDot(p.x,p.y,p.z,p.col[0]*a,p.col[1]*a,p.col[2]*a,p.sz);}
+  if(S.mode==='play'&&S.phase==='aim'&&!S.auto&&S.lastIn==='key'&&!S.paused)aimGuide();
+  if(S.flash>0){const f=S.flash*.32,c=S.flashC;for(let i=Y0*W;i<W*H;i++)addPx(i,c[0]*f,c[1]*f,c[2]*f);}
+  if(!reduce&&S.shake>0)shiftView(Math.round((Math.random()-.5)*S.shake*5),Math.round((Math.random()-.5)*S.shake*4));
+  if(S.mode==='over'||S.paused){const k=S.paused?.4:.42;for(let i=Y0*W;i<W*H;i++){const c=RBUF[i];RBUF[i]=pack((c&255)*k,((c>>>8)&255)*k,((c>>>16)&255)*k);}}
+  if(S.mode==='over')TIX.draw();
+  if(S.mode==='play'&&S.phase==='aim'&&!S.auto&&(S.charging||S.lastIn==='key')&&!S.paused)meterDraw();
+  renderDMD();
+  commit();
+  hud();
+  PERF.render=performance.now()-t0;   /* everything except present() (the GPU LED pass) */
+}
+/* ---- text HUD on top (bitmap fonts through the 2D context) ---- */
+function hud(){
+  const mid=W/2,bot=H-9,bl=(S.rt*2.2|0)%2;
+  for(const p of S.popups){const q=project(p.x,p.y,p.z);if(q[2]<=0)continue;const sc=W>=300?2:1;otxt5(g,p.txt,Math.round(q[0]),Math.round(q[1]-10-p.t*14),p.t<.12?'#ffffff':rgba(p.col),sc,'c');}
+  if(S.mode==='title'){
+    if(bl||S.t<.5)otxt5(g,touchy?'TAP TO PLAY':'PRESS START',4,bot-1,GR.volt,1,'l');otxt3(g,'HI '+fmt(S.hi),W-4,bot+1,'#ffb040',1,'r');
+  }else if(S.mode==='play'){
+    if(S.phase==='aim'&&!S.auto&&S.hint<2&&!S.paused){
+      const m=S.lastIn==='ptr'?(touchy?'SWIPE UP TO ROLL':'DRAG BACK, FLICK UP'):'HOLD SPACE, RELEASE';
+      const hy=Y0+Math.round(VH3*.6);otxt3(g,m,mid,hy,bl?'#ffe46a':'#ffb040',1,'c');if(S.lastIn!=='ptr')otxt3(g,'ARROWS AIM   UP DOWN CURVE',mid,hy+8,'#a6f3ff',1,'c');}
+    if(S.phase==='aim'&&!S.auto&&Math.abs(S.spin)>.05&&!S.paused){const n=Math.min(3,Math.ceil(Math.abs(S.spin)*3)),a=(S.spin>0?'>':'<').repeat(n);otxt3(g,'CURVE '+a,4,bot,'#ff9aab',1,'l');}
+    if(S.paused){otxt5(g,'PAUSED',mid,Y0+Math.round(VH3*.35),GR.steel,2,'c');otxt3(g,touchy?'TAP RESUME':'ESC TO RESUME',mid,Y0+Math.round(VH3*.35)+20,'#cfd6e6',1,'c');}
+  }else if(S.mode==='over'){
+    const sc=W>=250?2:1,hs=S.newHi&&W<300?1:sc,y0=Y0+Math.round(VH3*.03);
+    otxt5(g,S.newHi?'NEW HIGH SCORE':'GAME OVER',mid,y0,S.newHi?GR.green:GR.volt,hs,'c',.1);
+    const ys=y0+hs*7+Math.round(VH3*.04);otxt5(g,'SCORE '+fmt(S.score),mid,ys,'#ffffff',1,'c');
+    const yt=ys+7+Math.round(VH3*.06);otxt5(g,String(S.tixShown),mid,yt,GR.volt,sc,'c');otxt3(g,'TICKETS',mid,yt+sc*7+2,'#ffd040',1,'c');
+    if(TIX.done&&S.t>1.6&&bl)otxt3(g,touchy?'TAP TO CONTINUE':'PRESS START',mid,bot+2,'#cfd6e6',1,'c');
+  }
+}
+/* =====================================================================================
+   10. FRAME LOOP — fixed 60 Hz simulation, render once per display frame
+   ===================================================================================== */
+/* the rolling rumble: looping noise through a lowpass whose level, colour and lumpiness
+   (an LFO at the ball's rotation rate) follow the rolling speed. Airborne balls are silent. */
+const RB={on:false};
+function rumble(){
+  const c=AU.ctx;if(!c||c.state!=='running')return;
+  try{
+    if(!RB.on){RB.on=true;
+      RB.src=c.createBufferSource();RB.src.buffer=AU.noise;RB.src.loop=true;RB.f=c.createBiquadFilter();RB.f.type='lowpass';RB.f.Q.value=2.2;RB.f.frequency.value=200;
+      RB.m=c.createGain();RB.m.gain.value=.65;RB.g=c.createGain();RB.g.gain.value=0;RB.src.connect(RB.f);RB.f.connect(RB.m);RB.m.connect(RB.g);RB.g.connect(AU.sfx);
+      RB.lfo=c.createOscillator();RB.lfo.frequency.value=8;RB.lg=c.createGain();RB.lg.gain.value=.35;RB.lfo.connect(RB.lg);RB.lg.connect(RB.m.gain);
+      RB.o=c.createOscillator();RB.o.type='sine';RB.o.frequency.value=50;RB.og=c.createGain();RB.og.gain.value=0;RB.o.connect(RB.og);RB.og.connect(AU.sfx);
+      RB.src.start();RB.lfo.start();RB.o.start();}
+    const b=BALL;let sp=0,f=220;
+    if(!S.paused&&S.mode!=='over'&&(b.st==='live'||b.st==='hand')&&b.roll>.05){sp=b.roll;f=b.supK===2?120+sp*80:200+sp*170;}
+    const v=AU.muted||ARC.muted?0:clamp(sp/3.6,0,1)*.6*(S.mode==='title'?.5:1),t=c.currentTime;
+    RB.g.gain.setTargetAtTime(v,t,.035);RB.og.gain.setTargetAtTime(v*.55,t,.05);RB.f.frequency.setTargetAtTime(f,t,.05);
+    RB.lfo.frequency.setTargetAtTime(clamp(sp/(TAU*PH.R),1,30),t,.05);RB.o.frequency.setTargetAtTime(38+sp*9,t,.05);
+  }catch(e){}
+}
+const UIP={};
+function setPause(on){if(S.mode!=='play')on=false;S.paused=on;$('pauseBtn').textContent=on?'Resume':'Pause';if(on){S.charging=false;S.drag=null;}}
+function tick(dt){
+  const c=readCtl(),e={};for(const k of ['ok','back','pause','a','start']){e[k]=c[k]&&!UIP[k];UIP[k]=c[k];}
+  const mk=K('KeyM');if(mk&&!UIP.m)toggleSound();UIP.m=mk;
+  const tap=PTR.pressed;
+  if(S.mode==='title'){S.rt+=dt;simTick(dt,c,e);camTick(dt);if(e.ok||e.start||tap){audioInit();APP_start();}else if(e.back&&EMBED)ARC.exit();}
+  else if(S.mode==='play'){
+    if(e.pause){setPause(!S.paused);return;}
+    if(S.paused){if(tap)setPause(false);rumble();return;}
+    S.rt+=dt;simTick(dt,c,e);camTick(dt);
+  }else if(S.mode==='over'){
+    S.rt+=dt;S.t+=dt;dmdTick(dt);lampTick(dt);partTick(dt);TIX.tick(dt);camTick(dt);S.disp=S.score;
+    if(!TIX.done&&S.t>1&&(tap||e.ok))TIX.rate*=3;
+    else if(S.t>1.6&&TIX.done&&(e.ok||e.start||tap))APP_attract();else if(EMBED&&S.t>1.6&&e.back)ARC.exit();
+  }
+  rumble();
+}
+let ACC=0,LAST=0,FREEZE=false;   /* tests can freeze real time and drive ticks themselves */
+function frame(ts){
+  const dt=LAST?Math.min(.05,(ts-LAST)/1000):1/60;LAST=ts;
+  ACC+=dt;let n=0;const t0=performance.now();if(FREEZE)ACC=0;while(ACC>=1/60&&n<4){tick(1/60);ACC-=1/60;n++;}if(n===4)ACC=0;
+  if(n>0){PERF.tick=(performance.now()-t0)/n;endInputFrame();}   /* only clear latched taps once a tick has seen them */
+  g.setTransform(1,0,0,1,0,0);render();musicTick(S.paused);present();
+  requestAnimationFrame(frame);
+}
+/* ---------- chrome + boot ---------- */
+function toggleSound(){AU.muted=!AU.muted;store.set('hd-mute',AU.muted?'1':'0');setVolume();$('snd').textContent=AU.muted?'Sound off':'Sound on';try{if(AU.muted)speechSynthesis.cancel();}catch(e){}}
+$('snd').addEventListener('click',e=>{audioInit();toggleSound();e.currentTarget.blur();});
+$('res').addEventListener('click',e=>{setRes((resI+1)%CAB.res.length);layout();e.currentTarget.blur();});
+$('pauseBtn').addEventListener('click',e=>{audioInit();setPause(!S.paused);e.currentTarget.blur();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)setPause(true);});
+addEventListener('resize',resize);
+$('brand').firstChild.textContent=CAB.brand;$('brand').querySelector('span').textContent=CAB.sub;$('keys').innerHTML=CAB.keys;document.title='Ring Roller';
+/* phones: no stick (you swipe the matrix itself); the big button is hold-to-charge, release to roll */
+$('stL').hidden=true;$('bB').hidden=true;$('bA').textContent='ROLL';$('pad').style.justifyContent='flex-end';
+if(!gl)$('err').style.display='grid';
+if(AU.muted)$('snd').textContent='Sound off';
+buildScene();buildPaint();LAMPV=new Float32Array(2*LAMPN());LAMPT=new Float32Array(2*LAMPN());LAMPC=new Uint8Array(2*LAMPN());buildTable();
+RESCB.push(()=>{fitCams();CAM.sig='';});
+setRes(resI);resize();APP_attract();
+ARC.post('ready',{title:CAB.title,w:W,h:H,tickets:CAB.tickets});
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

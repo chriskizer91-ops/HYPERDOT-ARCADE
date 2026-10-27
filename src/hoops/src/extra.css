@@ -1,0 +1,14 @@
+/* BUCKET BLITZ is a flick game: no stick or buttons; the whole screen is the throwing surface.
+   Upright phones get a quiet "swipe here" zone under the matrix. */
+#pad{display:none!important}
+#flick{position:fixed;left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));top:calc(var(--padTop,62%) + 14px);bottom:max(20px,env(safe-area-inset-bottom,0px));
+  display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;pointer-events:none;border:1px dashed rgba(255,176,64,.26);border-radius:24px;
+  background:radial-gradient(ellipse at 50% 70%,rgba(255,150,40,.07),transparent 70%);color:var(--ink-2);font:600 11px/1.3 var(--f);letter-spacing:.24em;text-transform:uppercase}
+#flick i{position:relative;width:2px;height:min(24vh,170px);background:linear-gradient(to top,rgba(255,176,64,0),rgba(255,176,64,.75));border-radius:2px}
+#flick i::before{content:"";position:absolute;left:-6px;top:0;width:12px;height:12px;border-left:2px solid rgba(255,176,64,.85);border-top:2px solid rgba(255,176,64,.85);transform:rotate(45deg);transform-origin:50% 50%}
+@media (prefers-reduced-motion:no-preference){#flick i{animation:flk 1.6s cubic-bezier(.2,.7,.2,1) infinite}}
+@keyframes flk{0%{transform:translateY(30px);opacity:0}25%{opacity:1}70%{transform:translateY(-10px);opacity:.9}100%{transform:translateY(-14px);opacity:0}}
+body.portrait:not(.embed) #flick{display:flex}
+/* "BUCKET BLITZ" is a longer marquee than the starter's: keep the bar on one line on narrow phones */
+@media (max-width:440px){.brand{font-size:11px;letter-spacing:.12em}.chip{padding:0 8px}}
+@media (max-width:360px){.brand{font-size:10px;letter-spacing:.06em}}

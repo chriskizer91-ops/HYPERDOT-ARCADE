@@ -1,0 +1,4 @@
+<!doctype html><html><head><meta charset="utf-8"><title>embed test</title><style>html,body{margin:0;background:#111}iframe{position:absolute;left:40px;top:40px;width:640px;height:360px;border:0}</style></head>
+<body><iframe id="f" src="../qp/stack/stack.html?embed=1"></iframe>
+<script>window.MSGS=[];addEventListener('message',e=>{if(e.data&&e.data.src==='hyperdot')MSGS.push(e.data);});
+window.send=cmd=>document.getElementById('f').contentWindow.postMessage({src:'hyperdot-arcade',cmd},'*');</script></body></html>

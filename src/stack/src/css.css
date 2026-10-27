@@ -1,0 +1,8 @@
+/* SKY STACK: one-button cabinet. The stick is hidden; the big STOP button is an arcade push-button. */
+#pad.one{justify-content:flex-end}
+body.portrait #pad.one{justify-content:center}
+body.portrait #pad.one .acts{gap:26px;align-items:center}
+body.portrait #pad.one #bA{width:min(40vw,170px);height:min(40vw,170px);font-size:15px;letter-spacing:.16em}
+body.portrait #pad.one #bB{width:min(20vw,84px);height:min(20vw,84px)}
+#bA{background:radial-gradient(circle at 50% 30%,rgba(255,214,140,.75),rgba(214,96,24,.55) 52%,var(--panel) 76%);box-shadow:0 0 22px rgba(255,150,50,.28),inset 0 -6px 14px rgba(0,0,0,.35)}
+body.land #pad.one .acts{flex-direction:column;align-items:center;gap:10px}

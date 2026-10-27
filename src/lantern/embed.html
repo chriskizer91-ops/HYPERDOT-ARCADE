@@ -1,0 +1,5 @@
+<!doctype html><html><body style="margin:0;background:#000">
+<iframe id="f" src="lantern.html?embed=1" style="width:640px;height:360px;border:0"></iframe>
+<script>window.MSGS=[];addEventListener('message',e=>{if(e.data&&e.data.src==='hyperdot')MSGS.push(e.data);});
+function send(cmd){document.getElementById('f').contentWindow.postMessage({src:'hyperdot-arcade',cmd},'*');}</script>
+</body></html>

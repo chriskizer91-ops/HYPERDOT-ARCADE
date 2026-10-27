@@ -1,0 +1,1606 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Lantern</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&display=swap">
+<style>
+/* =====================================================================================
+   HYPERDOT CABINET STARTER
+   One self-contained page: an offscreen W x H "matrix" canvas is drawn by the game, then
+   shown through a WebGL2 LED shader (round dots + bloom + tonemap). Everything visual is
+   drawn by code; all sound is synthesized. Copy this file, rename it, replace the GAME
+   section near the bottom. Dark-only by design (it is a lit sign in a dark arcade).
+   ===================================================================================== */
+:root{
+  --bg:#070403;--ink:#f8ebe0;--ink-2:#b09a8a;--accent:#ff8a2a;--accent-2:#ffd59a;
+  --panel:rgba(26,14,8,.84);--edge:rgba(255,255,255,.14);
+  --f:"Chakra Petch","Arial Narrow",system-ui,sans-serif;color-scheme:dark;
+}
+[hidden]{display:none!important}           /* author display rules would otherwise beat the hidden attribute */
+html{height:100%;box-sizing:border-box;background:var(--bg)}
+*,*::before,*::after{box-sizing:inherit}
+body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:var(--f);overflow:hidden;overscroll-behavior:none;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+#gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#sa{position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+.bar{position:fixed;left:0;right:0;top:0;display:flex;align-items:center;justify-content:space-between;gap:10px;pointer-events:none;
+  padding-top:max(10px,env(safe-area-inset-top,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.brand{font:700 14px/1 var(--f);letter-spacing:.32em;color:var(--accent);text-shadow:0 0 12px rgba(255,138,42,.65);white-space:nowrap}
+.brand span{color:var(--ink-2);letter-spacing:.2em;font-weight:500;font-size:10px;margin-left:8px;text-shadow:none}
+@media (max-width:560px){.brand span{display:none}}
+@media (max-width:440px){.brand{font-size:12px;letter-spacing:.2em}.opts{gap:6px}.chip{padding:0 9px;font-size:10px;letter-spacing:.06em}.chip .lbl{display:none}}
+.opts{display:flex;gap:8px}
+.chip{pointer-events:auto;height:34px;padding:0 12px;border-radius:999px;border:1px solid var(--edge);background:var(--panel);color:var(--ink);cursor:pointer;
+  font:600 11px/1 var(--f);letter-spacing:.12em;text-transform:uppercase;font-variant-numeric:tabular-nums;white-space:nowrap}
+.chip:focus-visible,.ab:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+/* touch controls: a stick on the left, two buttons on the right (phones only) */
+#pad{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:space-between;align-items:flex-end;gap:10px;pointer-events:none;
+  padding-bottom:max(16px,env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.stk{pointer-events:auto;touch-action:none;position:relative;flex:none;width:var(--stick,150px);height:var(--stick,150px);border-radius:50%;
+  background:radial-gradient(circle,rgba(255,255,255,.05) 0 30%,transparent 31%),var(--panel);border:1px solid var(--edge)}
+.kn{position:absolute;left:50%;top:50%;width:40%;height:40%;margin:-20% 0 0 -20%;border-radius:50%;background:radial-gradient(circle at 40% 32%,#ffe0b0,#d0601a 62%,#4a1606);box-shadow:0 0 16px rgba(255,138,48,.45)}
+.acts{pointer-events:auto;display:flex;gap:12px;align-items:flex-end}
+.ab{touch-action:none;cursor:pointer;width:var(--b,64px);height:var(--b,64px);border-radius:50%;border:1px solid var(--edge);color:var(--ink);background:var(--panel);
+  font:700 11px/1 var(--f);letter-spacing:.06em;display:grid;place-items:center;padding:0;transition:transform .05s}
+#bA{border-color:rgba(255,150,60,.75);background:radial-gradient(circle at 50% 34%,rgba(255,150,60,.55),var(--panel) 74%);width:calc(var(--b,64px)*1.25);height:calc(var(--b,64px)*1.25)}
+#bB{border-color:rgba(255,224,170,.6);background:radial-gradient(circle at 50% 34%,rgba(255,224,170,.32),var(--panel) 74%)}
+.ab.on{transform:scale(.9);filter:brightness(1.5)}
+body.portrait #pad{top:var(--padTop,60%);align-items:center}
+body.land #pad{opacity:.8}
+.keys{position:fixed;left:0;right:0;bottom:max(10px,env(safe-area-inset-bottom,0px));margin:0;text-align:center;font:500 11px/1.5 var(--f);letter-spacing:.08em;color:var(--ink-2);pointer-events:none;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.keys b{color:var(--ink);font-weight:600}
+#turn{position:fixed;left:0;right:0;margin:0;text-align:center;font:500 11px/1.4 var(--f);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2);pointer-events:none}
+#err{position:fixed;inset:0;display:none;place-items:center;padding:24px;text-align:center;font:500 14px/1.6 var(--f);color:var(--ink-2)}
+/* embedded in the 3D arcade: no page chrome, the matrix fills the frame */
+body.embed .bar,body.embed .keys,body.embed #turn{display:none!important}
+</style>
+</head>
+<body>
+<canvas id="gl" aria-label="Lantern: a lamplighter keeps the shades at bay with a lantern beam, on a simulated amber plasma dot-matrix display"></canvas>
+<div id="sa"></div>
+<div class="bar">
+  <span class="brand" id="brand">LANTERN<span>KEEP THE LIGHT</span></span>
+  <div class="opts"><button class="chip" id="res" type="button"><span class="lbl">Glass </span><span id="resv">AMBER</span></button><button class="chip" id="snd" type="button">Sound on</button><button class="chip" id="pauseBtn" type="button">Pause</button></div>
+</div>
+<div id="pad" hidden>
+  <div class="stk" id="stL" aria-label="Stick"><div class="kn" id="knL"></div></div>
+  <div class="acts"><button class="ab" id="bB" type="button">FLARE</button><button class="ab" id="bA" type="button">BEAM</button></div>
+</div>
+<p id="turn" hidden>Turn your phone sideways for a bigger screen</p>
+<p class="keys" id="keys"><b>WASD</b> or <b>arrows</b> walk · <b>mouse</b> aims · hold <b>Space</b> or <b>click</b> to open the beam · <b>X</b> or <b>right click</b> flare · <b>Esc</b> pause · <b>M</b> mute</p>
+<div id="err">LANTERN shows its dot-matrix display through WebGL2, which this browser has turned off.</div>
+<script>
+(()=>{
+'use strict';
+/* =====================================================================================
+   LANTERN — a lamplighter, a town of shades, one flame.
+   The display is a classic amber plasma dot matrix: 192 x 96 dots, sixteen levels per dot.
+   The game writes nibbles (0..15) into a framebuffer the way a 1990s pinball display
+   controller did; the light that decides those nibbles is computed per dot on the CPU
+   with polar shadow maps. The music and effects run through a small two-operator FM
+   synthesizer, the sound family of the soundboards those machines carried.
+   ===================================================================================== */
+/* =====================================================================================
+   1. BASICS
+   ===================================================================================== */
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>v<a?a:v>b?b:v,lerp=(a,b,t)=>a+(b-a)*t,rnd=(a,b)=>a+Math.random()*(b-a),TAU=Math.PI*2;
+const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:v}catch(e){return d}},set(k,v){try{localStorage.setItem(k,String(v))}catch(e){}}};
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const touchy=matchMedia('(hover: none)').matches;
+const fmt=n=>Math.floor(n).toLocaleString('en-US');
+const pick=a=>a[(Math.random()*a.length)|0];
+const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
+const EMBED=/[?&]embed=1/.test(location.search);
+const cv=$('gl');
+/* the panel */
+const W=192,H=96,N=W*H;
+/* xorshift32 for everything that must be cheap and repeatable */
+let RS=0x2545f491;
+function r32(){RS^=RS<<13;RS^=RS>>>17;RS^=RS<<5;return RS>>>0;}
+const rf=()=>r32()/4294967296;
+function hash2(x,y,s){let h=(Math.imul(x|0,374761393)+Math.imul(y|0,668265263)+Math.imul(s|0,982451653))|0;h=Math.imul(h^(h>>>13),1274126177);return ((h^(h>>>16))>>>0)/4294967296;}
+function vnoise(x,y,s){const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi,u=xf*xf*(3-2*xf),v=yf*yf*(3-2*yf);
+  const a=hash2(xi,yi,s),b=hash2(xi+1,yi,s),c=hash2(xi,yi+1,s),d=hash2(xi+1,yi+1,s);return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v;}
+function fbm(x,y,s){return vnoise(x,y,s)*.55+vnoise(x*2.1,y*2.1,s+7)*.3+vnoise(x*4.3,y*4.3,s+13)*.15;}
+
+/* =====================================================================================
+   2. THE NIBBLE FRAMEBUFFER AND ITS FONTS
+      NB holds one level per dot (0 = dark, 15 = full). Text and HUD art are written
+      straight into it, as on the real thing: there is no colour, only brightness.
+   ===================================================================================== */
+const NB=new Uint8Array(N);
+const F5SRC=`A 01110 10001 10001 11111 10001 10001 10001|B 11110 10001 10001 11110 10001 10001 11110|C 01110 10001 10000 10000 10000 10001 01110|D 11110 10001 10001 10001 10001 10001 11110|E 11111 10000 10000 11110 10000 10000 11111|F 11111 10000 10000 11110 10000 10000 10000|G 01110 10001 10000 10111 10001 10001 01111|H 10001 10001 10001 11111 10001 10001 10001|I 01110 00100 00100 00100 00100 00100 01110|J 00111 00010 00010 00010 00010 10010 01100|K 10001 10010 10100 11000 10100 10010 10001|L 10000 10000 10000 10000 10000 10000 11111|M 10001 11011 10101 10101 10001 10001 10001|N 10001 10001 11001 10101 10011 10001 10001|O 01110 10001 10001 10001 10001 10001 01110|P 11110 10001 10001 11110 10000 10000 10000|Q 01110 10001 10001 10001 10101 10010 01101|R 11110 10001 10001 11110 10100 10010 10001|S 01111 10000 10000 01110 00001 00001 11110|T 11111 00100 00100 00100 00100 00100 00100|U 10001 10001 10001 10001 10001 10001 01110|V 10001 10001 10001 10001 10001 01010 00100|W 10001 10001 10001 10101 10101 10101 01010|X 10001 10001 01010 00100 01010 10001 10001|Y 10001 10001 01010 00100 00100 00100 00100|Z 11111 00001 00010 00100 01000 10000 11111|0 01110 10001 10011 10101 11001 10001 01110|1 00100 01100 00100 00100 00100 00100 01110|2 01110 10001 00001 00010 00100 01000 11111|3 11111 00010 00100 00010 00001 10001 01110|4 00010 00110 01010 10010 11111 00010 00010|5 11111 10000 11110 00001 00001 10001 01110|6 00110 01000 10000 11110 10001 10001 01110|7 11111 00001 00010 00100 01000 01000 01000|8 01110 10001 10001 01110 10001 10001 01110|9 01110 10001 10001 01111 00001 00010 01100|! 00100 00100 00100 00100 00100 00000 00100|. 00000 00000 00000 00000 00000 01100 01100|, 00000 00000 00000 00000 01100 00100 01000|: 00000 01100 01100 00000 01100 01100 00000|- 00000 00000 00000 11111 00000 00000 00000|+ 00000 00100 00100 11111 00100 00100 00000|? 01110 10001 00001 00010 00100 00000 00100|' 00100 00100 01000 00000 00000 00000 00000|/ 00001 00001 00010 00100 01000 10000 10000|> 01000 00100 00010 00001 00010 00100 01000|< 00010 00100 01000 10000 01000 00100 00010|x 00000 00000 10001 01010 00100 01010 10001|_ 00000 00000 00000 00000 00000 00000 00000`;
+const G5={};for(const ln of F5SRC.split('|')){const p=ln.trim().split(/\s+/);G5[p[0]==='_'?' ':p[0]]=p.slice(1).map(r=>parseInt(r,2));}
+const F3SRC=`A 010 101 111 101 101|B 110 101 110 101 110|C 011 100 100 100 011|D 110 101 101 101 110|E 111 100 110 100 111|F 111 100 110 100 100|G 011 100 101 101 011|H 101 101 111 101 101|I 111 010 010 010 111|J 001 001 001 101 010|K 101 101 110 101 101|L 100 100 100 100 111|M 101 111 111 101 101|N 110 101 101 101 101|O 010 101 101 101 010|P 110 101 110 100 100|Q 010 101 101 110 011|R 110 101 110 101 101|S 011 100 010 001 110|T 111 010 010 010 010|U 101 101 101 101 111|V 101 101 101 101 010|W 101 101 111 111 101|X 101 101 010 101 101|Y 101 101 010 010 010|Z 111 001 010 100 111|0 111 101 101 101 111|1 010 110 010 010 111|2 111 001 111 100 111|3 111 001 011 001 111|4 101 101 111 001 001|5 111 100 111 001 111|6 111 100 111 101 111|7 111 001 001 010 010|8 111 101 111 101 111|9 111 101 111 001 111|x 000 101 010 101 000|+ 000 010 111 010 000|- 000 000 111 000 000|: 0 1 0 1 0|. 0 0 0 0 1|, 0 0 0 1 1|! 1 1 1 0 1|/ 001 001 010 100 100|' 1 1 0 0 0|> 100 010 001 010 100|< 001 010 100 010 001|? 111 001 011 000 010|( 01 10 10 10 01|) 10 01 01 01 10|% 101 001 010 100 101|# 101 111 101 111 101`;
+const G3={};for(const ln of F3SRC.split('|')){const p=ln.trim().split(/\s+/);G3[p[0]]=p.slice(1);}
+/* a dot: mode 0 sets, mode 1 keeps the brighter, mode 2 adds */
+function dot(x,y,v,mode){x|=0;y|=0;if(x<0||y<0||x>=W||y>=H)return;const i=y*W+x;v=v<0?0:v>15?15:v|0;if(mode===1){if(v>NB[i])NB[i]=v;}else if(mode===2){NB[i]=Math.min(15,NB[i]+v);}else NB[i]=v;}
+function rect(x,y,w,h,v){for(let j=0;j<h;j++)for(let i=0;i<w;i++)dot(x+i,y+j,v);}
+function dimRect(x,y,w,h,k){x|=0;y|=0;for(let j=Math.max(0,y);j<Math.min(H,y+h);j++)for(let i=Math.max(0,x);i<Math.min(W,x+w);i++){const q=j*W+i;NB[q]=(NB[q]*k)|0;}}
+function tw5(s,sc=1){return s.length*6*sc-sc;}
+function tw3(s,sc=1){let w=0;for(const ch of s){const gg=G3[ch]||G3[ch.toUpperCase()];w+=((gg?gg[0].length:3)+1)*sc;}return Math.max(0,w-sc);}
+/* v may be a number or a function (col,row)->level for shaded lettering */
+function txt5(s,x,y,v,sc=1,align,mode){
+  if(align==='c')x=Math.round(x-tw5(s,sc)/2);else if(align==='r')x=x-tw5(s,sc);
+  const f=typeof v==='function'?v:null;
+  for(const ch of s){const g5=G5[ch]||G5[ch.toUpperCase()]||G5[' '];
+    for(let r=0;r<7;r++)for(let c=0;c<5;c++)if((g5[r]>>(4-c))&1)for(let j=0;j<sc;j++)for(let i=0;i<sc;i++)dot(x+c*sc+i,y+r*sc+j,f?f(c*sc+i,r*sc+j):v,mode);
+    x+=6*sc;}
+}
+function txt3(s,x,y,v,align,mode){
+  if(align==='c')x=Math.round(x-tw3(s)/2);else if(align==='r')x=x-tw3(s);
+  for(const ch of s){const gg=G3[ch]||G3[ch.toUpperCase()];if(!gg){x+=4;continue;}for(let r=0;r<5;r++)for(let c=0;c<gg[r].length;c++)if(gg[r][c]==='1')dot(x+c,y+r,v,mode);x+=gg[0].length+1;}
+}
+/* outlined text: a dark keyline one dot wide so lettering reads over a lit scene */
+const O8=[[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]];
+function otxt5(s,x,y,v,sc=1,align){for(const [a,b] of O8)txt5(s,x+a,y+b,0,sc,align);txt5(s,x,y,v,sc,align);}
+function otxt3(s,x,y,v,align){for(const [a,b] of O8)txt3(s,x+a,y+b,0,align);txt3(s,x,y,v,align);}
+
+/* =====================================================================================
+   3. AUDIO — a two-operator FM synthesizer (carrier + modulator, both sine) with an
+      envelope on the output and a separate decaying envelope on the modulation index,
+      which is what gives FM its struck, bell-like attacks. Plus filtered noise, a
+      convolution hall and a tape-ish delay. Nothing plays until the first user gesture.
+   ===================================================================================== */
+const AU={ctx:null,out:null,mus:null,sfx:null,rev:null,dly:null,noise:null,muted:store.get('hd-mute','0')==='1',next:0,step:0,track:null,want:null};
+const mtof=m=>440*Math.pow(2,(m-69)/12),now=()=>AU.ctx?AU.ctx.currentTime:0;
+function audioInit(){
+  try{
+    if(!AU.ctx){
+      const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const c=new C();AU.ctx=c;
+      const comp=c.createDynamicsCompressor();comp.threshold.value=-14;comp.ratio.value=4;comp.attack.value=.004;comp.release.value=.2;comp.connect(c.destination);
+      AU.out=c.createGain();AU.out.gain.value=AU.muted||ARC.muted?0:.66;AU.out.connect(comp);
+      AU.mus=c.createGain();AU.mus.gain.value=.3;AU.mus.connect(AU.out);
+      AU.sfx=c.createGain();AU.sfx.gain.value=.85;AU.sfx.connect(AU.out);
+      /* a long dark hall: night streets ring */
+      const len=c.sampleRate*3.2|0,ir=c.createBuffer(2,len,c.sampleRate);
+      for(let ch=0;ch<2;ch++){const d=ir.getChannelData(ch);let lp=0;for(let i=0;i<len;i++){lp+=((Math.random()*2-1)-lp)*.35;d[i]=lp*Math.pow(1-i/len,2.6);}}
+      const cvn=c.createConvolver();cvn.buffer=ir;AU.rev=c.createGain();AU.rev.gain.value=.55;AU.rev.connect(cvn);cvn.connect(AU.out);
+      const dl=c.createDelay(1.5);dl.delayTime.value=.42;const fb=c.createGain();fb.gain.value=.36;const dlf=c.createBiquadFilter();dlf.type='lowpass';dlf.frequency.value=2400;const dlo=c.createGain();dlo.gain.value=.32;
+      dl.connect(dlf);dlf.connect(fb);fb.connect(dl);dl.connect(dlo);dlo.connect(AU.mus);AU.dly=dl;
+      const nb=c.createBuffer(1,c.sampleRate,c.sampleRate),nd=nb.getChannelData(0);for(let i=0;i<nd.length;i++)nd[i]=Math.random()*2-1;AU.noise=nb;
+      AU.next=c.currentTime+.05;
+    }
+    if(AU.ctx.state==='suspended')AU.ctx.resume();
+  }catch(e){}
+}
+function setVolume(){if(AU.out)AU.out.gain.value=AU.muted||ARC.muted?0:.66;}
+function env(gp,t,a,peak,d){gp.setValueAtTime(.0001,t);gp.exponentialRampToValueAtTime(Math.max(.0002,peak),t+a);gp.exponentialRampToValueAtTime(.0001,t+a+d);}
+/* fm(freq, start, dur, ratio, index, indexDecay, vol, bus, reverbSend, attack, detune)
+   modulation depth in Hz = index x modulator frequency; it falls to index*0.15 over indexDecay */
+function fm(f,t,dur,ratio,index,idec,vol,bus,rv,att,det){
+  const c=AU.ctx;if(!c||AU.muted)return;
+  const car=c.createOscillator(),mod=c.createOscillator(),mg=c.createGain(),g=c.createGain();
+  car.frequency.setValueAtTime(f,t);if(det)car.detune.setValueAtTime(det,t);mod.frequency.setValueAtTime(f*ratio,t);
+  const depth=index*f*ratio;mg.gain.setValueAtTime(depth,t);mg.gain.exponentialRampToValueAtTime(Math.max(.01,depth*.15),t+Math.max(.01,idec));
+  mod.connect(mg);mg.connect(car.frequency);env(g.gain,t,att||.004,vol,dur);car.connect(g);g.connect(bus||AU.sfx);
+  if(rv){const s=c.createGain();s.gain.value=rv;g.connect(s);s.connect(AU.rev);}
+  car.start(t);mod.start(t);car.stop(t+dur+.1);mod.stop(t+dur+.1);
+  return g;
+}
+/* tone(freq, start, dur, wave, vol, bus, slideTo, lowpassCut, reverbSend, attack) */
+function tone(f,t,dur,type,vol,bus,slide,cut,rv,att){
+  const c=AU.ctx;if(!c||AU.muted)return;const o=c.createOscillator();o.type=type||'sine';o.frequency.setValueAtTime(f,t);
+  if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(20,slide),t+dur);
+  const gn=c.createGain();env(gn.gain,t,att||.005,vol||.1,dur);let n=o;
+  if(cut){const fl=c.createBiquadFilter();fl.type='lowpass';fl.frequency.value=cut;fl.Q.value=2;o.connect(fl);n=fl;}
+  n.connect(gn);gn.connect(bus||AU.sfx);if(rv){const s=c.createGain();s.gain.value=rv;gn.connect(s);s.connect(AU.rev);}o.start(t);o.stop(t+dur+.08);
+}
+/* noise(start, dur, vol, filterFrom, filterTo, filterType, bus, reverbSend, Q, attack) */
+function noise(t,dur,vol,f0,f1,type,bus,rv,q,att){
+  const c=AU.ctx;if(!c||AU.muted)return;const s=c.createBufferSource();s.buffer=AU.noise;s.loop=true;
+  const fl=c.createBiquadFilter();fl.type=type||'lowpass';fl.Q.value=q||1;fl.frequency.setValueAtTime(f0||4000,t);fl.frequency.exponentialRampToValueAtTime(Math.max(30,f1||200),t+dur);
+  const gn=c.createGain();env(gn.gain,t,att||.003,vol,dur);s.connect(fl);fl.connect(gn);gn.connect(bus||AU.sfx);if(rv){const r=c.createGain();r.gain.value=rv;gn.connect(r);r.connect(AU.rev);}
+  s.start(t,Math.random()*.5);s.stop(t+dur+.08);
+}
+/* FM patches, in the spirit of a 1990s soundboard */
+const PATCH={
+  box:  (f,t,d,v,b)=>fm(f,t,d,3.5,2.2,.18,v,b,.35,.002),           /* music box: inharmonic tine */
+  celst:(f,t,d,v,b)=>fm(f,t,d,1,1.6,.5,v,b,.3,.003),                /* celesta */
+  bell: (f,t,d,v,b)=>fm(f,t,d,1.4,3.2,1.2,v,b,.5,.002),             /* church bell: non-integer ratio */
+  bass: (f,t,d,v,b)=>fm(f,t,d,1,1.1,.3,v,b,0,.006),                 /* round FM bass */
+  pad:  (f,t,d,v,b)=>{fm(f,t,d,2,.45,d,v,b,.5,d*.35,-6);fm(f,t,d,2,.45,d,v*.8,b,.5,d*.35,7);},   /* breathing string pad */
+  reed: (f,t,d,v,b)=>fm(f,t,d,2,1.3,d,v,b,.25,.03),                 /* an accordion-ish reed for the waltz */
+  glass:(f,t,d,v,b)=>fm(f,t,d,5.19,1.4,.6,v,b,.45,.002)
+};
+
+/* =====================================================================================
+   4. INPUT — one snapshot per simulation tick from keyboard, mouse/pen, touch stick + buttons, gamepads.
+      LATCH holds keys pressed since the last tick so very quick taps are never lost.
+   ===================================================================================== */
+const KEY={},LATCH=new Set();
+const GAMEKEYS=new Set(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Space','Tab']);
+addEventListener('keydown',e=>{if(GAMEKEYS.has(e.code))e.preventDefault();KEY[e.code]=true;if(e.repeat)return;LATCH.add(e.code);audioInit();});
+addEventListener('keyup',e=>{KEY[e.code]=false;});
+addEventListener('blur',()=>{for(const k in KEY)KEY[k]=false;PTR.down=false;});
+const K=c=>KEY[c]||LATCH.has(c);
+let RECT={x:0,y:0,w:100,h:50};
+/* pointer in panel dots (mouse, pen and touch on the panel itself) */
+const PTR={x:0,y:0,on:false,down:false,pressed:false,released:false,last:0,id:null,touch:false,right:false};
+const toM=e=>[(e.clientX-RECT.x)/RECT.w*W,(e.clientY-RECT.y)/RECT.h*H];
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('pointerdown',e=>{e.preventDefault();audioInit();[PTR.x,PTR.y]=toM(e);PTR.on=true;PTR.touch=e.pointerType!=='mouse';PTR.last=performance.now();
+  if(e.button===2){PTR.right=true;return;}PTR.down=true;PTR.pressed=true;PTR.id=e.pointerId;try{cv.setPointerCapture(e.pointerId);}catch(_){}});
+addEventListener('pointermove',e=>{if(e.pointerType==='mouse'||e.pointerId===PTR.id){[PTR.x,PTR.y]=toM(e);PTR.on=true;PTR.last=performance.now();}});
+addEventListener('pointerup',e=>{if(e.pointerId===PTR.id||e.pointerType==='mouse'){if(e.button===2)return;if(PTR.down)PTR.released=true;PTR.down=false;}});
+addEventListener('pointercancel',e=>{if(e.pointerId===PTR.id){PTR.down=false;PTR.released=true;}});
+function pads(){try{const gp=navigator.getGamepads?navigator.getGamepads():[];const out=[];for(const p of gp)if(p&&p.connected!==false)out.push(p);return out;}catch(e){return [];}}
+const TS={x:0,y:0,on:false,A:false,B:false};
+function stick(el,kn,cb){
+  let id=null,cx=0,cy=0;
+  const set=(x,y)=>{const dx=x-cx,dy=y-cy,r=el.clientWidth*.5,l=Math.hypot(dx,dy),k=l>r*.62?r*.62/l:1;kn.style.transform=`translate(${dx*k}px,${dy*k}px)`;const m=Math.min(1,l/(r*.62));cb(l>2?dx/l*m:0,l>2?dy/l*m:0,true);};
+  el.addEventListener('pointerdown',e=>{e.preventDefault();audioInit();id=e.pointerId;const r=el.getBoundingClientRect();cx=r.left+r.width/2;cy=r.top+r.height/2;try{el.setPointerCapture(id);}catch(_){}set(e.clientX,e.clientY);});
+  el.addEventListener('pointermove',e=>{if(e.pointerId===id)set(e.clientX,e.clientY);});
+  const end=e=>{if(e.pointerId!==id)return;id=null;kn.style.transform='';cb(0,0,false);};
+  el.addEventListener('pointerup',end);el.addEventListener('pointercancel',end);el.addEventListener('lostpointercapture',end);
+}
+stick($('stL'),$('knL'),(x,y,on)=>{TS.x=x;TS.y=y;TS.on=on;});
+for(const [bid,k] of [['bA','A'],['bB','B']]){
+  const el=$(bid);
+  el.addEventListener('pointerdown',e=>{e.preventDefault();audioInit();TS[k]=true;el.classList.add('on');try{el.setPointerCapture(e.pointerId);}catch(_){}});
+  const up=()=>{TS[k]=false;el.classList.remove('on');};
+  el.addEventListener('pointerup',up);el.addEventListener('pointercancel',up);el.addEventListener('lostpointercapture',up);
+}
+
+/* =====================================================================================
+   5. THE PLASMA PANEL
+      The nibbles go through what a real gas-plasma display does to them before they reach
+      your eye: every cell lights at once but takes a few hundredths of a second to go out
+      (so fast motion smears), and a heavily lit row bleeds a faint glow into the dark cells
+      of the same row (the classic plasma ghosting). Then the GPU draws each cell as a round
+      neon dot behind tinted glass, with bloom.
+   ===================================================================================== */
+const PLV=new Float32Array(N),PUP=new Uint8Array(N);
+const LVL=new Float32Array(16);for(let l=0;l<16;l++)LVL[l]=l/15;
+const PANEL={tau:.032,ghost:.055};
+function panelStep(dt){
+  const k=Math.exp(-dt/PANEL.tau);
+  for(let y=0;y<H;y++){let sum=0;const r=y*W;
+    for(let x=0;x<W;x++){const i=r+x,n=LVL[NB[i]],o=PLV[i]*k,v=n>o?n:o;PLV[i]=v;sum+=v;}
+    const gh=sum/W*PANEL.ghost;
+    for(let x=0;x<W;x++){const i=r+x,v=PLV[i]+gh*(1-PLV[i]);PUP[i]=v>=1?255:(v*255)|0;}}
+}
+const gl=cv.getContext('webgl2',{antialias:false,alpha:false,depth:false,powerPreference:'high-performance'});
+const HDR=gl?!!gl.getExtension('EXT_color_buffer_float'):false;
+function prog(vs,fs){
+  const p=gl.createProgram();
+  for(const [t,src] of [[gl.VERTEX_SHADER,vs],[gl.FRAGMENT_SHADER,fs]]){const s=gl.createShader(t);gl.shaderSource(s,'#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\n'+src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));gl.attachShader(p,s);}
+  gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));
+  const u={},n=gl.getProgramParameter(p,gl.ACTIVE_UNIFORMS);for(let i=0;i<n;i++){const inf=gl.getActiveUniform(p,i);u[inf.name.replace(/\[0\]$/,'')]=gl.getUniformLocation(p,inf.name);}
+  return {p,u};
+}
+const VS=`out vec2 vT;void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));vT=p;gl_Position=vec4(p*2.0-1.0,0.0,1.0);}`;
+/* one neon cell per dot. The plasma glows orange near 585-610 nm; at full drive the core of a dot runs
+   toward yellow-white. Off cells stay faintly visible through the glass. */
+const FS_LED=`in vec2 vT;uniform sampler2D uDots;uniform vec2 uRes;uniform vec3 uTint;uniform vec3 uHot;uniform float uGain;uniform float uTime;uniform float uFlash;out vec4 o;
+float h21(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
+void main(){
+  vec2 cell=vT*uRes;vec2 id=floor(cell);vec2 f=fract(cell)-.5;
+  float v=texture(uDots,vec2((id.x+.5)/uRes.x,1.-(id.y+.5)/uRes.y)).r;
+  v=max(v,uFlash);
+  /* drive -> light: plasma cells are close to linear in perceived brightness, so expand to linear */
+  float L=pow(v,2.1);
+  vec3 c=uTint*L+uHot*smoothstep(.62,1.,v)*L;
+  float fw=max(fwidth(cell.x),fwidth(cell.y));float d=length(f);
+  float r=.43;float dm=1.-smoothstep(r-fw*.7-.04,r+fw*.7,d);
+  float core=1.-smoothstep(0.,r*.9,d);float far=smoothstep(.36,.95,fw);
+  float m=mix(dm*(.66+.62*core),.62,far);
+  /* the off cell and the glass: a dim brown disc, a faint sheen across the panel, a little dust */
+  vec3 off=vec3(.042,.016,.006)*(1.-far*.4)*dm;
+  float sheen=smoothstep(.9,0.,abs(vT.x*.7+vT.y-1.05))*.018;
+  float dust=step(.9985,h21(id*1.37+3.1))*.03;
+  o=vec4(c*uGain*m+off+vec3(sheen+dust)*vec3(1.,.85,.7),1.);
+}`;
+const FS_BRIGHT=`in vec2 vT;uniform sampler2D uTex;uniform vec2 uPx;uniform float uThr;out vec4 o;
+void main(){vec3 c=texture(uTex,vT+uPx*vec2(-1,-1)).rgb+texture(uTex,vT+uPx*vec2(1,-1)).rgb+texture(uTex,vT+uPx*vec2(-1,1)).rgb+texture(uTex,vT+uPx*vec2(1,1)).rgb;
+c*=.25;float l=max(c.r,max(c.g,c.b));c*=max(l-uThr,0.0)/max(l,1e-4);o=vec4(c,1.0);}`;
+const FS_BLUR=`in vec2 vT;uniform sampler2D uTex;uniform vec2 uDir;out vec4 o;
+void main(){vec3 s=texture(uTex,vT).rgb*.227027;s+=(texture(uTex,vT+uDir*1.3846).rgb+texture(uTex,vT-uDir*1.3846).rgb)*.316216;
+s+=(texture(uTex,vT+uDir*3.2308).rgb+texture(uTex,vT-uDir*3.2308).rgb)*.070270;o=vec4(s,1.0);}`;
+const FS_COMP=`in vec2 vT;uniform sampler2D uScene;uniform sampler2D uB1;uniform sampler2D uB2;uniform float uBloom;out vec4 o;
+vec3 aces(vec3 x){return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.0,1.0);}
+void main(){vec3 c=texture(uScene,vT).rgb+(texture(uB1,vT).rgb*.55+texture(uB2,vT).rgb*.85)*uBloom;c=aces(c);c=pow(c,vec3(1.0/2.2));vec2 q=vT-.5;c*=1.0-dot(q,q)*.45;o=vec4(c,1.0);}`;
+let P_LED,P_BR,P_BL,P_CO,VAO,GLERR=null;
+const FB={},TX={};let VW=1,VH=1,DPR=1;
+function texParams(nearest){const f=nearest?gl.NEAREST:gl.LINEAR;gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,f);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,f);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);}
+function mkTarget(w,h){const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);gl.texImage2D(gl.TEXTURE_2D,0,HDR?gl.RGBA16F:gl.RGBA8,w,h,0,gl.RGBA,HDR?gl.HALF_FLOAT:gl.UNSIGNED_BYTE,null);texParams(false);
+  const f=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,f);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);return {t,f,w,h};}
+function freeTarget(T){if(!T)return;gl.deleteTexture(T.t);gl.deleteFramebuffer(T.f);}
+/* the glass: classic amber, the deeper red-orange of the earliest panels, or a cold blue mod */
+const GLASS=[{name:'AMBER',tint:[1,.36,.055],hot:[.55,.42,.2]},{name:'RED',tint:[1,.16,.035],hot:[.6,.26,.1]},{name:'ICE',tint:[.22,.52,1],hot:[.4,.55,.6]}];
+let GI=clamp(parseInt(store.get('hd-lantern-glass','0'),10)||0,0,GLASS.length-1);
+if(gl){
+  try{P_LED=prog(VS,FS_LED);P_BR=prog(VS,FS_BRIGHT);P_BL=prog(VS,FS_BLUR);P_CO=prog(VS,FS_COMP);}catch(e){GLERR=String(e);console.error(e);}
+  VAO=gl.createVertexArray();
+  TX.dots=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,TX.dots);gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);gl.texImage2D(gl.TEXTURE_2D,0,gl.R8,W,H,0,gl.RED,gl.UNSIGNED_BYTE,null);texParams(true);
+}
+function bindT(unit,t,loc){gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,t);gl.uniform1i(loc,unit);}
+function draw(p,dst,setup){gl.bindFramebuffer(gl.FRAMEBUFFER,dst?dst.f:null);gl.viewport(0,0,dst?dst.w:VW,dst?dst.h:VH);gl.useProgram(p.p);if(setup)setup(p.u);gl.bindVertexArray(VAO);gl.drawArrays(gl.TRIANGLES,0,3);}
+function pass(p,src,dst,setup){draw(p,dst,u=>{bindT(0,src.t,u.uTex);if(setup)setup(u);});}
+let FLASH=0,PTIME=0;
+function present(){
+  if(!gl||!P_LED)return;
+  gl.bindTexture(gl.TEXTURE_2D,TX.dots);gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,W,H,gl.RED,gl.UNSIGNED_BYTE,PUP);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,FB.scene.f);gl.viewport(0,0,VW,VH);gl.clearColor(.012,.006,.004,1);gl.clear(gl.COLOR_BUFFER_BIT);
+  const rx=Math.round((RECT.x+(RECT.ox||0))*DPR),rw=Math.round(RECT.w*DPR),rh=Math.round(RECT.h*DPR),ry=VH-Math.round((RECT.y+(RECT.oy||0))*DPR)-rh;
+  gl.viewport(rx,ry,rw,rh);gl.useProgram(P_LED.p);const G=GLASS[GI];
+  bindT(0,TX.dots,P_LED.u.uDots);gl.uniform2f(P_LED.u.uRes,W,H);gl.uniform3fv(P_LED.u.uTint,G.tint);gl.uniform3fv(P_LED.u.uHot,G.hot);
+  gl.uniform1f(P_LED.u.uGain,HDR?1.9:1.3);gl.uniform1f(P_LED.u.uTime,PTIME);gl.uniform1f(P_LED.u.uFlash,FLASH);
+  gl.bindVertexArray(VAO);gl.drawArrays(gl.TRIANGLES,0,3);gl.activeTexture(gl.TEXTURE0);
+  pass(P_BR,FB.scene,FB.a,u=>{gl.uniform2f(u.uPx,1/VW,1/VH);gl.uniform1f(u.uThr,HDR?.9:.7);});
+  pass(P_BL,FB.a,FB.b,u=>gl.uniform2f(u.uDir,1/FB.a.w,0));pass(P_BL,FB.b,FB.a,u=>gl.uniform2f(u.uDir,0,1/FB.a.h));
+  pass(P_BR,FB.a,FB.c,u=>{gl.uniform2f(u.uPx,1/FB.a.w,1/FB.a.h);gl.uniform1f(u.uThr,0);});
+  pass(P_BL,FB.c,FB.d,u=>gl.uniform2f(u.uDir,2.2/FB.c.w,0));pass(P_BL,FB.d,FB.c,u=>gl.uniform2f(u.uDir,0,2.2/FB.c.h));
+  draw(P_CO,null,u=>{bindT(0,FB.scene.t,u.uScene);bindT(1,FB.a.t,u.uB1);bindT(2,FB.c.t,u.uB2);gl.uniform1f(u.uBloom,HDR?1:.6);});
+  gl.activeTexture(gl.TEXTURE0);
+}
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2.5);VW=Math.max(2,Math.round(innerWidth*DPR));VH=Math.max(2,Math.round(innerHeight*DPR));cv.width=VW;cv.height=VH;
+  if(gl){for(const k of ['scene','a','b','c','d'])if(FB[k])freeTarget(FB[k]);
+    FB.scene=mkTarget(VW,VH);FB.a=mkTarget(Math.max(1,VW>>2),Math.max(1,VH>>2));FB.b=mkTarget(Math.max(1,VW>>2),Math.max(1,VH>>2));
+    FB.c=mkTarget(Math.max(1,VW>>3),Math.max(1,VH>>3));FB.d=mkTarget(Math.max(1,VW>>3),Math.max(1,VH>>3));}
+  layout();
+}
+/* the panel is 2:1; it sits under the chrome bar, centred, as large as the window allows */
+function layout(){
+  const sa=getComputedStyle($('sa')),st=parseFloat(sa.paddingTop)||0,sb=parseFloat(sa.paddingBottom)||0,sl=parseFloat(sa.paddingLeft)||0,sr=parseFloat(sa.paddingRight)||0;
+  const vw=innerWidth,vh=innerHeight,portrait=touchy&&vh>vw*1.05,bs=document.body.style,asp=W/H;
+  document.body.classList.toggle('portrait',portrait);document.body.classList.toggle('land',touchy&&!portrait);document.body.classList.toggle('embed',EMBED);
+  $('pad').hidden=!touchy;$('keys').hidden=touchy||EMBED;$('turn').hidden=!portrait||EMBED;
+  const gutL=EMBED?Math.max(0,sl):Math.max(16,sl),gutR=EMBED?Math.max(0,sr):Math.max(16,sr),top=EMBED?Math.max(0,st):Math.max(10,st)+46;
+  if(portrait){const w=vw-gutL-gutR,h=w/asp;RECT={x:gutL,y:top+4,w,h};bs.setProperty('--stick',Math.min(156,vw*.36)+'px');bs.setProperty('--b',Math.min(64,vw*.16)+'px');bs.setProperty('--padTop',(RECT.y+h+26)+'px');$('turn').style.top=(RECT.y+h+8)+'px';}
+  else{const bottom=EMBED?Math.max(0,sb):touchy?Math.max(8,sb)+4:Math.max(10,sb)+30,aw=vw-gutL-gutR,ah=vh-top-bottom;let w=aw,h=w/asp;if(h>ah){h=ah;w=h*asp;}RECT={x:gutL+(aw-w)/2,y:top+(ah-h)/2,w,h};
+    if(touchy){bs.setProperty('--stick',Math.min(140,vh*.34)+'px');bs.setProperty('--b',Math.min(56,vh*.13)+'px');}}
+}
+
+/* =====================================================================================
+   6. LIGHT — every lit dot is the sum of a few lights, each with its own shadows.
+      A light keeps a 1-D polar shadow map: for each of A directions, how far its rays get
+      before an occluder (a grid DDA through the town's occlusion map). A dot at distance d
+      in direction a is lit if d is not beyond the map there. Penumbrae come from the size
+      of the flame: a dot behind an edge sees part of the flame, and the angular width of
+      that partial view grows with its distance behind the edge, so shadows are crisp at the
+      foot of a wall and soft far from it (contact hardening), all from the 1-D map.
+      Street lamps are static, so their light is baked into a world light map once; only the
+      hand lantern, flares and the lighthouse are traced every frame.
+      Occluders come in two heights: low ones (fences, gravestones, crates) stop the hand
+      lantern but not a lamp on its post; tall ones (walls, trunks, posts) stop everything.
+   ===================================================================================== */
+let WW=384,WH=256,WN=WW*WH;
+let OCC=new Uint8Array(WN),ALB=new Uint8Array(WN),MAT=new Uint8Array(WN),MOON=new Uint8Array(WN),LMAP=new Float32Array(WN),LMID=new Uint8Array(WN);
+const M_ROAD=0,M_GRASS=1,M_WATER=2,M_ROOF=3,M_BRIDGE=4,M_WALL=5,M_DIRT=6,M_STONE=7,M_ROCK=8,M_SAND=9,M_FLOOR=10;
+function worldAlloc(w,h){WW=w;WH=h;WN=w*h;OCC=new Uint8Array(WN);ALB=new Uint8Array(WN);MAT=new Uint8Array(WN);MOON=new Uint8Array(WN);LMAP=new Float32Array(WN);LMID=new Uint8Array(WN).fill(255);}
+/* polar lookups for offsets within +-127 dots: angle (0..1 of a turn) and distance */
+const ANG=new Float32Array(256*256),DST=new Float32Array(256*256);
+for(let dy=-128;dy<128;dy++)for(let dx=-128;dx<128;dx++){const k=(dy+128)*256+dx+128;let a=Math.atan2(dy+.0001,dx+.0001)/TAU;if(a<0)a+=1;ANG[k]=a;DST[k]=Math.sqrt(dx*dx+dy*dy);}
+/* ---------- the shadow map: A rays by DDA through the occlusion grid ---------- */
+const WMAX=6;
+function mkShadow(A){return {A,d:new Float32Array(A),mn:new Float32Array(A),mx:new Float32Array(A),x:0,y:0,R:0};}
+function castShadow(S,lx,ly,R,block,skip){
+  const A=S.A,d=S.d;S.x=lx;S.y=ly;S.R=R;
+  for(let a=0;a<A;a++){
+    const th=(a+.5)/A*TAU,dx=Math.cos(th),dy=Math.sin(th);
+    let ix=Math.floor(lx),iy=Math.floor(ly);
+    const sx=dx>0?1:-1,sy=dy>0?1:-1,tdx=Math.abs(1/dx),tdy=Math.abs(1/dy);
+    let tx=dx>0?(ix+1-lx)*tdx:(lx-ix)*tdx,ty=dy>0?(iy+1-ly)*tdy:(ly-iy)*tdy,t=0,hit=R+2;
+    while(t<=R){
+      if(ix<0||iy<0||ix>=WW||iy>=WH){hit=t;break;}
+      if(t>skip&&OCC[iy*WW+ix]>=block){hit=t;break;}
+      if(tx<ty){t=tx;tx+=tdx;ix+=sx;}else{t=ty;ty+=tdy;iy+=sy;}
+    }
+    d[a]=hit;
+  }
+  /* the nearest and farthest edge within +-WMAX bins: most dots are decided by these two alone */
+  const mn=S.mn,mx=S.mx;
+  for(let a=0;a<A;a++){let lo=1e9,hi=0;for(let j=-WMAX;j<=WMAX;j++){const v=d[(a+j+A)%A];if(v<lo)lo=v;if(v>hi)hi=v;}mn[a]=lo;mx[a]=hi;}
+}
+/* visibility of a dot at polar (af = angle in bins, dist) from a flame of radius src */
+function vis(S,af,dist,src){
+  const A=S.A,a=(af|0)%A,pen=1.15;
+  if(dist<=S.mn[a]+pen)return 1;
+  if(dist>S.mx[a]+pen+3)return 0;
+  const d=S.d,dmin=Math.max(1,S.mn[a]);
+  let w=src*(dist-dmin)/(dmin*dist)*A/TAU;w=w<.5?.5:w>WMAX?WMAX:w;
+  const lo=Math.floor(af-w),hi=Math.floor(af+w);let s=0,n=0;
+  for(let j=lo;j<=hi;j++){const wt=j===lo?1-(af-w-lo):j===hi?(af+w-hi):1;const v=d[(j%A+A)%A];s+=wt*clamp((v+pen-dist)*.8+.5,0,1);n+=wt;}
+  return n>0?s/n:1;
+}
+/* ---------- static lamps, baked ---------- */
+const LAMPS=[];
+function lampContribution(L){
+  const R=L.R,S=mkShadow(512);castShadow(S,L.x+.5,L.y+.5,R,2,2.2);L.S=S;
+  const sz=2*R+1,c=new Float32Array(sz*sz);
+  for(let j=-R;j<=R;j++)for(let i=-R;i<=R;i++){const wx=L.x+i,wy=L.y+j;if(wx<0||wy<0||wx>=WW||wy>=WH)continue;
+    const k=(j+128)*256+i+128,d=DST[k];if(d>R)continue;const f=1-d*d/(R*R),fall=f*f*(1+1.6/(1+d*.12));
+    const v=vis(S,ANG[k]*S.A,d,2.2);if(v<=0)continue;c[(j+R)*sz+i+R]=L.I*fall*v;}
+  L.C=c;
+}
+/* rebuild the light map where a lamp changed (all lit lamps whose pools touch that box) */
+function relightBox(x0,y0,x1,y1){
+  x0=Math.max(0,x0);y0=Math.max(0,y0);x1=Math.min(WW-1,x1);y1=Math.min(WH-1,y1);
+  for(let y=y0;y<=y1;y++){LMAP.fill(0,y*WW+x0,y*WW+x1+1);LMID.fill(255,y*WW+x0,y*WW+x1+1);}
+  const best=new Float32Array((x1-x0+1)*(y1-y0+1));
+  for(let li=0;li<LAMPS.length;li++){const L=LAMPS[li];if(!L.lit||!L.C)continue;const R=L.R,sz=2*R+1;
+    const ax=Math.max(x0,L.x-R),ay=Math.max(y0,L.y-R),bx=Math.min(x1,L.x+R),by=Math.min(y1,L.y+R);if(ax>bx||ay>by)continue;
+    for(let y=ay;y<=by;y++)for(let x=ax;x<=bx;x++){const v=L.C[(y-L.y+R)*sz+x-L.x+R];if(v<=0)continue;const w=y*WW+x;LMAP[w]+=v;const b=(y-y0)*(x1-x0+1)+x-x0;if(v>best[b]){best[b]=v;LMID[w]=li;}}}
+}
+function lampToggle(L,on){L.lit=on;relightBox(L.x-L.R,L.y-L.R,L.x+L.R,L.y+L.R);}
+/* ---------- the per-frame buffers (screen space) ---------- */
+const LB=new Float32Array(N),EMB=new Float32Array(N),VOID=new Float32Array(N),RAD=new Float32Array(N);
+const CAM={x:0,y:0,tx:0,ty:0,sx:0,sy:0};
+/* a dynamic light: omni falloff, optional cone, optional shadow map */
+function addLight(lx,ly,R,I,opt){
+  opt=opt||{};const S=opt.S,src=opt.src||1.2,cone=opt.cone,ci=cone?Math.cos(cone.half):0,cx=cone?Math.cos(cone.dir):0,cy=cone?Math.sin(cone.dir):0,soft=cone?cone.soft||.1:0;
+  const sx0=Math.floor(lx-VX),sy0=Math.floor(ly-VY);           /* relative to this frame's view origin (shake included) */
+  const x0=Math.max(0,sx0-R),x1=Math.min(W-1,sx0+R),y0=Math.max(0,sy0-R),y1=Math.min(H-1,sy0+R);
+  const fx=lx-Math.floor(lx),fy=ly-Math.floor(ly);
+  for(let y=y0;y<=y1;y++){const dy=y-sy0;
+    for(let x=x0;x<=x1;x++){const dx=x-sx0,k=(dy+128)*256+dx+128;
+      const ddx=dx+.5-fx,ddy=dy+.5-fy,d=Math.sqrt(ddx*ddx+ddy*ddy);if(d>R)continue;
+      let f=1-d*d/(R*R);f*=f;
+      if(cone){const cs=(ddx*cx+ddy*cy)/(d||1);if(cs<ci-soft)continue;f*=smooth(ci-soft,ci+soft,cs)*(opt.near?smooth(0,opt.near,d):1);}
+      else f*=(1+(opt.hot||0)/(1+d*.2));
+      let v=1;if(S)v=vis(S,ANG[k]*S.A,d,src);
+      if(v<=0)continue;LB[y*W+x]+=I*f*v;}}
+}
+/* light at a world point, for game logic (no penumbra, cheap) */
+function lightAt(wx,wy,withLantern){
+  wx|=0;wy|=0;if(wx<0||wy<0||wx>=WW||wy>=WH)return 0;let L=LMAP[wx+wy*WW];
+  if(withLantern)L+=withLantern(wx,wy);return L;
+}
+function shadowTest(S,wx,wy){const dx=wx-S.x,dy=wy-S.y,d=Math.hypot(dx,dy);if(d>S.R)return 0;let a=Math.atan2(dy,dx)/TAU;if(a<0)a+=1;const ai=(a*S.A)|0;return d<=S.d[ai%S.A]+1?1:0;}
+/* ---------- fog: a tileable noise sheet, two layers drifting at different speeds ---------- */
+const FOGS=128,FOGT=new Float32Array(FOGS*FOGS);
+{const per=(x,y,s,p)=>{const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi,u=xf*xf*(3-2*xf),v=yf*yf*(3-2*yf),m=q=>((q%p)+p)%p;
+   const a=hash2(m(xi),m(yi),s),b=hash2(m(xi+1),m(yi),s),c=hash2(m(xi),m(yi+1),s),d=hash2(m(xi+1),m(yi+1),s);return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v;};
+ for(let y=0;y<FOGS;y++)for(let x=0;x<FOGS;x++){const v=per(x/16,y/16,5,8)*.55+per(x/8,y/8,9,16)*.3+per(x/4,y/4,13,32)*.15;FOGT[y*FOGS+x]=smooth(.32,.78,v);}}
+/* ---------- quantization: tone curve, then a 4x4 ordered dither onto the 16 levels ---------- */
+const BAYER=[0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5].map(v=>(v+.5)/16-.5);
+const TONE=new Uint8Array(4096);    /* radiance*1024 -> level*16 (fixed point, so the dither can add fractions) */
+for(let i=0;i<4096;i++){const r=i/1024,v=Math.pow(1-Math.exp(-r*1.8),.8);TONE[i]=Math.min(255,Math.round(v*15*16));}
+function quantize(){
+  for(let y=0;y<H;y++){const row=y*W,b=(y&3)<<2;
+    for(let x=0;x<W;x++){const i=row+x;let r=RAD[i];if(r<=0){NB[i]=0;continue;}
+      const t=TONE[r>=3.999?4095:(r*1024)|0]/16+BAYER[b|(x&3)];NB[i]=t<0?0:t>15?15:t+.5|0;}}
+}
+
+/* =====================================================================================
+   7. THE TOWN — nights are drawn as maps of 8 x 8-dot cells, then every cell is dressed
+      dot by dot: running-bond cobbles, grass tufts, roof tiles that only the moon sees,
+      plank bridges with rails, picket fences whose gaps let light through in stripes,
+      gravestones, crates, wells, rocks, and trees whose canopies dapple the lamplight.
+   ===================================================================================== */
+const CS=8;
+let MW=48,MH=32,MAP=[];
+const WALK=new Uint8Array(64*64);          /* per cell: 1 when a shade can drift through it */
+const PWALK=new Uint8Array(64*64);         /* per cell: 1 when the lamplighter can walk through it */
+let CANOPY=new Uint8Array(1);                /* per dot: leaf albedo (0 = open sky) */
+let START={x:0,y:0},WELLS=[],PICKS=[],FLIES=[],EDGES=[];
+let TOWER=null;                              /* the lighthouse on the last night */
+/* legend */
+const CELL={'#':'bld','.':'road',',':'grass',':':'dirt','~':'water','=':'bridge','L':'lamp','T':'tree','g':'grave','f':'fence','c':'crates','o':'oil','x':'flare','*':'flies','S':'well','P':'start','W':'wellstone','k':'statue','b':'bench','R':'rocks','s':'sand','H':'tower','h':'hedge','m':'stall','d':'door'};
+function cellAt(cx,cy){if(cx<0||cy<0||cx>=MW||cy>=MH)return '#';return MAP[cy][cx]||'#';}
+function groundOf(cx,cy){
+  const t=CELL[cellAt(cx,cy)];if(t==='road'||t==='grass'||t==='dirt'||t==='sand'||t==='water'||t==='bridge')return t;
+  /* a feature cell takes the most common ground around it */
+  const cnt={};for(const [a,b] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]]){const u=CELL[cellAt(cx+a,cy+b)];if(u==='road'||u==='grass'||u==='dirt'||u==='sand')cnt[u]=(cnt[u]||0)+1;}
+  let best='road',bn=0;for(const k in cnt)if(cnt[k]>bn){bn=cnt[k];best=k;}
+  if(t==='grave'||t==='tree'||t==='flies'||t==='hedge')return bn&&best!=='road'?best:'grass';
+  if(t==='rocks'||t==='tower')return 'sand';
+  return best;
+}
+function put(x,y,occ,alb,mat){if(x<0||y<0||x>=WW||y>=WH)return;const i=y*WW+x;if(occ!=null)OCC[i]=occ;if(alb!=null)ALB[i]=alb;if(mat!=null)MAT[i]=mat;}
+function disc(cx,cy,r,f){for(let y=Math.floor(cy-r);y<=Math.ceil(cy+r);y++)for(let x=Math.floor(cx-r);x<=Math.ceil(cx+r);x++){const d=Math.hypot(x+.5-cx,y+.5-cy);if(d<=r)f(x,y,d);}}
+/* ---------- ground dressing ---------- */
+function dressGround(cx,cy,kind,sd){
+  const x0=cx*CS,y0=cy*CS;
+  for(let j=0;j<CS;j++)for(let i=0;i<CS;i++){const x=x0+i,y=y0+j,h=hash2(x,y,sd);let a,m;
+    if(kind==='road'){
+      /* running-bond cobbles 4x3 with mortar between; each stone its own shade and a worn top */
+      const row=Math.floor(y/3),off=(row&1)*2,sx=Math.floor((x+off)/4),hs=hash2(sx,row,sd+1),lx=(x+off)%4,ly=y%3;
+      const mortar=lx===3||ly===2;a=mortar?34:92+hs*58+(lx===1&&ly===0?16:0);m=M_ROAD;}
+    else if(kind==='grass'){a=48+h*36+(hash2(x>>1,y,sd+2)>.86?40:0);m=M_GRASS;}
+    else if(kind==='dirt'){a=70+h*30+(h>.93?50:0);m=M_DIRT;}
+    else if(kind==='sand'){a=96+h*34+((x*3+y*5)%11===0?24:0);m=M_SAND;}
+    else if(kind==='water'){a=10+h*8;m=M_WATER;}
+    else if(kind==='bridge'){
+      const hor=CELL[cellAt(cx-1,cy)]==='bridge'||CELL[cellAt(cx+1,cy)]==='bridge'||CELL[cellAt(cx-1,cy)]==='road'||CELL[cellAt(cx+1,cy)]==='road';
+      const p=hor?x:y;a=(p%3===2)?40:96+hash2(hor?Math.floor(x/3):x,hor?y:Math.floor(y/3),sd+3)*40;m=M_BRIDGE;}
+    else{a=80;m=M_ROAD;}
+    put(x,y,0,a|0,m);}
+}
+/* ---------- buildings: flood each block of '#', outline it, tile its roof ---------- */
+function dressBuildings(sd){
+  const seen=new Uint8Array(MW*MH);
+  for(let cy=0;cy<MH;cy++)for(let cx=0;cx<MW;cx++){if(seen[cy*MW+cx]||cellAt(cx,cy)!=='#')continue;
+    const cells=[],q=[[cx,cy]];seen[cy*MW+cx]=1;let x0=cx,x1=cx,y0=cy,y1=cy;
+    while(q.length){const [a,b]=q.pop();cells.push([a,b]);x0=Math.min(x0,a);x1=Math.max(x1,a);y0=Math.min(y0,b);y1=Math.max(y1,b);
+      for(const [u,v] of [[1,0],[-1,0],[0,1],[0,-1]]){const nx=a+u,ny=b+v;if(nx<0||ny<0||nx>=MW||ny>=MH||seen[ny*MW+nx]||cellAt(nx,ny)!=='#')continue;seen[ny*MW+nx]=1;q.push([nx,ny]);}}
+    const horiz=(x1-x0)>=(y1-y0),bid=hash2(cx,cy,sd+4);
+    for(const [a,b] of cells)for(let j=0;j<CS;j++)for(let i=0;i<CS;i++){const x=a*CS+i,y=b*CS+j;
+      /* an edge dot borders open ground: that is the wall face the street light falls on */
+      const edge=[[1,0],[-1,0],[0,1],[0,-1]].some(([u,v])=>{const nx=x+u,ny=y+v,ncx=Math.floor(nx/CS),ncy=Math.floor(ny/CS);return cellAt(ncx,ncy)!=='#'&&nx>=0&&ny>=0&&nx<WW&&ny<WH;});
+      const i2=y*WW+x;OCC[i2]=2;MAT[i2]=edge?M_WALL:M_ROOF;ALB[i2]=edge?150:60;
+      /* roof seen by moonlight: rows of tiles, a ridge along the long axis, a few chimneys */
+      const u=horiz?x:y,v=horiz?y:x,mid=horiz?(y0*CS+(y1+1)*CS)/2:(x0*CS+(x1+1)*CS)/2;
+      const tile=((v+(Math.floor(u/3)&1))%3===0)?1:0,ridge=Math.abs(v+.5-mid)<1;
+      let mo=edge?14:(ridge?44:22+tile*10-(Math.abs(v+.5-mid)<3?4:0))+bid*8;
+      if(!edge&&hash2(Math.floor(x/6),Math.floor(y/6),sd+5)>.965&&(x%6)<2&&(y%6)<2)mo=58;    /* chimney pots catch the moon */
+      MOON[i2]=mo|0;}
+  }
+}
+/* ---------- features ---------- */
+function lampAt(x,y,R){LAMPS.push({x,y,R:R||ST.lampR,I:ST.lampI||1,lit:false,C:null,S:null,kindle:0,snuffT:0,flick:Math.random()*10});
+  for(let j=-1;j<=0;j++)for(let i=-1;i<=0;i++)put(x+i,y+j,2,120,M_STONE);}
+function dressFeature(cx,cy,t,sd){
+  const x0=cx*CS,y0=cy*CS,mx=x0+4,my=y0+4,hs=hash2(cx,cy,sd+9);
+  if(t==='lamp')lampAt(mx,my);
+  else if(t==='tree'){const r=1.6+hs*.6;disc(mx+(hs-.5)*2,my+(hash2(cx,cy,sd+10)-.5)*2,r,(x,y)=>put(x,y,2,70,M_STONE));
+    disc(mx,my,4.6,(x,y,d)=>{if(OCC[y*WW+x]===0&&hash2(x,y,sd+11)>.55)ALB[y*WW+x]=Math.min(255,ALB[y*WW+x]*.6+20);});   /* leaf litter */
+    disc(mx,my,7.2+hs*1.5,(x,y,d)=>{if(x<0||y<0||x>=WW||y>=WH)return;const n=vnoise(x*.45,y*.45,sd+12);if(n>.42+d*.025)CANOPY[y*WW+x]=Math.max(CANOPY[y*WW+x],(60+n*90)|0);});}
+  else if(t==='grave'){const k=1+(hs>.4?1:0);for(let n=0;n<k;n++){const gx=x0+1+((hash2(cx,cy,sd+20+n)*4)|0),gy=y0+1+n*3+((hash2(cx,cy,sd+30+n)*2)|0);
+      if(hash2(cx,cy,sd+40+n)>.55){put(gx+1,gy-1,1,170,M_STONE);for(let i=0;i<3;i++)put(gx+i,gy,1,170,M_STONE);put(gx+1,gy+1,1,150,M_STONE);}      /* a cross */
+      else for(let j=0;j<2;j++)for(let i=0;i<3;i++)put(gx+i,gy+j,1,j?130:175,M_STONE);}}                                                           /* a headstone */
+  else if(t==='fence'||t==='hedge'){const L=CELL[cellAt(cx-1,cy)],R=CELL[cellAt(cx+1,cy)],U=CELL[cellAt(cx,cy-1)],D=CELL[cellAt(cx,cy+1)];
+    const hor=L===t||R===t||(!(U===t||D===t)),ver=U===t||D===t,hedge=t==='hedge';
+    if(hor)for(let i=0;i<CS;i++){const x=x0+i;if(hedge){for(let j=3;j<6;j++)put(x,y0+j,1,60+hash2(x,y0+j,sd)*40,M_GRASS);}else if((x%3)!==2||i===0)put(x,my,1,(x%3)===0?160:130,M_STONE);}
+    if(ver)for(let j=0;j<CS;j++){const y=y0+j;if(hedge){for(let i=3;i<6;i++)put(x0+i,y,1,60+hash2(x0+i,y,sd)*40,M_GRASS);}else if((y%3)!==2||j===0)put(mx,y,1,(y%3)===0?160:130,M_STONE);}}
+  else if(t==='crates'){const n=2+((hs*2)|0);for(let k=0;k<n;k++){const bx=x0+((hash2(cx,cy,sd+50+k)*4)|0),by=y0+((hash2(cx,cy,sd+60+k)*4)|0),round=hash2(cx,cy,sd+70+k)>.5;
+      if(round)disc(bx+2,by+2,1.8,(x,y,d)=>put(x,y,1,d<1?150:110,M_STONE));
+      else for(let j=0;j<4;j++)for(let i=0;i<4;i++)put(bx+i,by+j,1,(i===0||j===0)?160:(i+j)%3===0?90:125,M_STONE);}}
+  else if(t==='stall'){for(let i=1;i<CS-1;i++)for(let j=1;j<4;j++)put(x0+i,y0+j,1,(i&1)?170:120,M_STONE);}
+  else if(t==='bench'){for(let i=1;i<7;i++){put(x0+i,my,1,140,M_STONE);put(x0+i,my+1,1,110,M_STONE);}}
+  else if(t==='wellstone'){disc(mx,my,3.4,(x,y,d)=>{if(d>2)put(x,y,2,140,M_STONE);else put(x,y,0,8,M_WATER);});}
+  else if((t==='statue'||t==='tower')&&(CELL[cellAt(cx-1,cy)]===t||CELL[cellAt(cx,cy-1)]===t))return;   /* a 2x2 feature is drawn once, from its top-left cell */
+  else if(t==='statue'){disc(mx+4,my+4,7.5,(x,y,d)=>{if(d>6.3)put(x,y,1,150,M_STONE);else if(d>2.2)put(x,y,0,14,M_WATER);else put(x,y,2,180,M_STONE);});}
+  else if(t==='rocks'){const n=2+((hs*3)|0);for(let k=0;k<n;k++){const rx=x0+hash2(cx,cy,sd+80+k)*8,ry=y0+hash2(cx,cy,sd+90+k)*8,r=1.5+hash2(cx,cy,sd+95+k)*2.2;
+      disc(rx,ry,r,(x,y,d)=>{if(vnoise(x*.7,y*.7,sd+96)>.25)put(x,y,2,110+(d<r*.5?30:0),M_ROCK);});}}
+  else if(t==='tower'){TOWER={x:mx+4,y:my+4,r:10};disc(mx+4,my+4,10.5,(x,y,d)=>{put(x,y,2,d>9.5?170:60,M_WALL);const i=y*WW+x;if(i>=0&&i<WN)MOON[i]=(d<3?70:((Math.floor(d)&1)?34:18));});}
+  else if(t==='well')WELLS.push({x:mx,y:my});
+  else if(t==='start')START={x:mx,y:my};
+  else if(t==='oil')PICKS.push({k:'oil',x:mx,y:my,on:true,t:0});
+  else if(t==='flare')PICKS.push({k:'flare',x:mx,y:my,on:true,t:0});
+  else if(t==='flies')FLIES.push({x:mx,y:my});
+  else if(t==='door')ST.door={x:mx,y:my};
+}
+function buildTown(st){
+  MAP=st.map.map(r=>r.padEnd(st.map[0].length,'#'));MW=MAP[0].length;MH=MAP.length;
+  worldAlloc(MW*CS,MH*CS);CANOPY=new Uint8Array(WN);LAMPS.length=0;WELLS=[];PICKS=[];FLIES=[];TOWER=null;START={x:WW/2,y:WH/2};st.door=null;
+  const sd=st.seed;
+  for(let cy=0;cy<MH;cy++)for(let cx=0;cx<MW;cx++){const c=cellAt(cx,cy),t=CELL[c]||'bld';if(t!=='bld')dressGround(cx,cy,groundOf(cx,cy),sd);}
+  dressBuildings(sd);
+  for(let cy=0;cy<MH;cy++)for(let cx=0;cx<MW;cx++){const t=CELL[cellAt(cx,cy)];if(t&&t!=='bld'&&t!=='road'&&t!=='grass'&&t!=='dirt'&&t!=='water'&&t!=='bridge'&&t!=='sand')dressFeature(cx,cy,t,sd);}
+  /* bridge rails: low stone along the water side of every bridge cell */
+  for(let cy=0;cy<MH;cy++)for(let cx=0;cx<MW;cx++){if(CELL[cellAt(cx,cy)]!=='bridge')continue;
+    for(const [u,v] of [[0,-1],[0,1],[-1,0],[1,0]]){if(CELL[cellAt(cx+u,cy+v)]!=='water')continue;
+      for(let k=0;k<CS;k++){const x=u?cx*CS+(u>0?CS-1:0):cx*CS+k,y=v?cy*CS+(v>0?CS-1:0):cy*CS+k;put(x,y,1,(k%4===0)?190:140,M_STONE);}}}
+  /* walkable cells for the shades' map; everything at the map border is a shade's way in */
+  WALK.fill(0);EDGES=[];
+  for(let cy=0;cy<MH;cy++)for(let cx=0;cx<MW;cx++){const t=CELL[cellAt(cx,cy)];const ok=t&&t!=='bld'&&t!=='water'&&t!=='tower'&&t!=='statue'&&t!=='wellstone';WALK[cy*64+cx]=ok?1:0;PWALK[cy*64+cx]=ok&&t!=='fence'&&t!=='hedge'&&t!=='stall'?1:0;
+    if(ok&&(cx===0||cy===0||cx===MW-1||cy===MH-1))EDGES.push({x:cx*CS+4,y:cy*CS+4});}
+  /* the dark water mirrors the sky a little */
+  for(let i=0;i<WN;i++)if(MAT[i]===M_WATER)MOON[i]=6+((hash2(i%WW,(i/WW)|0,sd+99)>.9)?10:0);
+  for(const L of LAMPS)lampContribution(L);
+  relightBox(0,0,WW-1,WH-1);
+  /* a fine walk map (2-dot cells) for the autopilot, built from the very collision test the lamplighter uses */
+  P2W=WW>>1;P2H=WH>>1;PASS2=new Uint8Array(P2W*P2H);D2=new Uint16Array(P2W*P2H);
+  for(let y=0;y<P2H;y++)for(let x=0;x<P2W;x++)PASS2[y*P2W+x]=blocked(x*2+1,y*2+1,2,true)?0:1;
+}
+let P2W=1,P2H=1,PASS2=new Uint8Array(1),D2=new Uint16Array(1);const Q2=new Int32Array(256*256);
+function bfs2(tx,ty){
+  D2.fill(65535);let s=clamp(ty>>1,0,P2H-1)*P2W+clamp(tx>>1,0,P2W-1);
+  if(!PASS2[s]){for(let r=1;r<6&&!PASS2[s];r++)for(let j=-r;j<=r&&!PASS2[s];j++)for(let i=-r;i<=r;i++){const x=clamp((tx>>1)+i,0,P2W-1),y=clamp((ty>>1)+j,0,P2H-1);if(PASS2[y*P2W+x]){s=y*P2W+x;break;}}}
+  let h=0,t=0;D2[s]=0;Q2[t++]=s;
+  while(h<t){const c=Q2[h++],cx=c%P2W,cy=(c/P2W)|0,d=D2[c]+1;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){if(!dx&&!dy)continue;const nx=cx+dx,ny=cy+dy;if(nx<0||ny<0||nx>=P2W||ny>=P2H)continue;const n=ny*P2W+nx;
+      if(!PASS2[n]||D2[n]<=d)continue;if(dx&&dy&&(!PASS2[cy*P2W+nx]||!PASS2[ny*P2W+cx]))continue;D2[n]=d;Q2[t++]=n;}}
+}
+/* the next step downhill on the fine map, a few cells ahead so the walk is smooth */
+function step2(x,y){let cx=clamp(x>>1,0,P2W-1),cy=clamp(y>>1,0,P2H-1);
+  for(let k=0;k<3;k++){let best=D2[cy*P2W+cx],bx=cx,by=cy;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const nx=cx+dx,ny=cy+dy;if(nx<0||ny<0||nx>=P2W||ny>=P2H)continue;if(dx&&dy&&(!PASS2[cy*P2W+nx]||!PASS2[ny*P2W+cx]))continue;const v=D2[ny*P2W+nx];if(v<best){best=v;bx=nx;by=ny;}}
+    if(bx===cx&&by===cy)break;cx=bx;cy=by;}
+  return [cx*2+1,cy*2+1];}
+/* is a dot free for something the size of a person (radius ~2) */
+function solidDot(x,y,lowToo){x|=0;y|=0;if(x<0||y<0||x>=WW||y>=WH)return true;const o=OCC[y*WW+x];if(o>=2)return true;if(MAT[y*WW+x]===M_WATER&&o===0)return true;return lowToo&&o===1;}
+/* every dot of the body's footprint (a rounded square), so a thin post can never slip between samples */
+function blocked(x,y,r,lowToo){const x0=Math.floor(x-r+.5),x1=Math.floor(x+r-.5),y0=Math.floor(y-r+.5),y1=Math.floor(y+r-.5);
+  for(let yy=y0;yy<=y1;yy++)for(let xx=x0;xx<=x1;xx++){if((xx===x0||xx===x1)&&(yy===y0||yy===y1)&&r>1)continue;if(solidDot(xx,yy,lowToo))return true;}return false;}
+
+/* =====================================================================================
+   8. THE NIGHTS — five maps (48 x 32 cells), authored with tools/maps.py and checked
+      there for reachability, and the weather, the darkness and the hunters of each.
+   ===================================================================================== */
+const MAP_N1=[
+  '################################################',
+  '#####################......#####################',
+  '##S.............#####......####...............S#',
+  '##..............#####......####.fffff::ffffff.##',
+  '##..#####..###..#####......####.f,T,,::T,,*,f.##',
+  '##..#,T,#..###..#####......####.f,,,*::,,T,,f.##',
+  '##..#fff#..###..#####......####.,:::::::b:::,.##',
+  '##..#####..###..#####......####.,:::::L:::::,.##',
+  '##..............#####......####.f,T,,::,,,,,f.##',
+  '##...L..........#####......####.f,,T,::,*,T,f.##',
+  '##..#####..###..#...............f,,,,::,,,,,f.##',
+  '##..#####..###..#.....L.........fffff::ffffff.##',
+  '##..#####..###..#..,T,,,,,,T,...............x.##',
+  '##.o#####..###..#..,,......,,..#################',
+  '#..................,,.b....,,..................#',
+  '#........L.........,,..kk..,,.........L........#',
+  '#..................,,..kk..,,..................#',
+  '#..................,,....b.,,..................#',
+  '##.................,,......,,................o.#',
+  '##.................,T,,,,,,T,..................#',
+  '##..###..###..###........L.......####c..#####..#',
+  '##..###..###..###.......P........####...#####..#',
+  '##..###..###..#..####......####..####.c.#####..#',
+  '##..###..###..#..####......####..####...#####..#',
+  '##.....L.........####......####.c.....W......c.#',
+  '##...............####......####.......L........#',
+  '##..###..###..#..####......####..####..c#####..#',
+  '##..###..###..#..####......####..####c..#####..#',
+  '##..###..###..#..####......####..####...#####..#',
+  '##.............o.####......####................#',
+  '##S.........S....####......####...............S#',
+  '################################################',
+];
+const MAP_N2=[
+  '##################################~~~###########',
+  '#S................................~~~.........S#',
+  '#.................................~~~.o........#',
+  '#..###########..##########..####..~~~...hhhhhh.#',
+  '#..###########..##########..####.L~~~...,,,,,,.#',
+  '#..###########..##########..####..~~~...,,T,,,.#',
+  '#................L................===...,,,,,,.#',
+  '#.................................===...,,,,,,.#',
+  '#..###########..##########.o####..~~~...,*,,T,.#',
+  '#..#,,,,,,,,##..#..c.....#..####..~~~...,,,,,,.#',
+  '#..#,,,,,,,,##..#......c.#..####..~~~...x......#',
+  '#..###########..##########..####..~~~..........#',
+  '#......L.......P..................~~~.......L..#',
+  '#.....................L...........~~~..........#',
+  '~~~~~~~~==~~~~~~~~~~==~~~~~~~~~~~~~~~~~~~~==~~~~',
+  '~~~~~~~~==~~~~~~~~~~==~~~~~~~~~~~~~~~~~~~~==~~~~',
+  '~~~~~~~~==~~~~~~~~~~==~~~~~~~~~~~~~~~~~~~~==~~~~',
+  '~~~~~~~~==~~~~~~~~~~==~~~~~~~~~~~~~~~~~~~~==~~~~',
+  '#.............................L...~~~..........#',
+  '#...........L.....................~~~....L.....#',
+  '#.................................~~~..........#',
+  '#.................................~~~..........#',
+  '#..#######..##########..#.c...c#..~~~L...####..#',
+  '#..o######..##########..#...c..#..~~~....####..#',
+  '#..#######..##########..#......#..===....####..#',
+  '#.................................===..........#',
+  '#....L............................~~~........o.#',
+  '#..#######..##########..########..~~~....####..#',
+  '#..#######..##########..########..~~~....####..#',
+  '#.................................~~~....####..#',
+  '#S..............S.......x.........~~~.........S#',
+  '##################################~~~###########',
+];
+const MAP_N3=[
+  '################################################',
+  '#S......................S.....................S#',
+  '#.,,,,,,,,,::,,,,,,,,,,::,,,,,,,,,,::,,,,,,,,,.#',
+  '#.,ffffffff::ffffffffff::ffffffffff::ffffffff,.#',
+  '#.,f,,,,,,,::,,,,,,,,,,::,,,,,,,,,,::,,,,,,,f,.#',
+  '#.,f,g,g,g,:Lg,g,g,g,g,::,,g,g,g,g,L:gTg,g,,f,.#',
+  '#.,f,,,,,,,::,,T,,,,,,,L:,,,,,T,,,,::,,,,T,,f,.#',
+  '#.,f,g,g,g,::g,g,g,g,g,::,,g,g,g,g,::g,g,g,,f,.#',
+  '#.of,,,,,,,::,,,,,,,,,,::,,,,,,,,,,::,,,*,,,f,.#',
+  '#.:::::::::::::::::::::::::::L::::::::::::::::.#',
+  '#.::::::::::::::::o:::::::::::::::::::::::::::.#',
+  '#.,f,,,,,,,::,,,,,,,,,,::,,,,,,,,,,::,,,,,,,f,.#',
+  '#.,f,,T,g,g::,g,g,g,########g,g*g,g::,gTg,g,f,.#',
+  '#.,f,g,g,g,::g,g,g,g########,g,g,g,::g,g,gT,f,.#',
+  '#.,f,,,,,,,::,,,,,,,########,,,,,,,::,,,,,,,f,.#',
+  '#.::::::::::::::::::########::b:::::::::::::::.#',
+  '#.::::L::::::::::b::########:::::::::::::L::::.#',
+  '#.,f,,,,,,,::,,,,,,,##....##,,,,,,,::,,,,,,,f,.#',
+  '#.,f,,g,g,g::,g,g,g,##....##g,g,g,g::,T,g,g,f,.#',
+  '#.,f,g,gTg,::g,g,g,g##.::.##,g,g,g,::g,g,T,,f,.#',
+  '#.,f,,,,,,,::,,,,,,,,,,::,,,,,,,,,,::,,,,,,,f,.#',
+  '#.::::::::::::::::::::::P:::::x:::::::::::::::.#',
+  '#.::::::::::::::::L:::::::::::::::::::::::::::.#',
+  '#.,f,,,*,,,::,,,,,,,,,,::,,,,,,,,,,::,,,,,,,f,.#',
+  '#.,f,,g,g,g::,g,g,g,g,,::,g,g,g,g,g::,g,g,g,fo.#',
+  '#.,f,T,,,,,:L,,,,,,,,,,::,,,,,T,,,,L:,,T,,T,f,.#',
+  '#.,f,,g,g,g::,g,g,g,g,,L:,g,g,g,g,g::,g,g,g,f,.#',
+  '#.,f,,,,,,,::,,,,,,,,,,::,,,,,,,,,,::,,,,,,,f,.#',
+  '#.,ffffffff::ffffffffff::ffffffffff::ffffffff,.#',
+  '#.,,,,,,,,,::,,,,,,,,,,::,,,,,,,,,,::,,,,,,,,,.#',
+  '#S............................................S#',
+  '################################################',
+];
+const MAP_N4=[
+  '################################################',
+  '#S...........................S........x.......S#',
+  '#..............................................#',
+  '#..#####..########..#########..#######..#####..#',
+  '#..#,,,#..###...##.L#########..#######..#####..#',
+  '#..#,T,#..###.W.##..#########..#######..#####..#',
+  '#..#,,,#..###...##..#########..#######L.#####..#',
+  '#..#####..########..#########..#######..#####..#',
+  '#....L.........................................#',
+  '#............L...............................o.#',
+  '#..#####...............L................#####..#',
+  '#..#####...m.m.m.....c.....c....m.m.m...#####..#',
+  '#..#####................................#####..#',
+  '#..#####...m...m.......c.....o..m...m...#####..#',
+  '#..#####................................#####..#',
+  '#.o....................kk.........L............#',
+  '#......................kk.................L....#',
+  '#..#####................P...............#####..#',
+  '#..#####...m....m........c......m...m...#####..#',
+  '#..#####.L..c....................c......#####..#',
+  '#..#####.....m.......c.....c.......m....#####..#',
+  '#..#####................L...............#####..#',
+  '#.............................L................#',
+  '#..............................................#',
+  '#..#####..########..#########..#######..#####..#',
+  '#..#####..########.o#########..#######..#,,,#..#',
+  '#..#####..########..#########..#######.L#,T,#..#',
+  '#..#####..########..#########..#######..#,,,#..#',
+  '#..#####..########..#########..#######..#####..#',
+  '#.............L................................#',
+  '#S......x.........S...........................S#',
+  '################################################',
+];
+const MAP_N5=[
+  '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+  '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+  '~~~~~~~~~~~~~~~~~~ss~~~~sss~~~~~~~~~~~~~~~~~~~~~',
+  '~~~~~~~~~~~~~~~~~ssss~~sSsss~~ssss~~~~~~~~~~~~~~',
+  '~~~~~~~~~~~s~~~~sssssss::sssssssss~~~~~~~~~~~~~~',
+  '~~~~~~~~~~ss~~~ssssssss::,ssssssss~~sss~~~~~~~~~',
+  '~~~~~~~~~sssssss,T,sos,::,sss,,Rsssssss~~~~~~~~~',
+  '~~~~~~~~ssssSss,,,,,,,,::,,,,,,,ssssssss~~~~~~~~',
+  '~~~~~~~ssRssss,,,,,,,,,L:,,,,,,,,sL,,,ss~~~s~~~~',
+  '~~~~~~~ssssss,,,L,,,,,,::,,,,,,,,,,,,,Rsssss~~~~',
+  '~~~~~~sssssss,#####,,,,::,,,,,,*,,,,,,ssssss~~~~',
+  '~~~~~~ss,sss,,#####,,,,::,,,R,,,,,,,,,ssssss~~~~',
+  '~~~~~ss,,ss,,,#####ffff::ffff,,,,T,,,,sossss~~~~',
+  '~~~~~sR,,s,,,,#...#,,ssssss,,,,,,,,,,,,s,,ss~~~~',
+  '~~~~ss,,ss,,,,,...,,,ssssss,,,,,,,,,,,,,,,ss~~~~',
+  '~~~~ss,,ss,,,,,,,,,,,ssHHss,,,,,,,,,,,,,R,ss~~~~',
+  '~~~~sSs:::::L::::::::ssHHss:::::::::L::::,Ss~sss',
+  '~~~ssss::::::::::::::ssssss::::::::::::::,ssssss',
+  '~~~ssssss,T,,,,,,,,,,sssdss,,,,,,,,,,,,,,ssssss~',
+  '~~~ssssss,,,,,,,,,,,,,,::,,,,,,,,,,,,,,,,ssssss~',
+  '~~~ssssss,,,,R,,,,,ffff::ffff,#####,,,,,sssssss~',
+  '~~~ssssso,,,,,,,,,,,,,,::,,,,,#####,,,,,ssssss~~',
+  '~~~ss~~ss,,,,,,*,,,,,,,:P,,,,,#####,,,,sssssss~~',
+  '~~~~~~~ss,,,s,,,,,,T,,,::,,,,,,,,,,,,,,ssssss~~~',
+  '~~~~~~~ssssRss,,,,,,,,,:L,,,,T,,,L,,,,sssssss~~~',
+  '~~~~~~~sssssssL,,,,,,,,::,,,,,,,,s,,Rsss~~ss~~~~',
+  '~~~~~~~sssssss,,,xs,,,,::,,,,,xssss,sss~~~~~~~~~',
+  '~~~~~~~~s~~~ssssssss,,,::s,,,,sssssssS~~~~~~~~~~',
+  '~~~~~~~~~~~~ssssssss,,s==ss,,ssssssss~~~~~~~~~~~',
+  '~~~~~~~~~~~~~sss~~sssss==ssssss~ssss~~~~~~~~~~~~',
+  '~~~~~~~~~~~~~~~~~~ssss====sss~~~~ss~~~~~~~~~~~~~',
+  '~~~~~~~~~~~~~~~~~~~ss~====ss~~~~~~~~~~~~~~~~~~~~',
+];
+/* shades: max alive at the start, one more every `deepen` seconds, a spawn every `rate` s, walking speed.
+   moths / snuffers: the times (s) at which a swarm or a snuffer comes. */
+const NIGHTS=[
+  {name:'LAMP STREET',sub:'THE FIRST NIGHT',map:MAP_N1,seed:11,lampR:38,lampI:1,fog:.18,rain:0,moon:1,amb:.018,
+   shade:{max:4,deepen:38,cap:10,rate:3.2,speed:21},moths:[],snuff:[],tr:'n1',
+   hint:['LIGHT EVERY LAMP TO CALL THE DAWN','SHADES FREEZE IN LIGHT','YOUR BEAM BURNS THEM']},
+  {name:'THE CANALS',sub:'THE SECOND NIGHT',map:MAP_N2,seed:23,lampR:38,lampI:1,fog:.3,rain:1,moon:.8,amb:.016,
+   shade:{max:5,deepen:34,cap:11,rate:2.9,speed:22},moths:[20,70,120],snuff:[],tr:'n2',
+   hint:['MOTHS DRINK YOUR OIL','SHUTTER THE BEAM AND THEY','FLY TO THE BRIGHTER LAMP']},
+  {name:"ST ELM'S YARD",sub:'THE THIRD NIGHT',map:MAP_N3,seed:37,lampR:40,lampI:1,fog:.42,rain:0,moon:1.15,amb:.02,
+   shade:{max:5,deepen:32,cap:12,rate:2.7,speed:23},moths:[60],snuff:[30,80,130,170],tr:'n3',
+   hint:['SNUFFERS PUT OUT THE LAMPS','ONLY YOUR BEAM STOPS THEM','LOW STONES SHADE YOUR LANTERN']},
+  {name:'THE FOG MARKET',sub:'THE FOURTH NIGHT',map:MAP_N4,seed:51,lampR:36,lampI:1,fog:.95,rain:1,moon:.6,amb:.014,
+   shade:{max:6,deepen:30,cap:13,rate:2.4,speed:24},moths:[25,75,115,160],snuff:[45,100,150],tr:'n4',
+   hint:['THE FOG DRINKS THE LIGHT','EVERYTHING HUNTS TONIGHT','KEEP TO THE LAMPS']},
+  {name:'THE LIGHTHOUSE',sub:'THE LAST NIGHT',map:MAP_N5,seed:67,lampR:40,lampI:1,fog:.55,rain:0,moon:.9,amb:.017,
+   shade:{max:5,deepen:32,cap:12,rate:2.7,speed:23},moths:[40,110],snuff:[60,140],tr:'n5',boss:1,
+   hint:['LIGHT THE ISLAND','AND THE GREAT LAMP WAKES','SOMETHING WAKES WITH IT']}
+];
+let ST=NIGHTS[0];
+
+/* =====================================================================================
+   9. THE LAMPLIGHTER, THE FLAME AND THE THINGS IN THE DARK
+   ===================================================================================== */
+const P={x:0,y:0,vx:0,vy:0,aim:0,aimTo:0,beamK:0,beam:false,oil:100,flares:2,lives:3,hurt:0,inv:0,kindle:0,kl:null,gutter:0,dead:0,step:0,lx:0,ly:0,moved:0,lastLamp:null,flick:1};
+const LSM=mkShadow(512);           /* the hand lantern's shadow map, cast every tick */
+const OIL_MAX=100;
+const oilK=()=>smooth(0,32,P.oil);                       /* below a third of a tank the flame starts to gutter */
+function lanternR(){return 10+18*oilK();}
+function lanternI(){return (.6+.55*oilK())*P.flick;}
+const BEAM={R:80,half:.34};
+/* light reaching a world point from the hand lantern (for logic: hard shadow test, no penumbra) */
+function lanternAt(wx,wy){
+  if(P.dead)return 0;const dx=wx-P.lx,dy=wy-P.ly,d=Math.hypot(dx,dy);if(d>LSM.R)return 0;
+  if(!shadowTest(LSM,wx,wy))return 0;let v=0;const ro=lanternR();
+  if(d<ro){const f=1-d*d/(ro*ro);v+=lanternI()*f*f;}
+  if(P.beamK>.05&&d<BEAM.R){const cs=(dx*Math.cos(P.aim)+dy*Math.sin(P.aim))/(d||1),ci=Math.cos(BEAM.half);if(cs>ci-.1){const f=1-d*d/(BEAM.R*BEAM.R);v+=1.9*P.beamK*oilK()*f*f*smooth(ci-.1,ci+.1,cs);}}
+  return v;
+}
+/* is a world point inside the open beam, and how hard is it hit */
+function beamAt(wx,wy){
+  if(P.dead||P.beamK<.3||P.oil<=0)return 0;const dx=wx-P.lx,dy=wy-P.ly,d=Math.hypot(dx,dy);if(d>BEAM.R||d<1)return d<3?1:0;
+  const cs=(dx*Math.cos(P.aim)+dy*Math.sin(P.aim))/d;if(cs<Math.cos(BEAM.half+.06))return 0;if(!shadowTest(LSM,wx,wy))return 0;
+  return P.beamK*(1-d/BEAM.R*.6);
+}
+/* every light that can freeze a shade, at a world point */
+function lightHere(wx,wy){let L=lightAt(wx,wy)+lanternAt(wx,wy);for(const f of FLARES)L+=flareAt(f,wx,wy);if(GREAT.on)L+=greatAt(wx,wy);return L;}
+/* ---------- flares ---------- */
+const FLARES=[];
+function flareAt(f,wx,wy){const d=Math.hypot(wx-f.x,wy-f.y);if(d>f.R)return 0;if(!shadowTest(f.S,wx,wy))return 0;const k=1-f.t/f.dur;return 2.4*k*k*(1-d/f.R);}
+function fireFlare(){
+  if(P.flares<=0||P.dead)return;P.flares--;const f={x:P.x,y:P.y,t:0,dur:1.5,R:96,S:mkShadow(512)};castShadow(f.S,f.x,f.y,f.R,2,1.5);FLARES.push(f);
+  S.flash=1;S.shake=Math.max(S.shake,.5);SFX.flare();
+  let n=0;for(const s of SH){if(s.hp>0&&Math.hypot(s.x-f.x,s.y-f.y)<72&&shadowTest(f.S,s.x,s.y)){s.hp=0;s.how='flare';n++;}}
+  for(const m of MOTHS)if(Math.hypot(m.x-f.x,m.y-f.y)<80){m.scatter=1;addScore(300,m.x,m.y-6);}
+  for(const z of SNUF)if(Math.hypot(z.x-f.x,z.y-f.y)<80&&shadowTest(f.S,z.x,z.y))z.hp-=2.2;
+  if(BOSS.on&&Math.hypot(BOSS.x-f.x,BOSS.y-f.y)<BOSS.r+60){BOSS.eye=Math.max(BOSS.eye,2.2);bossHurt(2.5);}
+  if(n>=3)callout('FLARE  x'+n,2);
+}
+/* ---------- the great lamp of the lighthouse (last night) ---------- */
+const GREAT={on:false,a:-Math.PI/2,S:null,R:127,half:.17,k:0};
+function greatAt(wx,wy){
+  if(!GREAT.on||!TOWER)return 0;const dx=wx-TOWER.x,dy=wy-TOWER.y,d=Math.hypot(dx,dy);if(d>GREAT.R||d<TOWER.r)return 0;
+  const cs=(dx*Math.cos(GREAT.a)+dy*Math.sin(GREAT.a))/d,ci=Math.cos(GREAT.half);if(cs<ci-.05)return 0;if(!shadowTest(GREAT.S,wx,wy))return 0;
+  return 1.6*GREAT.k*smooth(ci-.05,ci+.05,cs)*(1-d/GREAT.R*.55);
+}
+function wakeGreatLamp(){GREAT.on=true;GREAT.k=0;GREAT.S=mkShadow(1024);castShadow(GREAT.S,TOWER.x,TOWER.y,GREAT.R,2,TOWER.r+1.5);}
+/* ---------- particles (world space): embers glow, smoke and spray are lit ---------- */
+const PART=[];
+function puff(x,y,n,kind,spd,life){for(let k=0;k<n&&PART.length<500;k++){const a=Math.random()*TAU,v=rnd(.2,1)*(spd||20);PART.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:rnd(.5,1)*(life||.8),t:0,kind});}}
+function stepParts(dt){let n=0;for(const p of PART){p.t+=dt;if(p.t>=p.life)continue;const dr=p.kind===1?1.6:p.kind===0?2.4:4;p.vx*=Math.exp(-dr*dt);p.vy*=Math.exp(-dr*dt);if(p.kind===1)p.vy-=6*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;PART[n++]=p;}PART.length=n;}
+/* ---------- the shades' map of the town: a Dijkstra field from the lamplighter, lit cells cost more ---------- */
+const FIELD=new Uint16Array(64*64),CLIT=new Uint8Array(64*64);
+function litCells(){for(let cy=0;cy<MH;cy++)for(let cx=0;cx<MW;cx++){let s=0;for(let j=1;j<CS;j+=3)for(let i=1;i<CS;i+=3)s+=LMAP[(cy*CS+j)*WW+cx*CS+i];CLIT[cy*64+cx]=s/9>.3?1:0;}}
+const HEAP=[];
+function buildField(tx,ty,F,litCost,G){
+  F=F||FIELD;litCost=litCost||5;G=G||WALK;
+  F.fill(65535);const sc=clamp(Math.floor(tx/CS),0,MW-1)+clamp(Math.floor(ty/CS),0,MH-1)*64;F[sc]=0;HEAP.length=0;HEAP.push(sc);
+  const push=v=>{HEAP.push(v);let i=HEAP.length-1;while(i>0){const p=(i-1)>>1;if(F[HEAP[p]]<=F[HEAP[i]])break;[HEAP[p],HEAP[i]]=[HEAP[i],HEAP[p]];i=p;}};
+  const pop=()=>{const top=HEAP[0],last=HEAP.pop();if(HEAP.length){HEAP[0]=last;let i=0;for(;;){const l=i*2+1,r=l+1;let m=i;if(l<HEAP.length&&F[HEAP[l]]<F[HEAP[m]])m=l;if(r<HEAP.length&&F[HEAP[r]]<F[HEAP[m]])m=r;if(m===i)break;[HEAP[m],HEAP[i]]=[HEAP[i],HEAP[m]];i=m;}}return top;};
+  const seen=new Uint8Array(64*64);
+  while(HEAP.length){const c=pop();if(seen[c])continue;seen[c]=1;const cx=c&63,cy=c>>6,dc=F[c];
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){if(!dx&&!dy)continue;const nx=cx+dx,ny=cy+dy;if(nx<0||ny<0||nx>=MW||ny>=MH)continue;const n=ny*64+nx;if(!G[n])continue;
+      if(dx&&dy&&(!G[cy*64+nx]||!G[ny*64+cx]))continue;                  /* no cutting corners of buildings */
+      const cost=(dx&&dy?14:10)*(CLIT[n]?litCost:1),nd=dc+cost;if(nd<F[n]){F[n]=nd;push(n);}}}
+}
+function fieldStep(x,y,F,G){F=F||FIELD;G=G||WALK;const cx=clamp(Math.floor(x/CS),0,MW-1),cy=clamp(Math.floor(y/CS),0,MH-1);let best=F[cy*64+cx],bx=0,by=0;
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const nx=cx+dx,ny=cy+dy;if(nx<0||ny<0||nx>=MW||ny>=MH)continue;if(dx&&dy&&(!G[cy*64+nx]||!G[ny*64+cx]))continue;const v=F[ny*64+nx];if(v<best){best=v;bx=dx;by=dy;}}
+  return [(cx+bx)*CS+4,(cy+by)*CS+4];}
+/* ---------- shades: darkness that walks. They cannot move while light is on them; the beam burns them ---------- */
+const SH=[];let SID=0;
+function spawnShade(){
+  const cands=[...WELLS,...EDGES].filter(w=>Math.hypot(w.x-P.x,w.y-P.y)>95&&LMAP[(w.y|0)*WW+(w.x|0)]<.12);if(!cands.length)return false;
+  const w=pick(cands);SH.push({x:w.x+rnd(-2,2),y:w.y+rnd(-2,2),vx:0,vy:0,hp:1,fz:0,in:0,eye:Math.random()*5,id:SID++,how:'',burn:0,lunge:0,stuck:0});return true;
+}
+function stepShades(dt,live){
+  const spd=ST.shade.speed;
+  for(let k=SH.length-1;k>=0;k--){const s=SH[k];s.in=Math.min(1,s.in+dt*1.25);s.eye+=dt;
+    const L=lightHere(s.x,s.y),bm=beamAt(s.x,s.y);
+    if(bm>0&&s.in>.6){s.hp-=bm*2.7*dt;s.burn=.12;if((r32()&3)===0)puff(s.x+rnd(-2,2),s.y+rnd(-2,2),1,0,30,.35);s.how='beam';}
+    s.burn=Math.max(0,s.burn-dt);
+    if(s.hp<=0){SH.splice(k,1);shadeDies(s);continue;}
+    s.fz=L>.2&&s.in>.6?Math.min(1,s.fz+dt*8):Math.max(0,s.fz-dt*4);
+    if(s.fz>.5||!live||P.dead){s.vx*=.6;s.vy*=.6;continue;}
+    const d=Math.hypot(P.x-s.x,P.y-s.y);let tx,ty;
+    if(d<20){tx=P.x;ty=P.y;}else[tx,ty]=fieldStep(s.x,s.y);
+    let ax=tx-s.x,ay=ty-s.y;const al=Math.hypot(ax,ay)||1;ax/=al;ay/=al;
+    for(const o of SH){if(o===s)continue;const ox=s.x-o.x,oy=s.y-o.y,od=ox*ox+oy*oy;if(od<36&&od>0){ax+=ox/od*3;ay+=oy/od*3;}}
+    const v=spd*(d<24?1.5:1)*(1-s.fz)*(.4+.6*s.in);
+    s.vx+=(ax*v-s.vx)*Math.min(1,dt*5);s.vy+=(ay*v-s.vy)*Math.min(1,dt*5);
+    const nx=s.x+s.vx*dt,ny=s.y+s.vy*dt;
+    if(!blocked(nx,s.y,1.5,false))s.x=nx;else s.vx*=-.3;
+    if(!blocked(s.x,ny,1.5,false))s.y=ny;else s.vy*=-.3;
+    if(d<4.5&&live&&P.inv<=0){SH.splice(k,1);shadeTouches(s);}
+  }
+}
+function shadeDies(s){
+  puff(s.x,s.y,14,0,46,.6);puff(s.x,s.y,6,1,12,1.2);
+  if(s.how==='flare'){addScore(100,s.x,s.y-6);}else{S.chain=S.chainT>0?S.chain+1:1;S.chainT=2.2;const m=Math.min(6,S.chain);addScore(150*m,s.x,s.y-6);if(m>1)callout('BURNED  x'+m,1.1);}
+  S.stats.shades++;SFX.burn(Math.min(6,S.chain||1));
+}
+function shadeTouches(s){
+  P.oil=Math.max(0,P.oil-30);P.hurt=.5;P.inv=1.1;S.shake=Math.max(S.shake,.45);puff(s.x,s.y,10,1,30,1);SFX.chill();
+  const dx=P.x-s.x,dy=P.y-s.y,dl=Math.hypot(dx,dy)||1;P.vx+=dx/dl*70;P.vy+=dy/dl*70;S.stats.hits++;
+}
+/* ---------- moths: a swarm goes to the brightest light it can see ---------- */
+const MOTHS=[];
+function spawnMoths(){const cands=[...WELLS,...EDGES];if(!cands.length)return;const w=pick(cands);
+  const m={x:w.x,y:w.y,vx:0,vy:0,n:[],tgt:null,t:0,scatter:0,atLamp:0};for(let k=0;k<7;k++)m.n.push({a:Math.random()*TAU,r:rnd(2,6),w:rnd(5,11)*(Math.random()<.5?-1:1),ph:Math.random()*TAU});MOTHS.push(m);SFX.moths();}
+function stepMoths(dt){
+  for(let k=MOTHS.length-1;k>=0;k--){const m=MOTHS[k];m.t+=dt;
+    if(m.scatter>0){m.scatter+=dt;for(const q of m.n)q.r+=dt*60;if(m.scatter>1.2)MOTHS.splice(k,1);continue;}
+    /* pick the brightest light, weighed by distance */
+    let best=null,bs=0;const pb=(.45+.9*P.beamK)*oilK()*(P.dead?0:1),pd=Math.hypot(P.x-m.x,P.y-m.y);if(pd<110){bs=pb/(1+pd/50);best='P';}
+    for(const L of LAMPS){if(!L.lit)continue;const d=Math.hypot(L.x-m.x,L.y-m.y);if(d>110)continue;const s=.9/(1+d/50);if(s>bs){bs=s;best=L;}}
+    if(best!==m.tgt){m.tgt=best;m.atLamp=0;}
+    let tx,ty;if(best==='P'){tx=P.lx;ty=P.ly;}else if(best){tx=best.x;ty=best.y-2;m.atLamp+=dt;}else{tx=P.x;ty=P.y;}
+    if(m.atLamp>22){m.scatter=.01;continue;}                        /* a swarm that has had its fill of a lamp drifts off */
+    const dx=tx-m.x,dy=ty-m.y,dl=Math.hypot(dx,dy)||1,v=dl>8?30:8;m.vx+=(dx/dl*v-m.vx)*dt*2.5;m.vy+=(dy/dl*v-m.vy)*dt*2.5;m.x+=m.vx*dt;m.y+=m.vy*dt;
+    for(const q of m.n){q.a+=q.w*dt;q.r+=(rnd(2,7)-q.r)*dt*.8;}
+    if(best==='P'&&dl<10&&!P.dead){P.oil=Math.max(0,P.oil-2.4*dt);P.flick=.78+.22*Math.random();S.mothsOn=1;}
+  }
+}
+/* ---------- snuffers: tall shapes with a bell on a pole, they walk through walls to put the lamps out ---------- */
+const SNUF=[];
+function spawnSnuffer(){const cands=[...WELLS,...EDGES].filter(w=>Math.hypot(w.x-P.x,w.y-P.y)>80);if(!cands.length)return;const w=pick(cands);
+  SNUF.push({x:w.x,y:w.y,hp:2.6,tgt:null,t:0,wait:0,burn:0,fz:0});SFX.snufferCome();callout('A SNUFFER WALKS',1.6);}
+function stepSnuffers(dt,live){
+  for(let k=SNUF.length-1;k>=0;k--){const z=SNUF[k];z.t+=dt;
+    const bm=beamAt(z.x,z.y-3);if(bm>0){z.hp-=bm*1.5*dt;z.burn=.12;z.fz=1;if((r32()&3)===0)puff(z.x+rnd(-3,3),z.y+rnd(-6,1),1,0,34,.4);}else z.fz=Math.max(0,z.fz-dt*3);
+    z.burn=Math.max(0,z.burn-dt);
+    if(z.hp<=0){SNUF.splice(k,1);puff(z.x,z.y-3,26,0,50,.8);puff(z.x,z.y-3,10,1,16,1.4);addScore(1000,z.x,z.y-10);S.stats.snuffers++;SFX.burn(4);callout('SNUFFER BURNED',1.4);continue;}
+    if(!live||z.fz>.5)continue;
+    if(z.wait>0){z.wait-=dt;continue;}
+    if(!z.tgt||!z.tgt.lit){let bd=1e9;z.tgt=null;for(const L of LAMPS)if(L.lit){const d=Math.hypot(L.x-z.x,L.y-z.y);if(d<bd){bd=d;z.tgt=L;}}}
+    const tx=z.tgt?z.tgt.x:P.x,ty=z.tgt?z.tgt.y+2:P.y,dx=tx-z.x,dy=ty-z.y,dl=Math.hypot(dx,dy)||1;
+    z.x+=dx/dl*13*dt;z.y+=dy/dl*13*dt;
+    if(z.tgt&&dl<4){lampToggle(z.tgt,false);z.tgt.snuffT=1;puff(z.tgt.x,z.tgt.y-3,18,1,14,2);SFX.snuff();callout('A LAMP GOES OUT',1.6);z.tgt=null;z.wait=1.6;S.stats.snuffed++;litCells();}
+    if(Math.hypot(P.x-z.x,P.y-z.y)<5&&P.inv<=0&&!P.dead){P.oil=Math.max(0,P.oil-30);P.hurt=.5;P.inv=1.2;S.shake=.6;SFX.chill();}
+  }
+}
+/* ---------- fireflies and pickups ---------- */
+const FF=[];
+function seedFlies(){FF.length=0;for(const f of FLIES)for(let k=0;k<5;k++)FF.push({hx:f.x,hy:f.y,x:f.x,y:f.y,ph:Math.random()*TAU,on:true,re:0,sp:rnd(.6,1.4)});}
+function stepFlies(dt){for(const f of FF){if(!f.on){f.re-=dt;if(f.re<=0)f.on=true;continue;}f.ph+=dt*f.sp;f.x=f.hx+Math.sin(f.ph*1.3)*9+Math.sin(f.ph*.7)*4;f.y=f.hy+Math.cos(f.ph)*7;
+  if(!P.dead&&Math.hypot(f.x-P.x,f.y-P.y)<4.5){f.on=false;f.re=30;P.oil=Math.min(OIL_MAX,P.oil+2);addScore(50,f.x,f.y-5);SFX.firefly();S.stats.flies++;}}}
+function stepPicks(dt){for(const p of PICKS){p.t+=dt;if(!p.on){p.re-=dt;if(p.re<=0&&p.k==='oil')p.on=true;continue;}
+  if(!P.dead&&Math.hypot(p.x-P.x,p.y-P.y)<5){if(p.k==='oil'){if(P.oil>OIL_MAX-4)continue;P.oil=Math.min(OIL_MAX,P.oil+38);p.on=false;p.re=40;SFX.oil();callout('OIL',.8);}
+    else{if(P.flares>=3)continue;P.flares++;p.on=false;p.re=1e9;SFX.pickFlare();callout('FLARE',.8);}}}}
+/* ---------- THE LONG NIGHT: a hole in the world the size of a house. Light does not stop it; it puts out
+   every lamp it passes over. Its one eye opens now and then, and when the great lamp sweeps it. ---------- */
+const BOSS={on:false,x:0,y:0,r:22,hp:9,hp0:9,eye:0,eyeT:6,t:0,rise:0,hurt:0,split:2,dead:0,vx:0,vy:0};
+function bossStart(){Object.assign(BOSS,{on:true,x:TOWER?TOWER.x:WW/2,y:22,r:22,hp:12,hp0:12,eye:0,eyeT:5,t:0,rise:0,hurt:0,split:2,dead:0});SFX.bossRise();bigCallout('THE LONG NIGHT','RISES FROM THE SEA');}
+function bossHurt(d){if(!BOSS.on||BOSS.dead)return;BOSS.hp=Math.max(0,BOSS.hp-d);BOSS.hurt=.15;
+  if(BOSS.hp<BOSS.hp0*BOSS.split/3){BOSS.split--;for(let k=0;k<4;k++){const a=Math.random()*TAU;SH.push({x:BOSS.x+Math.cos(a)*BOSS.r,y:BOSS.y+Math.sin(a)*BOSS.r,vx:0,vy:0,hp:1,fz:0,in:.3,eye:0,id:SID++,how:'',burn:0,lunge:0,stuck:0});}SFX.bossHit();}
+  if(BOSS.hp<=0){BOSS.dead=.01;SFX.bossDie();}}
+function stepBoss(dt,live){
+  const B=BOSS;if(!B.on)return;B.t+=dt;B.rise=Math.min(1,B.rise+dt*.35);B.hurt=Math.max(0,B.hurt-dt);
+  if(B.dead){B.dead+=dt;B.r=Math.max(0,22*(1-B.dead/2.4));if((r32()&1)===0)puff(B.x+rnd(-B.r,B.r),B.y+rnd(-B.r,B.r),2,0,60,.7);if(B.dead>2.6){B.on=false;S.bossDown=1;}return;}
+  /* the eye: on a timer, and forced open while the great lamp's beam crosses the body */
+  B.eyeT-=dt;if(B.eyeT<=0){B.eye=2.6;B.eyeT=7+Math.random()*2;SFX.bossEye();}
+  if(GREAT.on&&greatAt(B.x,B.y)>.2)B.eye=Math.max(B.eye,1.2);
+  B.eye=Math.max(0,B.eye-dt);
+  if(B.eye>0){const bm=beamAt(B.x,B.y);if(bm>0){bossHurt(bm*1.05*dt);if((r32()&1)===0)puff(B.x+rnd(-3,3),B.y+rnd(-3,3),1,0,40,.4);}}
+  if(!live||B.rise<1)return;
+  const dx=P.x-B.x,dy=P.y-B.y,dl=Math.hypot(dx,dy)||1,v=(B.eye>0?3:9)*(1+(1-B.hp/B.hp0)*.5);
+  B.vx+=(dx/dl*v-B.vx)*dt*.8;B.vy+=(dy/dl*v-B.vy)*dt*.8;B.x=clamp(B.x+B.vx*dt,10,WW-10);B.y=clamp(B.y+B.vy*dt,10,WH-10);
+  for(const L of LAMPS)if(L.lit&&Math.hypot(L.x-B.x,L.y-B.y)<B.r*.8){lampToggle(L,false);L.snuffT=1;puff(L.x,L.y-3,16,1,14,2);SFX.snuff();litCells();}
+  if(dl<B.r*.75&&P.inv<=0&&!P.dead){P.oil=Math.max(0,P.oil-34);P.inv=1.4;P.hurt=.6;S.shake=.9;P.vx-=dx/dl*90;P.vy-=dy/dl*90;SFX.chill();}
+}
+/* the body: a ragged disc whose edge boils */
+function bossMask(wx,wy){const B=BOSS;if(!B.on)return 1;const dx=wx-B.x,dy=wy-B.y,d=Math.hypot(dx,dy),r=B.r*(.4+.6*B.rise);if(d>r+5)return 1;
+  const a=Math.atan2(dy,dx),edge=r+Math.sin(a*5+B.t*1.7)*2.2+Math.sin(a*11-B.t*2.9)*1.2+(vnoise(a*3+B.t,B.t*.7,77)-.5)*3;return smooth(edge-2.5,edge+.5,d);}
+
+/* =====================================================================================
+   10. CABINET, SOUND EFFECTS, MUSIC
+   ===================================================================================== */
+const CAB={id:'lantern',title:'LANTERN',tickets:true};
+const SFXT={};
+function rl(k,ms){const t=performance.now();if(SFXT[k]&&t-SFXT[k]<ms)return false;SFXT[k]=t;return true;}
+const SFX={
+  move(){PATCH.glass(1568,now(),.12,.03);},
+  confirm(){const t=now();PATCH.bell(659,t,1.2,.06);PATCH.box(1319,t+.05,.5,.05);},
+  back(){PATCH.box(392,now(),.25,.05);},
+  tick(){if(!rl('tk',45))return;PATCH.box(2093,now(),.08,.025);},
+  shutter(open){if(!rl('sh',60))return;const t=now();noise(t,.03,.12,6000,2500,'bandpass',0,0,3);tone(open?1900:1200,t,.03,'square',.03,0,open?2600:800);},
+  kindle(k){if(!rl('kd',90))return;noise(now(),.12,.05+k*.05,800+k*2400,1800+k*2600,'bandpass',0,.2,2);},
+  lampLit(n){const t=now(),f=[523.3,587.3,659.3,784,880,987.8,1046.5,1174.7,1318.5,1568,1760,2093][Math.min(11,n)];noise(t,.5,.18,900,4000,'bandpass',0,.3,1.2,.02);PATCH.bell(f/2,t+.05,2.2,.09);PATCH.box(f,t+.08,1,.06);PATCH.box(f*1.5,t+.2,.9,.04);},
+  burn(m){if(!rl('bn',40))return;const t=now();noise(t,.35,.16,7000,1400,'bandpass',0,.2,1.5);PATCH.glass(440*Math.pow(1.122,m||1),t,.35,.05);},
+  chill(){const t=now();noise(t,.7,.22,300,2600,'bandpass',0,.5,1.4,.05);fm(110,t,.8,.5,6,.6,.12,AU.sfx,.5,.02);},
+  flare(){const t=now();noise(t,.06,.6,9000,3000,'highpass');noise(t,2.2,.22,5000,1200,'bandpass',0,.4,.8);tone(90,t,.5,'sine',.4,0,40);fm(220,t,1.6,3.01,4,1.2,.07,AU.sfx,.5);},
+  oil(){const t=now();for(let k=0;k<3;k++)tone(260-k*40,t+k*.07,.09,'sine',.12,0,180-k*30);},
+  pickFlare(){const t=now();PATCH.box(1047,t,.4,.06);PATCH.box(1568,t+.08,.5,.05);},
+  firefly(){if(!rl('ff',60))return;PATCH.glass(2637+Math.random()*400,now(),.3,.03);},
+  moths(){const t=now();for(let k=0;k<6;k++)noise(t+k*.05,.04,.05,3000,1500,'bandpass',0,.1,4);},
+  snufferCome(){const t=now();fm(73.4,t,2.4,1.41,5,2,.12,AU.sfx,.6,.4);PATCH.bell(146.8,t+.2,3,.06);},
+  snuff(){const t=now();tone(880,t,.6,'sine',.06,0,180);noise(t,.9,.14,1200,200,'lowpass',0,.4);},
+  toll(){const t=now();PATCH.bell(98,t,4,.16);PATCH.bell(196.4,t+.01,3.5,.06);},
+  heartbeat(){const t=now();tone(60,t,.13,'sine',.22,0,42);tone(54,t+.16,.15,'sine',.17,0,38);},
+  step(m){if(!rl('st',140))return;const t=now();if(m===M_GRASS||m===M_SAND)noise(t,.05,.025,1600,900,'bandpass',0,0,1.2);else if(m===M_BRIDGE)tone(170+Math.random()*30,t,.05,'triangle',.03);else noise(t,.03,.03,2600,1800,'bandpass',0,0,2);},
+  die(){const t=now();fm(55,t,3.5,.5,8,3,.2,AU.sfx,.6,.05);noise(t,3,.2,400,60,'lowpass',0,.5);for(let k=0;k<5;k++)noise(t+.4+k*.35,.5,.05,600+k*200,2500,'bandpass',0,.5,6,.1);},
+  dawn(){const t=now();[0,4,7,12,16].forEach((s,i)=>{PATCH.celst(mtof(67+s),t+i*.14,1.6,.06);});PATCH.pad(mtof(55),t,3.5,.03);},
+  bossRise(){const t=now();fm(41.2,t,5,.5,9,4,.26,AU.sfx,.7,1.2);fm(61.7,t+.5,4.5,.71,6,3,.14,AU.sfx,.7,1);noise(t,5,.12,200,60,'lowpass',0,.6,1,1.5);},
+  bossEye(){const t=now();PATCH.glass(196,t,1.2,.07);fm(98,t,1.2,2.76,4,1,.06,AU.sfx,.5);},
+  bossHit(){const t=now();fm(65.4,t,1.5,.5,7,1.2,.18,AU.sfx,.5,.02);},
+  bossDie(){const t=now();for(let k=0;k<12;k++)PATCH.glass(300+k*140,t+k*.09,1.4,.04);fm(32.7,t,4,.5,10,3,.25,AU.sfx,.7,.05);noise(t,4,.25,3000,80,'lowpass',0,.6);},
+  great(){const t=now();PATCH.bell(65.4,t,6,.2);PATCH.bell(98,t+.02,5,.1);noise(t,2,.1,500,3000,'bandpass',0,.6,.8,.6);},
+  lose(){const t=now();[523,466,392,311].forEach((f,i)=>PATCH.box(f,t+i*.25,.8,.06));}
+};
+/* ---- the sequencer: 12 or 16 steps a bar, FM voices. lead: scale degrees (1..g), '-' holds; bass R/O/F/T;
+   bell: X struck. A waltz is written in 12 steps (three beats of four). ---- */
+const SCALES={minor:[0,2,3,5,7,8,10],harm:[0,2,3,5,7,8,11],dorian:[0,2,3,5,7,9,10],major:[0,2,4,5,7,9,11],phryg:[0,1,3,5,7,8,10],lyd:[0,2,4,6,7,9,11]};
+function sdeg(tr,d){const sc=SCALES[tr.scale],n=sc.length,o=Math.floor(d/n),i=((d%n)+n)%n;return sc[i]+12*o;}
+const LEADCH='123456789abcdefg';
+const TRACKS={
+  title:{bpm:80,steps:12,root:50,scale:'harm',prog:[0,3,4,0,5,3,4,4],lead:'5---3-1-3---4---2-7-2---3---1-5-1---6---4-2-4---5-------7---',bass:'R...O...F...',pad:1,lv:.05,inst:'box',bell:'X...........'},
+  n1:{bpm:84,steps:12,root:45,scale:'minor',prog:[0,5,3,4],lead:'1---3---5---4-3-2---1---6---5-4-3---2---',bass:'R...F...F...',pad:1,lv:.04,inst:'box'},
+  n2:{bpm:72,steps:16,root:43,scale:'dorian',prog:[0,3,0,4],lead:'5-------4---3---2-------1-------',bass:'R.......O.......',pad:1,lv:.035,inst:'celst',drip:1},
+  n3:{bpm:66,steps:12,root:41,scale:'phryg',prog:[0,1,0,5],lead:'1-----2-----1---7---5-------',bass:'R...........',pad:1,lv:.04,inst:'reed',bell:'X...........'},
+  n4:{bpm:92,steps:16,root:46,scale:'harm',prog:[0,5,3,4],lead:'1-3-5-3-4-2-7---5-6-5-4-3-2-1---',bass:'R..R..O.R..R..F.',pad:1,lv:.035,inst:'box'},
+  n5:{bpm:78,steps:12,root:38,scale:'minor',prog:[0,5,6,4],lead:'5---6---5---3---2---1---7---1---2-------',bass:'R...O...F...',pad:1,lv:.04,inst:'celst',bell:'X.....x.....'},
+  boss:{bpm:132,steps:12,root:38,scale:'harm',prog:[0,0,5,4],lead:'1-2-3-5-3-2-7---5---6-5-4-3-2-1-7-5-',bass:'R.RO.RR.RF.R',pad:1,lv:.045,inst:'reed',bell:'X..x..X..x..',kick:'x.....x.....'},
+  dawn:{bpm:76,steps:12,root:55,scale:'major',prog:[0,3,4,0],lead:'3---5---8---7---6---5---6-5-4-3-2---',bass:'R...O...F...',pad:1,lv:.05,inst:'celst'},
+  over:{bpm:60,steps:12,root:40,scale:'minor',prog:[0,5,3,4],lead:'5-----------4-----------3-----------2-----------',bass:'R...........',pad:1,lv:.03,inst:'box'}
+};
+function setTrack(name){AU.want=name;}
+function musicTick(paused){
+  const c=AU.ctx;if(!c||c.state!=='running')return;
+  if(AU.want!==AU.track){AU.track=AU.want;AU.step=0;AU.next=Math.max(AU.next,c.currentTime+.05);}
+  const tr=TRACKS[AU.track];if(!tr)return;
+  const n=tr.steps||16,sd=60/tr.bpm/4;if(AU.next<c.currentTime)AU.next=c.currentTime+.03;
+  while(AU.next<c.currentTime+.15){
+    const st=AU.step,s=st%n,bar=Math.floor(st/n)%tr.prog.length,d=tr.prog[bar],t=AU.next,R=tr.root;
+    if(!AU.muted&&!ARC.muted&&!paused){
+      const bc=tr.bass[s%tr.bass.length];
+      if(bc&&bc!=='.'){const nn=R+sdeg(tr,d)+(bc==='O'?12:bc==='F'?sdeg(tr,d+4)-sdeg(tr,d):bc==='T'?sdeg(tr,d+2)-sdeg(tr,d):0);PATCH.bass(mtof(nn-12),t,sd*3.2,.12,AU.mus);}
+      const L=tr.lead.length,lc=tr.lead[st%L];
+      if(lc&&lc!=='.'&&lc!=='-'&&tr.lv){let len=1;while(tr.lead[(st+len)%L]==='-'&&len<24)len++;const dg=LEADCH.indexOf(lc);
+        const g=PATCH[tr.inst||'box'](mtof(R+24+sdeg(tr,dg+d*0)),t,sd*len*.95+.3,tr.lv,AU.mus);if(g&&AU.dly){const s2=AU.ctx.createGain();s2.gain.value=.5;g.connect(s2);s2.connect(AU.dly);}}
+      if(tr.pad&&s===0){for(const k of [0,2,4])PATCH.pad(mtof(R+12+sdeg(tr,d+k)),t,sd*n*1.02,.016,AU.mus);}
+      if(tr.bell&&tr.bell[s]!=='.'&&tr.bell[s]){PATCH.bell(mtof(R+12+sdeg(tr,d)),t,2.4,tr.bell[s]==='X'?.05:.03,AU.mus);}
+      if(tr.kick&&tr.kick[s]==='x'){tone(80,t,.2,'sine',.25,AU.mus,38);}
+      if(tr.drip&&(r32()&31)===0)PATCH.glass(mtof(R+36+sdeg(tr,(r32()%7))),t,.4,.02,AU.mus);
+    }
+    AU.next+=sd;AU.step++;
+  }
+}
+/* the night as sound: wind, crickets in the grass, rain, the sea; and the lantern's own small roar */
+const AMB={on:false};
+function ambInit(){
+  const c=AU.ctx;if(!c||AMB.on)return;AMB.on=true;
+  const gain=v=>{const g2=c.createGain();g2.gain.value=v;return g2;},filt=(type,f,q)=>{const fl=c.createBiquadFilter();fl.type=type;fl.frequency.value=f;fl.Q.value=q||1;return fl;};
+  const nsrc=()=>{const s=c.createBufferSource();s.buffer=AU.noise;s.loop=true;s.start(0,Math.random());return s;};
+  AMB.wn=nsrc();AMB.wf=filt('bandpass',420,.6);AMB.wg=gain(0);AMB.wn.connect(AMB.wf);AMB.wf.connect(AMB.wg);AMB.wg.connect(AU.sfx);
+  AMB.rn=nsrc();AMB.rf=filt('highpass',2600,.5);AMB.rg=gain(0);AMB.rn.connect(AMB.rf);AMB.rf.connect(AMB.rg);AMB.rg.connect(AU.sfx);
+  AMB.sn=nsrc();AMB.sf=filt('lowpass',380,.7);AMB.sg=gain(0);AMB.sn.connect(AMB.sf);AMB.sf.connect(AMB.sg);AMB.sg.connect(AU.sfx);
+  AMB.fn=nsrc();AMB.ff=filt('bandpass',1100,1.4);AMB.fg=gain(0);AMB.fn.connect(AMB.ff);AMB.ff.connect(AMB.fg);AMB.fg.connect(AU.sfx);   /* the flame */
+  AMB.cr=0;
+}
+function ambUpdate(){
+  if(!AU.ctx)return;if(!AMB.on)ambInit();if(!AMB.on)return;
+  const t=AU.ctx.currentTime,inGame=S.mode==='play'||S.mode==='demo'||S.mode==='intro',live=!S.paused&&!AU.muted&&inGame,set=(p,v,k)=>p.setTargetAtTime(v,t,k||.2);
+  set(AMB.wg.gain,live?.02+.015*Math.sin(t*.21)+(ST.fog>.5?.012:0):0,.8);set(AMB.wf.frequency,330+180*Math.sin(t*.13));
+  set(AMB.rg.gain,live&&ST.rain?.03:0,.6);set(AMB.sg.gain,live&&ST.boss?.05+.03*Math.sin(t*.4):0,.8);
+  set(AMB.fg.gain,live&&!P.dead?.006+P.beamK*.014:0,.08);set(AMB.ff.frequency,900+P.beamK*900);
+  /* crickets: FM chirps when the lamplighter is near grass and nothing hunts close by */
+  if(live&&!P.dead&&MAT[(P.y|0)*WW+(P.x|0)]===M_GRASS&&SH.every(s=>Math.hypot(s.x-P.x,s.y-P.y)>40)&&Math.random()<.03){const f=4200+Math.random()*600;for(let k=0;k<3;k++)fm(f,t+k*.045,.03,1.5,.8,.03,.012,AU.sfx,.2,.002);}
+}
+/* =====================================================================================
+   11. ARCADE BRIDGE AND INPUT SNAPSHOT
+   ===================================================================================== */
+const ARC={muted:false,last:0,
+  post(type,data){if(window.parent===window)return;try{window.parent.postMessage(Object.assign({src:'hyperdot',type,id:CAB.id},data||{}),'*');}catch(e){}},
+  score(s){const t=performance.now();if(t-this.last>250){this.last=t;this.post('score',{score:s});}},
+  over(score,tickets){this.post('over',{score,tickets:CAB.tickets?Math.max(0,Math.round(tickets||0)):0});},
+  exit(){this.post('exit');}
+};
+addEventListener('message',e=>{const m=e.data;if(!m||m.src!=='hyperdot-arcade')return;
+  if(m.cmd==='start'){audioInit();APP_start();}else if(m.cmd==='pause')setPause(true);else if(m.cmd==='resume')setPause(false);
+  else if(m.cmd==='attract')APP_attract();else if(m.cmd==='mute'){ARC.muted=true;setVolume();}else if(m.cmd==='unmute'){ARC.muted=false;setVolume();}});
+window.HYPERDOT_GAME={id:CAB.id,title:CAB.title,tickets:CAB.tickets,version:1};
+let PTRAIM=false;
+function readCtl(){
+  const o={x:0,y:0,a:false,b:false,start:false,ok:false,back:false,pause:false,u:false,d:false,l:false,r:false,ax:0,ay:0,aim:null};
+  if(K('ArrowLeft')||K('KeyA'))o.x-=1;if(K('ArrowRight')||K('KeyD'))o.x+=1;if(K('ArrowUp')||K('KeyW'))o.y-=1;if(K('ArrowDown')||K('KeyS'))o.y+=1;
+  if(K('Space')||K('KeyJ')||K('KeyZ'))o.a=true;if(K('ShiftLeft')||K('ShiftRight')||K('KeyK')||K('KeyX'))o.b=true;
+  if(TS.on&&(TS.x||TS.y)){o.x=TS.x;o.y=TS.y;}if(TS.A)o.a=true;if(TS.B)o.b=true;
+  for(const p of pads()){
+    const b=k=>!!(p.buttons[k]&&p.buttons[k].pressed),lx=p.axes[0]||0,ly=p.axes[1]||0,rx=p.axes[2]||0,ry=p.axes[3]||0;
+    if(Math.abs(lx)>.18||Math.abs(ly)>.18){o.x=lx;o.y=ly;}if(Math.hypot(rx,ry)>.35){o.ax=rx;o.ay=ry;}
+    if(b(14))o.x=-1;if(b(15))o.x=1;if(b(12))o.y=-1;if(b(13))o.y=1;
+    if(b(0)||b(7)||b(5))o.a=true;if(b(2)||b(6)||b(4))o.b=true;if(b(9))o.start=true;if(b(0))o.ok=true;if(b(1))o.back=true;
+  }
+  const l=Math.hypot(o.x,o.y);if(l>1){o.x/=l;o.y/=l;}
+  o.u=o.y<-.5;o.d=o.y>.5;o.l=o.x<-.5;o.r=o.x>.5;
+  /* the mouse (or a finger on the panel) aims the lantern; the button opens the beam */
+  if(PTR.on&&!PTR.touch&&performance.now()-PTR.last<4000)PTRAIM=true;if(Math.hypot(o.ax,o.ay)>.35||(l>.2&&PTR.touch&&!PTR.down))PTRAIM=false;
+  if(PTR.touch&&PTR.down)PTRAIM=true;
+  if(PTRAIM&&PTR.on)o.aim=[PTR.x,PTR.y];
+  if(PTR.down&&(!PTR.touch||PTRAIM))o.a=true;
+  if(PTR.right){o.b=true;}
+  o.ok=o.ok||K('Enter')||K('Space')||K('KeyJ')||TS.A;o.back=o.back||K('Escape')||K('Backspace');o.pause=K('Escape')||K('KeyP')||o.start;
+  return o;
+}
+function endInputFrame(){LATCH.clear();PTR.pressed=false;PTR.released=false;PTR.right=false;}
+/* =====================================================================================
+   12. GAME STATE AND FLOW
+     attract (logo, high scores, rules, demo) -> intro (a night's card) -> play -> dawn (tally) -> next night
+     play -> dying -> respawn at the last lamp, or game over (initials) -> attract
+   ===================================================================================== */
+const DEF_HI=[['LMP',60000],['WIK',45000],['ELM',32000],['OIL',20000],['FOG',10000]];
+function loadHi(){try{const v=JSON.parse(store.get('hd-lantern-table','null'));if(Array.isArray(v)&&v.length===5)return v;}catch(e){}return DEF_HI.map(r=>r.slice());}
+const S={mode:'attract',t:0,clock:0,tick:0,score:0,night:0,lives:3,cont:0,paused:false,pauseI:0,demo:false,chain:0,chainT:0,calls:[],big:null,pops:[],shake:0,flash:0,
+  nt:0,nextDeep:0,maxAlive:3,rate:3,spawnT:2,mothI:0,snufI:0,stats:null,tally:null,deathT:0,hi:loadHi(),entry:null,att:{ph:0,t:0},attractN:0,mothsOn:0,bossDown:0,greatT:0,lampsLit:0,
+  fieldT:0,newHi:false,tickets:0,flawless:true};
+function newStats(){return {lamps:0,shades:0,snuffers:0,flies:0,hits:0,snuffed:0};}
+function addScore(n,x,y){if(S.demo)return;S.score+=n;ARC.score(Math.floor(S.score));if(x!=null)S.pops.push({x,y,txt:''+n,t:0});if(S.pops.length>8)S.pops.shift();}
+function callout(txt,dur){S.calls.push({txt,t:0,dur:dur||1.2});if(S.calls.length>2)S.calls.shift();}
+function bigCallout(title,sub){S.big={title,sub,t:0};}
+function nightSetup(i,demo){
+  ST=NIGHTS[i];S.night=i;S.demo=demo;RS=(ST.seed*2654435761)>>>0||7;
+  buildTown(ST);SH.length=0;MOTHS.length=0;SNUF.length=0;FLARES.length=0;PART.length=0;seedFlies();BOSS.on=false;GREAT.on=false;
+  Object.assign(P,{x:START.x,y:START.y,vx:0,vy:0,aim:-Math.PI/2,aimTo:-Math.PI/2,beamK:0,oil:OIL_MAX,hurt:0,inv:0,kindle:0,kl:null,gutter:0,dead:0,lastLamp:null,flick:1});
+  if(!demo&&i===0){P.flares=2;P.lives=3;}
+  S.nt=0;S.nextDeep=ST.shade.deepen;S.maxAlive=ST.shade.max;S.rate=ST.shade.rate;S.spawnT=4;S.mothI=0;S.snufI=0;S.stats=newStats();S.chain=0;S.chainT=0;S.calls.length=0;S.big=null;S.pops.length=0;
+  S.bossDown=0;S.greatT=0;S.flawless=true;S.fieldT=0;litCells();buildField(P.x,P.y);
+  CAM.x=clamp(P.x-W/2,0,WW-W);CAM.y=clamp(P.y-H/2,0,WH-H);
+}
+function APP_attract(){S.mode='attract';S.t=0;S.paused=false;S.att={ph:0,t:0};S.entry=null;$('pauseBtn').textContent='Pause';titleSetup();setTrack('title');}
+function APP_start(){S.score=0;S.cont=0;S.paused=false;S.newHi=false;P.lives=3;P.flares=2;$('pauseBtn').textContent='Pause';startNight(0);SFX.confirm();ARC.score(0);}
+function startNight(i){nightSetup(i,false);S.mode='intro';S.t=0;setTrack(ST.tr);}
+function startDemo(){nightSetup(S.attractN%4,true);S.attractN++;S.mode='demo';S.t=0;P.oil=OIL_MAX;P.flares=2;setTrack(ST.tr);}
+function setPause(on){if(S.mode!=='play'&&S.mode!=='intro')on=false;S.paused=on;S.pauseI=0;$('pauseBtn').textContent=on?'Resume':'Pause';}
+function lampsLit(){let n=0;for(const L of LAMPS)if(L.lit)n++;return n;}
+/* ---------- the lamplighter ---------- */
+function playerStep(dt,c,live){
+  P.hurt=Math.max(0,P.hurt-dt);P.inv=Math.max(0,P.inv-dt);
+  if(P.dead){P.beamK=Math.max(0,P.beamK-dt*6);return;}
+  /* walking */
+  const sp=34,acc=14;P.vx+=(c.x*sp-P.vx)*Math.min(1,dt*acc);P.vy+=(c.y*sp-P.vy)*Math.min(1,dt*acc);
+  const nx=P.x+P.vx*dt,ny=P.y+P.vy*dt;
+  if(!blocked(nx,P.y,2,true))P.x=nx;else P.vx=0;if(!blocked(P.x,ny,2,true))P.y=ny;else P.vy=0;
+  P.x=clamp(P.x,3,WW-4);P.y=clamp(P.y,3,WH-4);
+  const spd=Math.hypot(P.vx,P.vy);P.step+=spd*dt;if(P.step>7&&live){P.step=0;SFX.step(MAT[(P.y|0)*WW+(P.x|0)]);}
+  /* aiming: the pointer or the right stick if they speak; otherwise the way you walk, with a little help
+     toward the nearest thing that hunts you in front */
+  let want=null;
+  if(c.aim){const wx=c.aim[0]+CAM.x,wy=c.aim[1]+CAM.y;if(Math.hypot(wx-P.x,wy-P.y)>2)want=Math.atan2(wy-P.y,wx-P.x);}
+  else if(Math.hypot(c.ax,c.ay)>.35)want=Math.atan2(c.ay,c.ax);
+  else{if(spd>6)want=Math.atan2(P.vy,P.vx);else want=P.aimTo;
+    let best=null,bd=1e9;for(const s of SH){const d=Math.hypot(s.x-P.x,s.y-P.y);if(d>70||s.in<.5)continue;let da=Math.atan2(s.y-P.y,s.x-P.x)-want;da=Math.atan2(Math.sin(da),Math.cos(da));if(Math.abs(da)<.9&&d<bd){bd=d;best=s;}}
+    for(const z of SNUF){const d=Math.hypot(z.x-P.x,z.y-P.y);if(d<70&&d<bd){let da=Math.atan2(z.y-P.y,z.x-P.x)-want;da=Math.atan2(Math.sin(da),Math.cos(da));if(Math.abs(da)<.9){bd=d;best=z;}}}
+    if(best&&c.a)want=Math.atan2(best.y-P.y,best.x-P.x);}
+  if(want!=null)P.aimTo=want;
+  let da=P.aimTo-P.aim;da=Math.atan2(Math.sin(da),Math.cos(da));P.aim+=clamp(da,-11*dt,11*dt);
+  P.lx=P.x+Math.cos(P.aim)*2.6;P.ly=P.y+Math.sin(P.aim)*2.6-.5;
+  /* the shutter */
+  const open=c.a&&P.oil>0;if(open!==P.beam){P.beam=open;SFX.shutter(open);}
+  P.beamK=clamp(P.beamK+(open?1:-1)*dt*12,0,1);
+  /* oil */
+  if(live){P.oil=Math.max(0,P.oil-(.85+P.beamK*3)*dt);
+    const L=LMAP[(P.y|0)*WW+(P.x|0)];if(L>.5&&P.oil<OIL_MAX){P.oil=Math.min(OIL_MAX,P.oil+6*dt);if(P.oil<OIL_MAX-1&&rl('wick',900))PATCH.glass(1760,now(),.3,.012);}}
+  P.flick=.94+.05*vnoise(S.clock*9,1,3)+.03*vnoise(S.clock*23,2,4);
+  if(P.oil<=0){P.gutter+=dt;if(P.gutter>2.4&&live)playerDies();}else P.gutter=0;
+  if(live&&P.oil<22&&P.oil>0&&rl('hb',Math.max(380,P.oil*40)))SFX.heartbeat();
+  /* kindling: stand by a dark lamp and the flame passes to it */
+  let near=null,nd=9;for(const L of LAMPS){if(L.lit)continue;const d=Math.hypot(L.x-P.x,L.y-P.y);if(d<nd){nd=d;near=L;}}
+  if(near&&near===P.kl&&P.hurt<=0&&live){P.kindle+=dt/1.5;SFX.kindle(P.kindle);if(P.kindle>=1){P.kindle=0;lightLamp(near);}}
+  else{P.kl=near;P.kindle=Math.max(0,P.kindle-dt*3);}
+}
+function lightLamp(L){
+  lampToggle(L,true);L.snuffT=0;litCells();const n=lampsLit(),first=!L.once;L.once=1;S.stats.lamps++;P.lastLamp=L;
+  addScore(first?500:250,L.x,L.y-8);callout('LAMP LIT  '+n+'/'+LAMPS.length,1.4);SFX.lampLit(n);puff(L.x,L.y-3,18,0,40,.6);
+  /* a newly lit lamp holds the shades already standing in it */
+}
+function playerDies(){
+  P.dead=1;S.mode='dying';S.t=0;S.flawless=false;SFX.die();setTrack('over');P.lives--;
+}
+function respawn(){
+  const lit=LAMPS.filter(L=>L.lit),L=P.lastLamp&&P.lastLamp.lit?P.lastLamp:lit.length?lit[(Math.random()*lit.length)|0]:null;
+  const x=L?L.x+4:START.x,y=L?L.y+5:START.y;let px=x,py=y;
+  for(let r=0;r<20&&blocked(px,py,2,true);r++){const a=Math.random()*TAU;px=x+Math.cos(a)*r;py=y+Math.sin(a)*r;}
+  Object.assign(P,{x:px,y:py,vx:0,vy:0,oil:72,dead:0,gutter:0,inv:2.5,hurt:0,kindle:0,beamK:0});
+  for(let k=SH.length-1;k>=0;k--)if(Math.hypot(SH[k].x-P.x,SH[k].y-P.y)<70)SH.splice(k,1);
+  if(BOSS.on){BOSS.vx=0;BOSS.vy=0;}
+  S.mode='play';S.t=0;setTrack(BOSS.on?'boss':ST.tr);callout('THE FLAME LIVES',1.4);
+}
+/* ---------- the night's director ---------- */
+function director(dt){
+  S.nt+=dt;
+  if(S.nt>=S.nextDeep){S.nextDeep+=ST.shade.deepen;if(S.maxAlive<ST.shade.cap){S.maxAlive++;S.rate*=.92;callout('THE NIGHT DEEPENS',1.6);SFX.toll();}}
+  S.spawnT-=dt;if(S.spawnT<=0){S.spawnT=S.rate*rnd(.7,1.3);if(SH.length<S.maxAlive)spawnShade();}
+  if(S.mothI<ST.moths.length&&S.nt>=ST.moths[S.mothI]){S.mothI++;spawnMoths();}
+  if(S.snufI<ST.snuff.length&&S.nt>=ST.snuff[S.snufI]&&lampsLit()>0){S.snufI++;spawnSnuffer();}
+  S.fieldT-=dt;if(S.fieldT<=0){S.fieldT=.3;buildField(P.x,P.y);}
+  /* the last night: the island lit wakes the great lamp, and the great lamp wakes the Long Night */
+  if(ST.boss&&!GREAT.on&&lampsLit()===LAMPS.length){wakeGreatLamp();S.greatT=.01;SFX.great();bigCallout('THE GREAT LAMP','WAKES');}
+  if(S.greatT>0&&!BOSS.on&&!S.bossDown){S.greatT+=dt;if(S.greatT>3.2){bossStart();setTrack('boss');}}
+  if(GREAT.on){GREAT.k=Math.min(1,GREAT.k+dt*.6);GREAT.a+=dt*.55;}
+}
+function nightWon(){return lampsLit()===LAMPS.length&&(!ST.boss||S.bossDown);}
+/* ---------- the tally at dawn ---------- */
+function startDawn(){
+  const oilB=Math.round(P.oil)*20,timeB=Math.max(0,Math.round(240-S.nt))*15,flaw=S.flawless&&S.stats.hits===0?5000:0,boss=ST.boss?25000:0;
+  S.tally={rows:[['LAMPS LIT',''+S.stats.lamps,0],['SHADES BURNED',''+S.stats.shades,0],['OIL LEFT',Math.round(P.oil)+'%',oilB],['NIGHT',fmtT(S.nt),timeB],['UNTOUCHED',flaw?'YES':'NO',flaw]].concat(boss?[['THE LONG NIGHT','ENDED',boss]]:[]),
+    shown:0,pay:oilB+timeB+flaw+boss,paid:0,t:0};
+  S.mode='dawn';S.t=0;setTrack('dawn');SFX.dawn();
+}
+const fmtT=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
+function nextNight(){
+  if(S.night>=NIGHTS.length-1){finalize();S.mode='ending';S.t=0;setTrack('dawn');return;}
+  const keep={oil:P.oil,flares:P.flares,lives:P.lives};startNight(S.night+1);P.flares=keep.flares;P.lives=keep.lives;
+}
+function finalize(){S.tickets=Math.round(S.score/2500);ARC.over(Math.floor(S.score),S.tickets);
+  const q=S.hi.findIndex(r=>S.score>r[1]);S.newHi=q>=0;if(q>=0&&!S.demo)S.entry={q,ch:[0,0,0],i:0,t:0};}
+function gameOver(){finalize();S.mode='over';S.t=0;setTrack('over');SFX.lose();}
+const ALPHA='ABCDEFGHIJKLMNOPQRSTUVWXYZ.';
+function commitEntry(){const e=S.entry;const nm=e.ch.map(i=>ALPHA[i]).join('');S.hi.splice(e.q,0,[nm,Math.floor(S.score)]);S.hi.length=5;store.set('hd-lantern-table',JSON.stringify(S.hi));S.entry=null;SFX.confirm();}
+/* ---------- the autopilot: plays the demo and the soak tests ---------- */
+const AFIELD=new Uint16Array(64*64);const AP={tgt:null,tgtT:0,ft:0};
+function autopilot(){
+  const o={x:0,y:0,a:false,b:false,ax:0,ay:0,aim:null,ok:false};
+  if(P.dead)return o;
+  /* the nearest threat that can move */
+  let th=null,td=1e9;for(const s of SH){if(s.in<.5)continue;const d=Math.hypot(s.x-P.x,s.y-P.y);if(d<td&&d<BEAM.R*.85&&(s.fz<.5||d<30)){td=d;th=s;}}
+  for(const z of SNUF){const d=Math.hypot(z.x-P.x,z.y-P.y);if(d<BEAM.R*.9&&d<td+20){td=d;th=z;}}
+  if(BOSS.on&&BOSS.rise>=1&&BOSS.eye>0){const d=Math.hypot(BOSS.x-P.x,BOSS.y-P.y);if(d<BEAM.R*.9){th=BOSS;td=d;}}
+  const swarm=MOTHS.some(m=>m.tgt==='P'&&Math.hypot(m.x-P.x,m.y-P.y)<14);
+  if(th&&!(swarm&&td>28)){o.ax=th.x-P.x;o.ay=th.y-P.y;const l=Math.hypot(o.ax,o.ay)||1;o.ax/=l;o.ay/=l;o.a=true;}
+  /* flares for crowds, for a snuffer at a lamp, and against the Long Night's open eye */
+  const close=SH.filter(s=>Math.hypot(s.x-P.x,s.y-P.y)<26&&s.in>.5).length;
+  AP.flT=(AP.flT||0)-1/60;
+  if(AP.flT<=0&&P.flares>0&&(close>=3||(BOSS.on&&BOSS.eye>0&&Math.hypot(BOSS.x-P.x,BOSS.y-P.y)<BOSS.r+40&&BOSS.hp<BOSS.hp0*.8)||(swarm&&P.oil<40))){o.b=true;AP.flT=2.5;}
+  /* where to walk: oil when low, a lit lamp to refill when there is no can, else the nearest dark lamp */
+  AP.tgtT-=1/60;
+  if(AP.tgtT<=0){AP.tgtT=.5;let tgt=null,bd=1e9;
+    if(P.oil<34){for(const p of PICKS)if(p.on&&p.k==='oil'){const d=Math.hypot(p.x-P.x,p.y-P.y);if(d<bd){bd=d;tgt=p;}}
+      if(!tgt||bd>140){bd=1e9;for(const L of LAMPS)if(L.lit){const d=Math.hypot(L.x-P.x,L.y-P.y);if(d<bd){bd=d;tgt={x:L.x+5,y:L.y+5};}}}}
+    if(!tgt||(swarm&&P.oil<70)){if(swarm){bd=1e9;for(const L of LAMPS)if(L.lit){const d=Math.hypot(L.x-P.x,L.y-P.y);if(d<bd){bd=d;tgt={x:L.x+5,y:L.y+5};}}}}
+    if(!tgt){bd=1e9;for(const L of LAMPS)if(!L.lit){const d=Math.hypot(L.x-P.x,L.y-P.y);if(d<bd){bd=d;tgt=L;}}}
+    if(!tgt&&BOSS.on)tgt={x:BOSS.x+(P.x>BOSS.x?40:-40),y:BOSS.y+30};
+    if(tgt!==AP.tgt||AP.ft<=0){AP.tgt=tgt;AP.ft=1.5;if(tgt)bfs2(tgt.x|0,tgt.y|0);}}
+  AP.ft-=1/60;
+  if(AP.tgt){const [tx,ty]=step2(P.x|0,P.y|0);
+    const dx=tx-P.x,dy=ty-P.y,l=Math.hypot(dx,dy);if(l>.8){o.x=dx/l;o.y=dy/l;}
+    /* while kindling, hold still */
+    if(P.kl&&P.kl===AP.tgt&&Math.hypot(P.kl.x-P.x,P.kl.y-P.y)<8){o.x=0;o.y=0;}}
+  /* back away from a shade that is about to touch */
+  if(th&&td<9&&th!==BOSS){o.x-=(th.x-P.x)/td;o.y-=(th.y-P.y)/td;}
+  if(BOSS.on&&BOSS.rise>=1){const d=Math.hypot(BOSS.x-P.x,BOSS.y-P.y);if(d<BOSS.r+16){o.x-=(BOSS.x-P.x)/d*1.5;o.y-=(BOSS.y-P.y)/d*1.5;}}
+  /* wedged: wander a moment and try again */
+  AP.mv=(AP.mv||0)*.97+Math.hypot(P.vx,P.vy)*.03;if(AP.mv<3&&Math.hypot(o.x,o.y)>.5&&!(P.kl&&P.kindle>0)){AP.stuck=(AP.stuck||0)+1/60;}else AP.stuck=0;
+  if(AP.stuck>1.5){AP.jig=.7;AP.ja=Math.random()*TAU;AP.stuck=0;AP.side=-(AP.side||1);}
+  if(AP.jig>0){AP.jig-=1/60;o.x=Math.cos(AP.ja);o.y=Math.sin(AP.ja);}
+  const l=Math.hypot(o.x,o.y);if(l>1){o.x/=l;o.y/=l;}
+  return o;
+}
+/* ---------- one tick of a running night ---------- */
+const PERF={sim:0};
+function nightStep(dt,c,live){
+  const t0=performance.now();
+  playerStep(dt,c,live);
+  if(!P.dead)castShadow(LSM,P.lx,P.ly,P.beamK>.02?BEAM.R:lanternR()+2,1,.8);
+  if(live)director(dt);
+  stepShades(dt,live);stepMoths(dt);stepSnuffers(dt,live);stepBoss(dt,live);stepFlies(dt);stepPicks(dt);stepParts(dt);
+  for(let k=FLARES.length-1;k>=0;k--){FLARES[k].t+=dt;if(FLARES[k].t>FLARES[k].dur)FLARES.splice(k,1);}
+  for(const L of LAMPS){L.flick+=dt;L.snuffT=Math.max(0,L.snuffT-dt*.5);}
+  S.chainT=Math.max(0,S.chainT-dt);S.mothsOn=0;
+  for(const c of S.calls)c.t+=dt;S.calls=S.calls.filter(c=>c.t<=c.dur);if(S.big){S.big.t+=dt;if(S.big.t>3.2)S.big=null;}
+  for(const p of S.pops)p.t+=dt;S.pops=S.pops.filter(p=>p.t<1.1);
+  PERF.sim+=(performance.now()-t0-PERF.sim)*.05;
+}
+
+/* =====================================================================================
+   13. COMPOSITION — light every dot of the view, set the sprites into it (lit pixel art,
+       voids where the shades stand, glowing eyes and flames), then quantize to nibbles
+   ===================================================================================== */
+const LT=new Float32Array(N);              /* total light per view dot, for the sprites */
+const FLK=new Float32Array(256).fill(1);
+let VX=0,VY=0;                              /* the view's world origin this frame (whole dots) */
+const RAIN=[];
+function composeWorld(t){
+  /* lamp flicker: gas mantles breathe a little, never much */
+  for(let i=0;i<LAMPS.length;i++){const L=LAMPS[i];FLK[i]=1+.03*Math.sin(L.flick*7.3)+.02*Math.sin(L.flick*17.1+i)+(L.snuffT>0?-.5*L.snuffT:0);}
+  FLK[255]=1;
+  LB.fill(0);EMB.fill(0);VOID.fill(1);
+  /* the hand lantern: a small hot glow and, when the shutter is open, the beam */
+  if(!P.dead||S.mode==='dying'){const dk=S.mode==='dying'?Math.max(0,1-S.t/1.6):1,ro=Math.ceil(lanternR()*dk+1);
+    if(ro>1)addLight(P.lx,P.ly,ro,lanternI()*dk*(P.oil<=0?.45+.35*Math.random():1),{S:LSM,src:1.1,hot:.9});
+    if(P.beamK>.02&&dk>0)addLight(P.lx,P.ly,BEAM.R,1.9*P.beamK*oilK()*dk,{S:LSM,src:1.1,cone:{dir:P.aim,half:BEAM.half,soft:.07},near:3});}
+  for(const f of FLARES){const k=1-f.t/f.dur;addLight(f.x,f.y,f.R,2.4*k*k,{S:f.S,src:2.2,hot:2});}
+  if(GREAT.on&&TOWER)addLight(TOWER.x,TOWER.y,127,1.6*GREAT.k,{S:GREAT.S,src:2.6,cone:{dir:GREAT.a,half:GREAT.half,soft:.05}});
+  for(const f of FF)if(f.on){const b=.5+.5*Math.sin(f.ph*6);if(b>.25)addLight(f.x,f.y,6,.28*b);}
+  /* the ground, the roofs, the water, the canopies */
+  const fogK=ST.fog,moonK=ST.moon*.42,amb=ST.amb*2.6,fx=(t*4.3)|0,fy=(t*2.1)|0,fx2=(-t*2.7)|0;
+  for(let y=0;y<H;y++){const wy=VY+y;if(wy<0||wy>=WH){for(let x=0;x<W;x++){RAD[y*W+x]=0;LT[y*W+x]=0;}continue;}
+    const fr=((wy+fy)&127)*FOGS,fr2=((wy*2+fy)&127)*FOGS;
+    for(let x=0;x<W;x++){const wx=VX+x,i=y*W+x;if(wx<0||wx>=WW){RAD[i]=0;LT[i]=0;continue;}
+      const w=wy*WW+wx,Ls=LMAP[w]*FLK[LMID[w]],L=Ls+LB[i];LT[i]=L;
+      const a=ALB[w]*(1/255),fog=(FOGT[fr+((wx+fx)&127)]*.65+FOGT[fr2+((wx+fx2)&127)]*.35)*fogK;
+      let r=L*(a+fog*.32)+MOON[w]*moonK*(1/255)*(1+fog*.6)+amb*a;
+      if(MAT[w]===M_WATER){const g=Math.sin(wx*.85+Math.sin(wy*.33+t*.9)*2.2+t*1.9)*Math.sin(wy*.6-t*.7+wx*.1);if(g>.55)r+=L*(g-.55)*1.6;}
+      const cn=CANOPY[w];if(cn){r=(Ls+LB[i]*.25)*cn*(1/255)*.9+MOON[w]*moonK*(1/255)+.012;}
+      RAD[i]=r;}}
+}
+/* ---------- sprites ---------- */
+function lit(x,y,alb,mode){x|=0;y|=0;if(x<0||y<0||x>=W||y>=H)return;const i=y*W+x,v=alb*(LT[i]+.02);if(mode===1)RAD[i]=Math.max(RAD[i],v);else RAD[i]=v;}
+function emit(x,y,v){x|=0;y|=0;if(x<0||y<0||x>=W||y>=H)return;EMB[y*W+x]+=v;}
+function voidAt(x,y,k){x|=0;y|=0;if(x<0||y<0||x>=W||y>=H)return;const i=y*W+x;VOID[i]=Math.min(VOID[i],k);}
+/* the lamplighter seen from above: a hood, a long coat swinging as he walks, the lantern held out */
+const PSPR=['..x..','.xxx.','xxoxx','xxxxx','.x.x.'];
+function drawPlayer(){
+  if(P.dead&&S.mode!=='dying')return;const sx=Math.round(P.x)-VX,sy=Math.round(P.y)-VY,blink=P.inv>0&&((S.clock*16|0)&1);if(blink)return;
+  const sw=Math.hypot(P.vx,P.vy)>4?((S.clock*8|0)&1):0;
+  for(let r=0;r<5;r++)for(let c=0;c<5;c++){const ch=PSPR[r][c];if(ch==='.')continue;if(r===4&&sw&&c===1)continue;if(r===4&&!sw&&c===3)continue;lit(sx-2+c,sy-3+r,ch==='o'?.95:.55);}
+  /* the lantern itself */
+  const lx=Math.round(P.lx)-VX,ly=Math.round(P.ly)-VY,fl=(P.oil>0?1:.4)*(S.mode==='dying'?Math.max(0,1-S.t/1.4):1);
+  emit(lx,ly,1.8*fl);emit(lx+1,ly,.5*fl);emit(lx,ly+1,.35*fl);
+}
+const SHSPR=['.x.x.','xxxxx','xxxxx','xxxxx','x.x.x'];
+function drawShades(t){
+  for(const s of SH){const sx=Math.round(s.x)-VX,sy=Math.round(s.y)-VY;if(sx<-8||sy<-8||sx>W+8||sy>H+8)continue;
+    const k=s.in,wob=(r32()&3)===0;
+    for(let r=0;r<5;r++)for(let c=0;c<5;c++){if(SHSPR[r][c]==='.')continue;if(k<.6&&hash2(c,r,(t*12|0)+s.id)>k)continue;const edge=r===0||c===0||c===4||r===4;voidAt(sx-2+c,sy-3+r,s.burn>0&&wob?.4:edge&&hash2(c,r,(t*14|0)+s.id)>.6?.3:0);}
+    /* a ragged fringe of dark */
+    for(let n=0;n<4;n++){const a=hash2(n,s.id,(t*9|0))*TAU,rr=3.2;voidAt(sx+Math.cos(a)*rr,sy-1+Math.sin(a)*rr,.35);}
+    const open=((s.eye+s.id)%4.3)>.18,eb=(s.fz>.5?.35:.75)*k;
+    if(open){emit(sx-1,sy-2,eb);emit(sx+1,sy-2,eb);}
+    if(s.burn>0)for(let n=0;n<3;n++)emit(sx-2+(r32()%5),sy-3+(r32()%5),1.2);}
+}
+function drawSnuffers(t){
+  for(const z of SNUF){const sx=Math.round(z.x)-VX,sy=Math.round(z.y)-VY;
+    for(let r=0;r<10;r++){const hw=r<2?1:r<5?2:3;for(let c=-hw;c<=hw;c++)voidAt(sx+c,sy-8+r,0);}
+    for(let r=0;r<6;r++)voidAt(sx+4,sy-9+r,0);voidAt(sx+3,sy-10,0);voidAt(sx+2,sy-10,0);          /* the pole and its bell */
+    for(let n=0;n<6;n++){const a=Math.sin(t*3+n)*1.5;voidAt(sx-2+n%5+a,sy+2+((n/5)|0),.3);}
+    emit(sx-1,sy-6,z.fz>.5?.4:.9);emit(sx+1,sy-6,z.fz>.5?.4:.9);
+    if(z.burn>0)for(let n=0;n<4;n++)emit(sx-3+(r32()%7),sy-8+(r32()%10),1.3);}
+}
+function drawMoths(t){for(const m of MOTHS)for(const q of m.n){const x=m.x+Math.cos(q.a)*q.r,y=m.y+Math.sin(q.a)*q.r*.7;lit(x-VX,y-VY,1.2,1);if(((t*20+q.ph*3)|0)&1)lit(x-VX+1,y-VY,.6,1);}}
+function drawLamps(t){
+  for(let li=0;li<LAMPS.length;li++){const L=LAMPS[li],sx=L.x-VX,sy=L.y-VY;if(sx<-4||sy<-6||sx>W+4||sy>H+4)continue;
+    /* the cage on its post, seen from above, a little north of the base */
+    const hy=sy-3;
+    if(L.lit){const f=FLK[li];emit(sx-1,hy,2.1*f);emit(sx,hy,2.4*f);emit(sx-1,hy-1,1.6*f);emit(sx,hy-1,1.8*f);for(const [u,v] of [[-2,0],[1,0],[-2,-1],[1,-1],[-1,-2],[0,-2],[-1,1],[0,1]])emit(sx+u,hy+v,.32*f);}
+    else{for(const [u,v] of [[-1,0],[0,0],[-1,-1],[0,-1]])lit(sx+u,hy+v,.5);for(const [u,v] of [[-2,0],[1,0],[-1,-2],[0,-2]])lit(sx+u,hy+v,.8);
+      if(L.snuffT>0)emit(sx,hy,.4*L.snuffT);}
+    if(P.kl===L&&P.kindle>0){const n=Math.round(P.kindle*16);for(let k=0;k<n;k++){const a=-Math.PI/2+k/16*TAU;emit(sx-.5+Math.cos(a)*5.5,hy+Math.sin(a)*5.5,.9);}}}
+}
+function drawPicks(t){for(const p of PICKS){if(!p.on)continue;const sx=p.x-VX,sy=p.y-VY+Math.round(Math.sin(p.t*3)*.6);
+  if(p.k==='oil'){for(let j=-2;j<=1;j++)for(let i=-1;i<=1;i++)lit(sx+i,sy+j,.85);lit(sx,sy-3,.9);emit(sx-1,sy-2,((p.t*2|0)&1)?.5:.15);}
+  else{for(let j=-1;j<=1;j++)lit(sx,sy+j,.9);emit(sx,sy-2,.9+.5*Math.sin(p.t*9));}}}
+function drawFlies(){for(const f of FF)if(f.on){const b=.5+.5*Math.sin(f.ph*6);if(b>.2)emit(f.x-VX,f.y-VY,1.4*b);}}
+function drawParts(){for(const p of PART){const k=1-p.t/p.life,sx=p.x-VX,sy=p.y-VY;if(p.kind===0)emit(sx,sy,1.6*k);else{const xi=sx|0,yi=sy|0;if(xi<0||yi<0||xi>=W||yi>=H)continue;const i=yi*W+xi;RAD[i]=RAD[i]*(1-.5*k)+LT[i]*.45*k+.03*k;}}}
+function drawRain(t,dt){
+  if(!ST.rain)return;for(let n=0;n<16;n++)RAIN.push({x:(r32()%W),y:(r32()%H),t:0});
+  let n=0;for(const d of RAIN){d.t+=dt;if(d.t>.16)continue;const i=d.y*W+d.x,L=LT[i];if(d.t<.06)RAD[i]+=L*1.1+.01;else{for(const [u,v] of [[1,0],[-1,0],[0,1],[0,-1]]){const xx=d.x+u,yy=d.y+v;if(xx>=0&&yy>=0&&xx<W&&yy<H)RAD[yy*W+xx]+=LT[yy*W+xx]*.5;}}RAIN[n++]=d;}RAIN.length=n;
+}
+function drawBoss(t){
+  const B=BOSS;if(!B.on)return;const r=B.r+6,sx=B.x-VX,sy=B.y-VY;
+  for(let y=Math.max(0,Math.floor(sy-r));y<=Math.min(H-1,Math.ceil(sy+r));y++)for(let x=Math.max(0,Math.floor(sx-r));x<=Math.min(W-1,Math.ceil(sx+r));x++){const m=bossMask(x+VX,y+VY);if(m<1)VOID[y*W+x]=Math.min(VOID[y*W+x],m);}
+  /* the eye: a slit that opens */
+  const e=B.eye>0?Math.min(1,B.eye*2):0,ew=Math.round(7*e),glow=B.hurt>0?2.2:1.4;
+  if(ew>0)for(let i=-ew;i<=ew;i++){const hh=Math.round(2.4*e*Math.sqrt(1-(i/(ew+1))**2));for(let j=-hh;j<=hh;j++)emit(sx+i,sy+j,(Math.abs(j)<1&&Math.abs(i)<2?2.2:.9)*glow*(B.dead?Math.max(0,1-B.dead):1));}
+  else for(let i=-5;i<=5;i++)emit(sx+i,sy,.18);
+}
+/* ---------- the whole view ---------- */
+function renderNight(t,dt){
+  /* the camera leads a little toward the lantern's beam */
+  const lead=12*P.beamK+4;CAM.tx=clamp(P.x-W/2+Math.cos(P.aim)*lead,0,WW-W);CAM.ty=clamp(P.y-H/2+Math.sin(P.aim)*lead*.7,0,WH-H);
+  CAM.x+=(CAM.tx-CAM.x)*Math.min(1,dt*5);CAM.y+=(CAM.ty-CAM.y)*Math.min(1,dt*5);
+  const sh=S.shake>0&&!reduce?S.shake*S.shake*2.2:0;VX=Math.round(CAM.x+(sh?rnd(-sh,sh):0));VY=Math.round(CAM.y+(sh?rnd(-sh,sh):0));
+  composeWorld(t);
+  drawLamps(t);drawPicks(t);drawPlayer();drawMoths(t);drawRain(t,dt);drawParts();
+  drawShades(t);drawSnuffers(t);drawBoss(t);drawFlies();
+  for(let i=0;i<N;i++){RAD[i]=RAD[i]*VOID[i]+EMB[i];}
+  if(S.mode==='dying'){const k=clamp(S.t/1.8,0,1);for(let i=0;i<N;i++)RAD[i]*=1-k*.92;}
+  quantize();
+}
+/* =====================================================================================
+   14. THE TITLE: the word LANTERN stands in raised iron letters on a cobbled floor, and a
+       lantern on a chain swings past them; the letters' shadows sweep across the stones
+   ===================================================================================== */
+const TT={t:0};
+function titleSetup(){
+  MAP=Array.from({length:12},()=>'.'.repeat(24));MW=24;MH=12;worldAlloc(W,H);CANOPY=new Uint8Array(WN);LAMPS.length=0;
+  for(let cy=0;cy<MH;cy++)for(let cx=0;cx<MW;cx++)dressGround(cx,cy,'road',5);
+  const sc=3,word='LANTERN',x0=Math.round((W-(word.length*6*sc-sc))/2),y0=20;TT.let=new Uint8Array(WN);
+  for(let k=0;k<word.length;k++){const g5=G5[word[k]];for(let r=0;r<7;r++)for(let c=0;c<5;c++)if((g5[r]>>(4-c))&1)
+    for(let j=0;j<sc;j++)for(let i=0;i<sc;i++){const x=x0+k*6*sc+c*sc+i,y=y0+r*sc+j,q=y*WW+x;OCC[q]=2;MAT[q]=M_WALL;TT.let[q]=1;}}
+  /* raised iron letters: a bevel that catches the light on the side it comes from */
+  for(let i=0;i<WN;i++)if(TT.let[i]){const up=!TT.let[i-WW],dn=!TT.let[i+WW],lf=!TT.let[i-1],rt=!TT.let[i+1];ALB[i]=up?250:dn?120:(lf||rt)?190:205;}
+  SH.length=0;MOTHS.length=0;SNUF.length=0;FLARES.length=0;PART.length=0;FF.length=0;PICKS.length=0;BOSS.on=false;GREAT.on=false;
+  ST=Object.assign({},NIGHTS[0],{fog:.3,rain:0,moon:1.4,amb:.01});TT.t=0;
+}
+const TSM=mkShadow(512);
+function renderTitle(t){
+  VX=0;VY=0;LB.fill(0);EMB.fill(0);VOID.fill(1);
+  /* a lantern carried slowly round the word: its shadows wheel across the cobbles */
+  const ang=t*.42-1.2,lx=96+Math.cos(ang)*86,ly=40+Math.sin(ang)*34,sw=0,R=120,I=1.35*(.95+.05*Math.sin(t*13));
+  castShadow(TSM,lx,ly,R,2,.5);addLight(lx,ly,R,I,{S:TSM,src:1.6,hot:1.3});
+  const fogK=ST.fog,moonK=ST.moon*.055;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=y*W+x,w=y*WW+x;
+    if(TT.let[w]){/* the face of a letter is above the floor: no shadow falls on it, only the fall-off of the flame */
+      const d=Math.hypot(x+.5-lx,y+.5-ly),f=Math.max(0,1-d*d/(R*R));RAD[i]=I*f*f*(1+1.3/(1+d*.2))*ALB[w]/255*.95+.05;LT[i]=RAD[i];continue;}
+    const L=LB[i];LT[i]=L;const fog=FOGT[((y+(t*2|0))&127)*FOGS+((x+(t*4|0))&127)]*fogK;RAD[i]=L*(ALB[w]/255+fog*.3)+MOON[w]*moonK/255;}
+  emit(lx,ly,2.6);emit(lx+1,ly,1);emit(lx,ly+1,.9);emit(lx-1,ly,.7);emit(lx,ly-1,.7);
+  for(let i=0;i<N;i++)RAD[i]+=EMB[i];quantize();
+}
+/* =====================================================================================
+   15. THE HUD AND THE SCREENS — straight into the nibbles
+   ===================================================================================== */
+function drawHUD(){
+  dimRect(0,0,W,7,.12);
+  const blink=(S.clock*4|0)&1,lowOil=P.oil<25;
+  txt3('OIL',1,1,lowOil&&blink?15:9);const bw=26,n=Math.round(bw*P.oil/OIL_MAX);for(let i=0;i<bw;i++){const v=i<n?(lowOil&&blink?15:i<n-1?11:14):2;dot(14+i,1,v);dot(14+i,2,v);dot(14+i,3,v);}
+  for(let k=0;k<3;k++){const on=k<P.flares;dot(44+k*4,1,on?13:2);dot(44+k*4,2,on?9:2);dot(44+k*4,3,on?9:2);}
+  for(let k=0;k<Math.min(5,P.lives);k++){dot(58+k*4,1,12);dot(58+k*4,2,15);dot(57+k*4,2,7);dot(59+k*4,2,7);dot(58+k*4,3,9);}
+  /* the lamps of the night: a little lamp each, lit or dark */
+  const nl=LAMPS.length,lx0=Math.round(W/2+6-nl*2.5);
+  for(let k=0;k<nl;k++){const L=LAMPS[k],x=lx0+k*5,on=L.lit,v=on?15:3;dot(x,1,v);dot(x+1,1,v);dot(x,2,on?12:3);dot(x+1,2,on?12:3);dot(x-1,1,on?5:2);dot(x+2,1,on?5:2);dot(x,3,on?6:4);dot(x+1,3,on?6:4);dot(x,4,4);dot(x+1,4,4);}
+  txt3(fmt(S.score),W-2,1,13,'r');
+  if(BOSS.on&&!BOSS.dead){const bw2=60,x0=Math.round(W/2-bw2/2),y0=H-5;dimRect(x0-4,y0-8,bw2+8,12,.15);txt3('THE LONG NIGHT',W/2,y0-7,10,'c');const k=BOSS.hp/BOSS.hp0;for(let i=0;i<bw2;i++){dot(x0+i,y0,i<k*bw2?13:2);dot(x0+i,y0+1,i<k*bw2?9:2);}}
+  /* where the nearest dark lamp lies, when it is off the panel */
+  let tl=null,bd=1e9;for(const L of LAMPS)if(!L.lit){const d=Math.hypot(L.x-P.x,L.y-P.y);if(d<bd){bd=d;tl=L;}}
+  if(tl&&!P.dead){const sx=tl.x-VX,sy=tl.y-VY;if(sx<2||sy<9||sx>W-3||sy>H-3){const a=Math.atan2(sy-H/2,sx-W/2),cx=W/2+Math.cos(a)*(W/2-5),cy=clamp(H/2+Math.sin(a)*(H/2-5),11,H-4);
+    if(((S.clock*3)|0)&1)for(let k=0;k<4;k++){const px=cx-Math.cos(a)*k,py=cy-Math.sin(a)*k,w=3-k;for(let j=-w;j<=w;j++)dot(px+Math.cos(a+Math.PI/2)*j*.6,py+Math.sin(a+Math.PI/2)*j*.6,k===0?15:10,1);}}}
+}
+function drawPops(){for(const p of S.pops){const k=p.t/1.1;txt3(p.txt,Math.round(p.x-VX),Math.round(p.y-VY-k*10),Math.round(13*(1-k*k)),'c',1);}}
+function drawCalls(){
+  let y=10;for(const c of S.calls){if(c.t>c.dur)continue;const reveal=Math.min(1,c.t/.18),s=c.txt,n=Math.ceil(s.length*reveal),from=Math.floor((s.length-n)/2);
+    const shown=s.split('').map((ch,i)=>i>=from&&i<from+n?ch:' ').join('');const v=c.t>c.dur-.35&&((c.t*16|0)&1)?6:15;otxt5(shown,W/2,y,v,1,'c');y+=10;}
+  if(S.big){const b=S.big;{const a=b.t<.25?b.t/.25:b.t>2.8?(3.2-b.t)/.4:1,sc=tw5(b.title,2)<=W-6?2:1,y=30;
+    dimRect(0,y-5,W,sc*7+20,.35);const v=Math.round(15*a);otxt5(b.title,W/2,y,v,sc,'c');if(b.sub)otxt3(b.sub,W/2,y+sc*7+5,Math.round(11*a),'c');}}
+}
+function panelBox(x,y,w,h){for(let j=0;j<h;j++)for(let i=0;i<w;i++)dot(x+i,y+j,(i===0||j===0||i===w-1||j===h-1)?6:0);}
+/* the classic DMD wipes and dissolves between screens */
+const SNAP=new Uint8Array(N);let SNAPT=-1;
+function snap(){SNAP.set(NB);SNAPT=0;}
+function dissolve(dt){if(SNAPT<0)return;SNAPT+=dt;const k=SNAPT/.45;if(k>=1){SNAPT=-1;return;}
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const th=(BAYER[((y&3)<<2)|(x&3)]+.5);if(th>k){const i=y*W+x;NB[i]=SNAP[i];}}}
+function sunrise(t){
+  /* a dithered dawn: a band of light climbs from the bottom edge and rays wheel out of the sun */
+  const hy=H-Math.min(H*.55,t*40),sx=W/2;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=y*W+x;let v=0;if(y>hy){v=4+(y-hy)/(H-hy+1)*9;}
+    else{const a=Math.atan2(y-hy-8,x-sx),r=Math.hypot(x-sx,y-hy-8);const ray=((a*9+t*.6)%1+1)%1<.5;v=ray?Math.max(0,7-r*.06):Math.max(0,3-r*.04);}
+    const lvl=Math.round(v+BAYER[((y&3)<<2)|(x&3)]);NB[i]=Math.max(NB[i]>>1,clamp(lvl,0,15));}
+  for(let x=0;x<W;x++)dot(x,Math.round(hy),15);
+}
+function drawTally(){
+  const T_=S.tally,w=150,x=Math.round(W/2-w/2),y=12,h=T_.rows.length*7+26;panelBox(x,y,w,h);
+  otxt5('DAWN',W/2,y+3,15,1,'c');
+  T_.rows.forEach((r,i)=>{if(i>=T_.shown)return;const yy=y+14+i*7;txt3(r[0],x+5,yy,9);txt3(r[1],x+w*.6,yy,13,'c');if(r[2])txt3('+'+fmt(r[2]),x+w-5,yy,15,'r');});
+  txt3('SCORE',x+5,y+h-8,11);txt3(fmt(S.score),x+w-5,y+h-8,15,'r');
+  if(T_.paid>=T_.pay&&T_.shown>=T_.rows.length&&((S.clock*2|0)&1))txt3(S.night<NIGHTS.length-1?(touchy?'TAP FOR THE NEXT NIGHT':'PRESS START: THE NEXT NIGHT'):(touchy?'TAP':'PRESS START'),W/2,H-6,12,'c');
+}
+function drawEntry(y){
+  const e=S.entry;if(!e)return;txt3('A NEW HIGH SCORE. YOUR INITIALS',W/2,y,10,'c');
+  for(let k=0;k<3;k++){const x=W/2-14+k*12,sel=k===e.i;txt5(ALPHA[e.ch[k]],x,y+9,sel&&((S.clock*4|0)&1)?15:sel?11:13);if(sel){dot(x,y+18,15);dot(x+4,y+18,15);for(let i=0;i<5;i++)dot(x+i,y+18,12);}}
+  txt3(touchy?'STICK CHANGES  BEAM SETS':'UP DOWN CHANGE  SPACE SETS',W/2,y+23,7,'c');
+}
+function drawTable(y0){
+  otxt5('HIGH SCORES',W/2,y0,15,1,'c');
+  S.hi.forEach((r,i)=>{const y=y0+12+i*9,v=i===0?15:11;txt5((i+1)+'',36,y,v);txt5(r[0],52,y,v);txt5(fmt(r[1]),W-36,y,v,1,'r');});
+}
+const RULES=[
+  ['THE SHADES WALK IN THE DARK','LIGHT FREEZES THEM','THE BEAM BURNS THEM'],
+  ['STAND BY A DARK LAMP TO LIGHT IT','LIT LAMPS FILL YOUR OIL','LIGHT THEM ALL TO CALL THE DAWN'],
+  ['MOTHS DRINK OIL. SNUFFERS KILL LAMPS','A FLARE BURNS ALL THAT IS NEAR','THE OIL RUNS OUT: THE DARK TAKES YOU']];
+function drawRules(t){
+  const pg=Math.min(2,Math.floor(t/3)),r=RULES[pg];otxt5('HOW TO KEEP THE LIGHT',W/2,10,15,1,'c');
+  r.forEach((l,i)=>txt3(l,W/2,32+i*12,i===0?14:11,'c'));
+  txt3((pg+1)+'/3',W/2,H-8,6,'c');
+}
+
+/* =====================================================================================
+   16. THE FRAME LOOP — a fixed 60 Hz simulation, one picture per display frame
+   ===================================================================================== */
+const UIP={};
+function edges(c){c.m=K('KeyM');const e={};for(const k of ['ok','back','pause','a','b','u','d','l','r','m']){e[k]=c[k]&&!UIP[k];UIP[k]=c[k];}if(e.m)toggleSound();return e;}
+const IDLE={x:0,y:0,a:false,b:false,ax:0,ay:0,aim:null};
+const ATT=[9,7,9.5,34];
+function tick(dt){
+  const c=readCtl(),e=edges(c),tap=PTR.pressed;S.t+=dt;S.clock+=dt;
+  S.shake=Math.max(0,S.shake-dt*2.2);S.flash=Math.max(0,S.flash-dt*2.2);
+  if((S.mode==='play'||S.mode==='intro')&&e.pause){setPause(!S.paused);return;}
+  if(S.paused){
+    if(e.u||e.d){S.pauseI^=1;SFX.move();}
+    const ti=tap?(PTR.y>H*.55-3&&PTR.y<H*.55+7?0:PTR.y>=H*.55+7&&PTR.y<H*.55+18?1:-1):-1;
+    if(e.ok||ti>=0){const i=ti>=0?ti:S.pauseI;if(i===0)setPause(false);else{setPause(false);if(EMBED)ARC.exit();APP_attract();}}
+    return;
+  }
+  const m=S.mode;
+  if(m==='attract'){
+    S.att.t+=dt;TT.t+=dt;
+    if(S.att.t>ATT[S.att.ph]){S.att.ph=(S.att.ph+1)%ATT.length;S.att.t=0;snap();if(S.att.ph===3){startDemo();return;}if(S.att.ph===0)titleSetup();}
+    if(e.ok||tap||c.start){APP_start();return;}
+    if(e.back&&EMBED)ARC.exit();
+  }
+  else if(m==='demo'){
+    const ap=autopilot();nightStep(dt,ap,true);if(ap.b)fireFlare();
+    if(e.ok||tap||c.start){APP_start();return;}
+    if(S.t>ATT[3]||P.dead||nightWon()){snap();APP_attract();}
+  }
+  else if(m==='intro'){
+    nightStep(dt,{x:0,y:0,a:false,b:false,ax:0,ay:0,aim:c.aim},false);
+    P.oil=Math.min(OIL_MAX,S.t/1.2*OIL_MAX);
+    if(S.t>4.8){S.mode='play';S.t=0;P.oil=OIL_MAX;}else if((e.ok||tap)&&S.t<3.8)S.t=3.8;
+  }
+  else if(m==='play'){
+    let ctl=c;if(e.b)fireFlare();
+    nightStep(dt,ctl,true);
+    if(nightWon()){S.wonT=(S.wonT||0)+dt;if(S.wonT>1.6){S.wonT=0;startDawn();}}
+  }
+  else if(m==='dying'){
+    nightStep(dt,IDLE,false);
+    if(S.t>3.8){if(P.lives>0)respawn();else gameOver();}
+  }
+  else if(m==='dawn'){
+    nightStep(dt,IDLE,false);const T_=S.tally;T_.t+=dt;
+    if(S.t>1.6){if(T_.shown<T_.rows.length){if(T_.t>.42){T_.t=0;T_.shown++;SFX.tick();}}
+      else if(T_.paid<T_.pay){const k=Math.min(T_.pay-T_.paid,Math.max(50,Math.round(T_.pay*dt*.9)));T_.paid+=k;addScore(k);SFX.tick();}}
+    if((e.ok||tap)&&S.t>1.6){if(T_.shown<T_.rows.length||T_.paid<T_.pay){addScore(T_.pay-T_.paid);T_.paid=T_.pay;T_.shown=T_.rows.length;}else nextNight();}
+    else if(S.t>16&&T_.paid>=T_.pay)nextNight();
+  }
+  else if(m==='over'||m==='ending'){
+    if(m==='ending')nightStep(dt,IDLE,false);
+    if(S.entry){const en=S.entry;en.t+=dt;
+      if(e.u){en.ch[en.i]=(en.ch[en.i]+1)%ALPHA.length;SFX.move();}if(e.d){en.ch[en.i]=(en.ch[en.i]+ALPHA.length-1)%ALPHA.length;SFX.move();}
+      if(e.l&&en.i>0){en.i--;SFX.move();}if(e.r&&en.i<2){en.i++;SFX.move();}
+      if(tap){en.ch[en.i]=(en.ch[en.i]+1)%ALPHA.length;SFX.move();}
+      if(e.ok||(e.a&&!tap)){if(en.i<2){en.i++;SFX.confirm();}else commitEntry();}
+      if(en.t>30)commitEntry();}
+    else if(S.t>2.5&&(e.ok||tap))APP_attract();
+    else if(EMBED&&S.t>2&&e.back)ARC.exit();
+    else if(S.t>(m==='ending'?45:25))APP_attract();
+  }
+}
+let ACC=0,LAST=0,RDT=0;
+const RT={ms:0};
+function render(dt){
+  const t0=performance.now(),m=S.mode;
+  if(m==='attract'){
+    const ph=S.att.ph,tt=S.att.t;
+    if(ph===0){renderTitle(TT.t);const a=clamp((tt-1.2)*1.5,0,1);if(a>0)otxt3('KEEP THE LIGHT',W/2,47,Math.round(13*a),'c');
+      if(tt>2&&((S.clock*2|0)&1))otxt3(touchy?'TAP TO PLAY':'PRESS START',W/2,74,15,'c');otxt3('HI '+fmt(S.hi[0][1]),3,H-6,9);otxt3('HYPERDOT ARCADE',W-3,H-6,9,'r');}
+    else if(ph===1){NB.fill(0);drawTable(8);}
+    else{NB.fill(0);drawRules(tt);}
+  }
+  else if(m==='demo'||m==='intro'||m==='play'||m==='dying'||m==='dawn'||m==='ending'){
+    renderNight(S.clock,dt);
+    if(m==='play'||m==='demo'||(m==='intro'&&S.t>3)||m==='dying'){drawPops();drawHUD();drawCalls();}
+    if(m==='demo'){otxt3('DEMO',3,H-7,9);if((S.clock*2|0)&1)otxt3(touchy?'TAP TO PLAY':'PRESS START',W/2,H-7,14,'c');}
+    if(m==='intro'){const a=clamp(S.t*2,0,1)*clamp((4.8-S.t)*2,0,1),v=Math.round(15*a);dimRect(0,18,W,56,.4);
+      otxt3('NIGHT '+(S.night+1),W/2,22,Math.round(10*a),'c');const sc=tw5(ST.name,2)<=W-8?2:1;otxt5(ST.name,W/2,30,v,sc,'c');
+      ST.hint.forEach((l,i)=>txt3(l,W/2,50+i*7,Math.round(11*a),'c'));if(S.t>2.2)otxt3('LIGHT '+LAMPS.length+' LAMPS',W/2,74,(S.clock*4|0)&1?v:Math.round(v*.6),'c');}
+    if(m==='dying'){
+      /* eyes in the dark, closing in */
+      const k=clamp((S.t-.6)/2.4,0,1);for(let n=0;n<9;n++){const a=n/9*TAU+n*.7,r=60-k*44+Math.sin(S.t*3+n)*3,x=W/2+Math.cos(a)*r*1.4,y=H/2+Math.sin(a)*r*.8;if(((S.t*3+n*.37)%2.1)>.15){dot(x-1,y,Math.round(9*k)+2,1);dot(x+1,y,Math.round(9*k)+2,1);}}
+      if(S.t>1.8){otxt5('THE DARK',W/2,30,15,2,'c');otxt5('TAKES YOU',W/2,48,15,1,'c');otxt3(P.lives>0?P.lives+(P.lives>1?' WICKS LEFT':' WICK LEFT'):'NO WICKS LEFT',W/2,62,11,'c');}}
+    if(m==='dawn'){sunrise(S.t);if(S.t>1.6)drawTally();}
+    if(m==='ending'){sunrise(Math.min(S.t,3));const a=clamp(S.t-1,0,1);if(S.t>1){otxt5('THE LONG NIGHT',W/2,14,Math.round(15*a),2,'c');otxt5('IS OVER',W/2,32,Math.round(15*a),1,'c');
+      otxt5(fmt(S.score),W/2,46,15,1,'c');otxt3(S.tickets+' TICKETS',W/2,56,12,'c');if(S.entry)drawEntry(64);else if(S.t>3&&((S.clock*2|0)&1))otxt3(touchy?'TAP':'PRESS START',W/2,H-7,12,'c');}}
+  }
+  else if(m==='over'){NB.fill(0);
+    for(let n=0;n<14;n++){const a=n*2.39996,r=30+((S.t*6+n*13)%50),x=W/2+Math.cos(a)*r*1.6,y=H/2+Math.sin(a)*r*.7;if((S.t*2+n)%3>.3){dot(x-1,y,5);dot(x+1,y,5);}}
+    otxt5('GAME OVER',W/2,8,15,2,'c');otxt5(fmt(S.score),W/2,28,15,1,'c');otxt3(S.tickets+' TICKETS',W/2,38,12,'c');
+    if(S.entry)drawEntry(50);else{txt3('HI '+fmt(S.hi[0][1])+'  '+S.hi[0][0],W/2,52,9,'c');if(S.t>2.5&&((S.clock*2|0)&1))otxt3(touchy?'TAP TO CONTINUE':'PRESS START',W/2,H-8,13,'c');}}
+  if(S.paused){dimRect(0,0,W,H,.25);otxt5('PAUSED',W/2,22,15,2,'c');
+    ['RESUME',EMBED?'EXIT':'QUIT TO TITLE'].forEach((t,i)=>{const y=Math.round(H*.55)+i*11,sel=i===S.pauseI;otxt5((sel?'> ':'  ')+t+(sel?' <':'  '),W/2,y,sel?15:7,1,'c');});}
+  if(S.flash>0&&!reduce){const f=Math.round(S.flash*9);for(let i=0;i<N;i++)if(NB[i]<f)NB[i]=f;}
+  dissolve(dt);
+  RT.ms+=(performance.now()-t0-RT.ms)*.05;
+}
+function frame(ts){
+  const ms=LAST?ts-LAST:16.7,dt=Math.min(.05,ms/1000);LAST=ts;
+  ACC+=dt;let n=0;while(ACC>=1/60&&n<3){tick(1/60);ACC-=1/60;n++;}if(n===3)ACC=0;
+  RDT+=dt;if(n>0){endInputFrame();render(Math.min(.1,RDT));RDT=0;}
+  PTIME+=dt;panelStep(dt);present();musicTick(S.paused);ambUpdate();
+  requestAnimationFrame(frame);
+}
+/* ---------- chrome + boot ---------- */
+function toggleSound(){AU.muted=!AU.muted;store.set('hd-mute',AU.muted?'1':'0');setVolume();$('snd').textContent=AU.muted?'Sound off':'Sound on';}
+$('snd').addEventListener('click',e=>{audioInit();toggleSound();e.currentTarget.blur();});
+$('res').addEventListener('click',e=>{GI=(GI+1)%GLASS.length;store.set('hd-lantern-glass',GI);$('resv').textContent=GLASS[GI].name;e.currentTarget.blur();});
+$('pauseBtn').addEventListener('click',e=>{audioInit();setPause(!S.paused);e.currentTarget.blur();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)setPause(true);});
+addEventListener('resize',resize);
+if(!gl||GLERR){$('err').style.display='grid';if(GLERR)$('err').textContent='LANTERN could not build its display shaders on this graphics card. '+GLERR.slice(0,300);}
+if(AU.muted)$('snd').textContent='Sound off';
+$('resv').textContent=GLASS[GI].name;
+if(gl&&!GLERR){resize();APP_attract();ARC.post('ready',{title:CAB.title,w:W,h:H,tickets:CAB.tickets});requestAnimationFrame(frame);}
+
+})();
+</script>
+</body>
+</html>

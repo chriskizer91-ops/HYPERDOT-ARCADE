@@ -1,0 +1,6 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Embed test</title>
+<style>html,body{margin:0;height:100%;background:#111}iframe{display:block;width:800px;height:300px;border:0;margin:20px}</style></head>
+<body><iframe id="f" src="../hoops.html?embed=1"></iframe>
+<script>window.__msgs=[];addEventListener('message',e=>{if(e.data&&e.data.src==='hyperdot')__msgs.push(Object.assign({at:Math.round(performance.now())},e.data));});
+window.cmd=c=>document.getElementById('f').contentWindow.postMessage({src:'hyperdot-arcade',cmd:c},'*');</script></body></html>
