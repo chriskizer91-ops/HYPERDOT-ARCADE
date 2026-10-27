@@ -25,11 +25,13 @@ sub("""  const to=W_.mode==='enter'?W_.active.cam():walkCam();
   CAM.fov=lerp(from.fov,to.fov,e);}""")
 sub("    if(W_.mode==='enter'){W_.mode='play';$('back').hidden=false;setControls(W_.active.controls,W_.active.labels);CH_.hidden=true;}",
     "    if(W_.mode==='enter'){if(W_.active.controls==='iframe'){CH_.hidden=true;openGame(W_.active);}else{W_.mode='play';$('back').hidden=false;setControls(W_.active.controls,W_.active.labels);CH_.hidden=true;}}")
+# the prompt's button says what the machine does (PLAY, or SIT IN for a cabinet whose game isn't here yet)
+sub("$('pName').firstChild.textContent=best.name;$('pSub').textContent=best.sub;pr.hidden=false;","$('pName').firstChild.textContent=best.name;$('pSub').textContent=best.sub;$('play').textContent=best.verb||'PLAY';pr.hidden=false;")
 # while a game is up, the room stops drawing and its machines stop ticking
 sub("  if(!window.__hdHold)step(dt);render();requestAnimationFrame(frame);","  if(!window.__hdHold)step(dt);if(W_.mode!=='game')render();requestAnimationFrame(frame);")
 sub("  for(const a of ATTR)if(a!==W_.active||W_.mode!=='play')a.idle&&a.idle(dt);","  if(W_.mode!=='game')for(const a of ATTR)if(a!==W_.active||W_.mode!=='play')a.idle&&a.idle(dt);\n  ghTick();")
 # the machines: the house's own two stay, everything else is placed by the floor plan
 i=s.index('/* ================= place machines ================= */');j=s.index('/* ================= INTRO PINBALL:')
-s=s[:i]+rd('m1_host.js')+'\n'+rd('m2_cabinets.js')+'\n'+rd('m3_tables.js')+'\n'+rd('m4_floor.js')+'\n'+rd('m5_prizes.js')+'\n\n'+s[j:]
+s=s[:i]+rd('m1_host.js')+'\n'+rd('m2_cabinets.js')+'\n'+rd('m2b_simpod.js')+'\n'+rd('m3_tables.js')+'\n'+rd('m4_floor.js')+'\n'+rd('m5_prizes.js')+'\n\n'+s[j:]
 out=os.path.join(ROOT,'index.html');open(out,'w',encoding='utf-8').write(s)
 print('index.html',len(s.encode()),'bytes')

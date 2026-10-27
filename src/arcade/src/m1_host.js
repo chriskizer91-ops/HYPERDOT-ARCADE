@@ -9,7 +9,7 @@ const GH={el:null,fr:null,a:null,ready:false,openT:0,holdT:0,lastTix:0};
   const css=document.createElement('style');
   css.textContent=`#gh{position:fixed;inset:0;z-index:20;background:#000;opacity:0;transition:opacity .45s;pointer-events:none}
 #gh.on{opacity:1;pointer-events:auto}
-#gh iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
+#gh iframe{position:absolute;inset:0;width:1px;min-width:100%;height:1px;min-height:100%;border:0;background:#000}
 #ghl{position:absolute;inset:0;display:grid;place-items:center;text-align:center;background:radial-gradient(60% 60% at 50% 45%,#1a0d2a,#050308);transition:opacity .5s;pointer-events:none}
 #ghl.gone{opacity:0}
 #ghl b{display:block;font:700 26px/1.1 var(--f);letter-spacing:.24em;color:#fff;text-shadow:0 0 14px var(--pink),0 0 30px rgba(255,63,164,.5)}
@@ -37,11 +37,26 @@ function openGame(a){
   $('ghn').textContent=G.title||a.name.toUpperCase();$('ghs').textContent=G.deluxe?'Loading the full game':'Powering up';$('ghl').classList.remove('gone');
   const f=document.createElement('iframe');f.allow='autoplay; fullscreen; gamepad';f.setAttribute('title',a.name);
   f.src=G.src+(G.src.includes('?')?'&':'?')+'embed=1';GH.fr=f;GH.el.insertBefore(f,GH.el.firstChild);
-  GH.el.classList.add('on');W_.mode='game';
+  GH.el.classList.add('on');W_.mode='game';clearTimeout(GH.sleepT);GH.sleepT=setTimeout(roomSleep,520);
   if(AU.out&&AU.ctx)AU.out.gain.setTargetAtTime(0,AU.ctx.currentTime,.15);
   f.addEventListener('load',()=>{try{const w=f.contentWindow;w.addEventListener('keydown',ghKey,true);w.addEventListener('keyup',ghKey,true);w.focus();}catch(e){}
     setTimeout(()=>{if(!GH.ready)ghReady();},G.deluxe?9000:5000);});
 }
+/* while a machine runs, the room goes to sleep: its sound is suspended, its canvas hidden and its big frame
+   buffers handed back, so a phone gives the game what it would give it opened on its own. Leaving rebuilds them. */
+const SLEEP={on:false};
+function roomSleep(){
+  if(SLEEP.on||W_.mode!=='game')return;SLEEP.on=true;
+  try{if(AU.ctx&&AU.ctx.state==='running')AU.ctx.suspend();}catch(e){}
+  for(const k in FB){const o=FB[k];if(o.t)gl.deleteTexture(o.t);if(o.f)gl.deleteFramebuffer(o.f);if(o.c)gl.deleteRenderbuffer(o.c);if(o.d)gl.deleteRenderbuffer(o.d);delete FB[k];}
+  cv.width=1;cv.height=1;cv.style.visibility='hidden';
+}
+function roomWake(){
+  if(!SLEEP.on)return;SLEEP.on=false;cv.style.visibility='';resize();
+  try{if(AU.ctx&&AU.ctx.state==='suspended')AU.ctx.resume();}catch(e){}
+}
+/* a turn of the phone while asleep waits until the room wakes */
+removeEventListener('resize',resize);addEventListener('resize',()=>{if(!SLEEP.on)resize();});
 function ghReady(){if(GH.ready)return;GH.ready=true;$('ghl').classList.add('gone');ghSync();try{GH.fr.contentWindow.focus();}catch(e){}}
 /* hold Esc (or a gamepad's Back) to leave any machine, whatever the game does with a single press */
 function ghKey(e){if(e.key!=='Escape')return;if(e.type==='keydown'){if(!e.repeat)GH.holdT=performance.now();}else GH.holdT=0;}
@@ -58,6 +73,7 @@ function closeGame(){
   GH.el.classList.remove('on');$('ghr').classList.remove('on');
   setTimeout(()=>{if(GH.fr){GH.fr.src='about:blank';GH.fr.remove();GH.fr=null;}},460);
   if(AU.out&&AU.ctx)AU.out.gain.setTargetAtTime(AU.muted?0:.6,AU.ctx.currentTime,.3);
+  clearTimeout(GH.sleepT);roomWake();
   W_.mode='play';W_.active=a;leaveAttr();cv.focus();
 }
 addEventListener('message',e=>{const m=e.data;if(!m||m.src!=='hyperdot'||!GH.fr||e.source!==GH.fr.contentWindow)return;
@@ -142,4 +158,4 @@ const GRAD={pink:['#ffffff','#ffe8f6','#ffb8e2','#ff7ac8','#ff2f9a','#d6237f','#
   red:['#ffffff','#ffe0e0','#ff9a9a','#ff5a5a','#ff2f3f','#c81e30','#8a1222'],violet:['#ffffff','#f1e6ff','#d8b8ff','#b47aff','#8f4bff','#6a2fd8','#4a1a9a'],
   amber:['#ffffff','#fff0d0','#ffd890','#ffb84a','#ff9a1e','#e07010','#a04a08']};
 
-window.__gh={GH,openGame,closeGame,ghCmd};
+window.__gh={GH,openGame,closeGame,ghCmd,SLEEP,roomSleep,roomWake,probe:()=>({fb:Object.keys(FB).length,cv:cv.width+"x"+cv.height,vis:cv.style.visibility,audio:AU.ctx?AU.ctx.state:"none"})};

@@ -292,7 +292,18 @@ function WhackTable(o){
 function Covered(o){
   const a={name:o.name||'Coming soon',sub:o.sub||'Under wraps',controls:'none',use:{x:1e9,z:1e9,face:0},idle(){},draw(){},drawScreens(){}};
   const T=chain(mT(o.x,0,o.z),mRY(o.ry||0)),seed=o.seed||1;
-  a.build=mb=>{mb.push();mb.m=mmul(mb.m,T);
+  if(o.kind==='racer')a.build=mb=>{mb.push();mb.m=mmul(mb.m,T);
+    /* a sit-down racer under its sheet: the tall screen hood at the front, the dip of the wheel, the seat back */
+    const Z=[-1.02,-.96,-.7,-.3,-.06,.12,.32,.56,.84,1.06,1.24,1.4,1.5],HZ=[1.1,1.98,2.03,2.0,1.86,1.3,1.06,.9,.78,1.22,1.2,.5,.16],M=30,rings=[];
+    Z.forEach((z,zi)=>{const hz=HZ[zi],R=[];for(let j=0;j<M;j++){const f=j/M*TAU,c=Math.cos(f),sn=Math.sin(f);
+      let x=.66*Math.sign(c)*Math.pow(Math.abs(c),.4),y=hz*(.5+.5*Math.sign(sn)*Math.pow(Math.abs(sn),.4));
+      const low=1-y/Math.max(.3,hz),d=(.004+.05*low*low)*Math.sin(z*11+f*5+seed)+(y<.1?.06:0);x+=Math.sign(x)*d;R.push([x,Math.max(0,y),z]);}rings.push(R);});
+    const c1=C_('#6a6378'),c2=C_('#575166');
+    loft(mb,rings,(m,i,j)=>Math.sin(m[2]*11+j/M*TAU*5+seed)>0?c1:c2,0);
+    capRing(mb,rings[0],[0,.55,-1.04],c2);capRing(mb,rings[rings.length-1],[0,.08,1.52],c2);
+    mb.pop();
+    const p0=xf(T,-.75,0,-1.1),p1=xf(T,.75,0,1.55);block(Math.min(p0[0],p1[0]),Math.max(p0[0],p1[0]),Math.min(p0[2],p1[2]),Math.max(p0[2],p1[2]));};
+  else a.build=mb=>{mb.push();mb.m=mmul(mb.m,T);
     /* the sheet follows the cabinet under it: the marquee's overhang, the screen set back, the control ledge */
     const M=36,YS=[2.06,2.03,1.96,1.86,1.78,1.66,1.4,1.16,1.08,1.0,.9,.7,.45,.22,.07,0],rings=[];
     const front=y=>y>1.84?.5:y>1.7?lerp(.33,.5,(y-1.7)/.14):y>1.12?.33:y>.98?.58:y>.86?lerp(.42,.58,(y-.86)/.12):.42;

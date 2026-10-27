@@ -23,9 +23,16 @@ Wheel({name:'Cyclone',sub:'The ticket wheel · one button',x:0,z:-11.35,ry:0,gam
 Tower({name:'Sky Stack',sub:'Stack the lamps to the prize',x:-2.5,z:-11.25,ry:0,game:G_('stack','SKY STACK'),res:[41,23]});
 WhackTable({name:'Whack Shack',sub:'Whack the critters',x:2.8,z:-10.95,ry:0,game:G_('whack','WHACK SHACK'),res:[256,144]});
 /* RACING, back right */
-Racer({name:'Redline',sub:'Grand Prix · sit-down',x:8.2,z:-10.25,ry:0,game:G_('redline','REDLINE'),res:[256,144],accent:'#ff2a4a',accent2:'#ffffff',neon:'#ff2a4a',mCols:GRAD.red,mTop:'#2a0408',mSub:'LED MATRIX GRAND PRIX',glow:[1,.3,.35],transT:1.4});
-Racer({name:'Shiftlight',sub:'Racing career · sit-down',x:10.6,z:-10.25,ry:0,game:G_('shift','SHIFTLIGHT'),res:[256,144],accent:'#ffd23f',accent2:'#1a1a1a',neon:'#ffd23f',body:'#14141a',mCols:GRAD.gold,mTop:'#2a2006',mSub:'HYPERDOT ARCADE',glow:[1,.8,.3],transT:1.4});
+Racer({name:'Redline',sub:'Grand Prix · sit-down',x:5.75,z:-10.25,ry:0,game:G_('redline','REDLINE'),res:[256,144],accent:'#ff2a4a',accent2:'#ffffff',neon:'#ff2a4a',mCols:GRAD.red,mTop:'#2a0408',mSub:'LED MATRIX GRAND PRIX',glow:[1,.3,.35],transT:1.4});
+Racer({name:'Shiftlight',sub:'Racing career · sit-down',x:8.2,z:-10.25,ry:0,game:G_('shift','SHIFTLIGHT'),res:[256,144],accent:'#ffd23f',accent2:'#1a1a1a',neon:'#ffd23f',body:'#14141a',mCols:GRAD.gold,mTop:'#2a2006',mSub:'HYPERDOT ARCADE',glow:[1,.8,.3],transT:1.4});
+Racer({name:'Shiftlight 2',sub:'The sequel · sit-down',x:10.6,z:-10.25,ry:0,game:G_('shift2','SHIFTLIGHT 2'),res:[256,144],accent:'#4fe3ff',accent2:'#ff3d5a',neon:'#4fe3ff',body:'#0e1018',mCols:GRAD.cyan,mTop:'#06142a',mSub:'HYPERDOT ARCADE',glow:[.35,.85,1],transT:1.4,marq:'SHIFTLIGHT 2'});
+/* the corner past the bike: the pit wall, a few stacks of tyres and a helmet left on one */
+{const mb=WORLD,tyre=(x,z,n,hat)=>{for(let k=0;k<n;k++){const y=k*.235;mb.cyl(x,y,z,.33,.225,18,hex('#121216'),0,.33,true,hex('#1c1c22'));mb.cyl(x,y+.1,z,.336,.025,18,k%2?hex('#4fe3ff'):hex('#ff4fa0'),.9,.336,false);}
+    if(hat){const y=n*.235+.13;mb.sphere(x,y,z,.15,hex('#ff4fa0'),.15,1);mb.box(x-.12,y+.01,z,.05,.07,.2,hex('#1a2a4a'),.35);}block(x-.36,x+.36,z-.36,z+.36);};
+  tyre(15.3,-11.35,4);tyre(14.58,-11.5,3);tyre(15.4,-10.62,2,true);}
 BikeRide({name:'Prisma',sub:'Hover-bike pursuit · ride-on',x:13.1,z:-10.1,ry:0,game:G_('prisma','PRISMA'),res:[320,180],transT:1.4});
+/* SHIFTLIGHT 3, down the right wall: the deluxe motion sim, still in the workshop (you can sit in it) */
+SimPod({name:'Shiftlight 3',sub:'Deluxe motion sim · coming soon',x:14.3,z:-5.7,ry:Math.PI,transT:2.2});
 /* PINBALL, right wall: Supermassive, and two machines still under wraps */
 Pinball({name:'Supermassive',sub:'Pinball',x:14.15,z:-1.4,ry:-RX,game:G_('supermassive','SUPERMASSIVE',{deluxe:true,src:'games/supermassive/index.html'}),
   backglass:'games/supermassive/img/backglass.jpg',playfield:'games/supermassive/img/playfield.jpg',sideArt:['games/supermassive/img/backglass2.jpg','games/supermassive/img/backglass3.jpg'],body:'#1c0a24',trim:'#ff4fb8',trim2:'#ffd23f',glow:[1,.4,.7],

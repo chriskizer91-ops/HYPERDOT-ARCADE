@@ -2,7 +2,7 @@
 
 A walkable low-poly 3D arcade. You start at a pinball machine that glitches, dive through it and fall through the ceiling. Then the lights come up on a floor of cabinets, and every one of them is a real game.
 
-`index.html` is the arcade itself. It's one file, about 260 KB. Every game is a separate HTML file under `games/`. A game loads only when you sit down at its cabinet, and its memory is freed when you leave.
+`index.html` is the arcade itself. It's one file, about 290 KB. Every game is a separate HTML file under `games/`. A game loads only when you sit down at its cabinet, and its memory is freed when you leave.
 
 ## Run it
 
@@ -32,7 +32,8 @@ Opening `index.html` straight from disk (`file://`) doesn't work, because cabine
 | Video (left wall) | Star Vanguard (built into the arcade), Hyperdot, Voltfist, Ironhowl, Voidlance, Lantern, Molten |
 | Deluxe (back left) | **Skies of Aethermoor**, a little airship. You climb into its gondola, and the full game runs with an optional LED-glass overlay (G toggles it, Shift+G changes the dot size). Next to it is **Ultramassive**, the deluxe pinball with its own side art, topper and DMD. |
 | Back wall | Cyclone (ticket wheel), Sky Stack, Whack Shack |
-| Racing (back right) | Redline and Shiftlight sit-down cabinets, Prisma ride-on hover bike |
+| Racing (back right) | Redline, Shiftlight and **Shiftlight 2** sit-down cabinets, the Prisma ride-on hover bike, and a pit wall of tyres in the corner |
+| Shiftlight 3 (right wall, before the pinball) | The deluxe motion sim: a closed racing capsule on a six-legged motion base, under a hanging marquee with a set of start lights. Every few seconds the lights count down and go out, and the capsule launches, squats and leans through the gears. Its game is still being built. Walk up and the gullwing door lifts; **Sit in** puts you in the seat, where three wraparound screens run a teaser. A screen on the wall shows the same view to the floor. |
 | Pinball (right wall) | Supermassive, **The Hollow Crown** (a lantern-lit dungeon crawler, in a gilt cabinet with a crown on top), and one machine under a dust sheet (coming soon) |
 | Redemption (middle) | Plush Panic (claw), Coin Cascade (pusher), Ring Roller, Bucket Blitz, Strike Night, Air Hockey (built in) |
 | Prizes (front left) | The prize counter and **Your Shelf** |
@@ -60,15 +61,20 @@ Arcade → game (`{src:'hyperdot-arcade', cmd}`): `start`, `pause`, `resume`, `a
 
 Each game stores its own data under `hd-<id>-…` keys.
 
+While a game is open, the arcade goes to sleep. It stops drawing, hands its frame buffers back to the GPU and suspends its own sound, so the game gets the phone or laptop to itself, as if it had been opened on its own. Leaving the game wakes the room up again.
+
 The big games (Ultramassive, Supermassive and Aethermoor) weren't written to this contract. Each one carries a small shim and bridge instead. The shim mutes and pauses the game from outside. The bridge reads its state and posts the messages above.
 
 ## Adding or updating a game
 
-1. Drop the file into `games/`. Shiftlight is `games/shift.html`, so a new build of it just replaces that file.
-2. Give it a cabinet in the floor plan (`src/m4_floor.js` in the build sources): `Upright`, `Racer`, `BikeRide`, `Pinball`, and so on, with `game:G_('<id>','<TITLE>')`.
-3. Optionally, record an attract loop: `attract/<id>.webp` (a sprite sheet) and `attract/<id>.json` (`{w,h,n,cols,fps}`). Until a loop exists, the cabinet's screen scrolls the game's name.
+1. Drop the file into `games/`. Shiftlight is `games/shift.html` and Shiftlight 2 is `games/shift2.html`, so a new build of either just replaces its file.
+2. Give it a cabinet in the floor plan (`src/arcade/src/m4_floor.js`): `Upright`, `Racer`, `BikeRide`, `Pinball`, `FlightPod`, `SimPod` and so on, with `game:G_('<id>','<TITLE>')`. Then run `python3 build.py` in `src/arcade/`, which writes `index.html`.
+3. The game has to speak the cabinet contract above: at least `ready` when it can take input and `over` when a run ends. A game built on `src/kit/hyperdot_cabinet_starter.html` already does. A game that wasn't gets the small shim and bridge from `src/kit/`, the way the big games do.
+4. Optionally, record an attract loop: `attract/<id>.webp` (a sprite sheet) and `attract/<id>.json` (`{w,h,n,cols,fps}`). Until a loop exists, the cabinet's screen scrolls the game's name.
 
 The machine under the dust sheet on the right wall is a placeholder for the next game.
+
+**Shiftlight 3** already has its cabinet. When the game is finished, it goes in as `games/shift3.html`. Then its line in the floor plan gets `game:G_('shift3','SHIFTLIGHT 3',{deluxe:true})`. With a game attached, the sim pod's prompt says Play instead of Sit in, the climb into the seat opens the game, and the marquee says NOW RACING.
 
 ## Engines
 
@@ -93,11 +99,11 @@ games/*.html          one file per game
 games/ultramassive/   index.html + img/ + music/ (split out of the single-file build)
 games/supermassive/   the same
 attract/              recorded attract loops for the cabinet screens
-src/arcade/           the arcade's build: intro_v2.html plus src/m0..m5 (room, host, cabinets, tables, floor plan, prizes)
+src/arcade/           the arcade's build: intro_v2.html plus src/m0..m5 (room, host, cabinets, the sim pod, tables, floor plan, prizes)
                       python3 build.py writes index.html at the root
 src/kit/              the Engine Lab kit (hdlab.js), the cabinet shim and bridge used by the big games,
                       Aethermoor's LED-glass layer, the cabinet starter and the quick-play brief
 src/<game>/           the modular sources for the games that are built from modules (python3 build.py in each)
 ```
 
-Shiftlight, Ultramassive, Supermassive, Skies of Aethermoor and The Hollow Crown were built separately and are included as finished builds, with no module sources here. Aethermoor and the two pinball games also carry the arcade shim and bridge, and the pinball games are split into a page plus their images and music.
+Shiftlight, Shiftlight 2, Ultramassive, Supermassive, Skies of Aethermoor and The Hollow Crown were built separately and are included as finished builds, with no module sources here. Aethermoor and the two pinball games also carry the arcade shim and bridge, and the pinball games are split into a page plus their images and music.
