@@ -184,7 +184,7 @@
   };
   // the burst: a crack, dots everywhere, the table's lights going with it
   function burst(){S.boom(1.6);SX.crackle(24);SX.whoosh();SX.bits(8);
-    for(let i=0;i<(INTRO==='d'?150:260);i++){const d=norm([rnd(-1,1),rnd(-1,1),rnd(-1,1)]),v=rnd(.4,2.6);spawnDeb(add(HOLE.w,scl(d,.1)),scl(d,v),PAL[(Math.random()*5)|0],rnd(.6,1.6),rnd(.006,.014),.2);}}
+    for(let i=0;i<(INTRO==='d'||INTRO==='e'?150:260);i++){const d=norm([rnd(-1,1),rnd(-1,1),rnd(-1,1)]),v=rnd(.4,2.6);spawnDeb(add(HOLE.w,scl(d,.1)),scl(d,v),PAL[(Math.random()*5)|0],rnd(.6,1.6),rnd(.006,.014),.2);}}
 
   /* ===== D · UPLOAD (the opening of C, the tunnel of B) =====
      The boot list ends on a quiet hint. When the game glitches the camera stays on the whole table and the score
@@ -245,7 +245,7 @@
       if(s>=.55)S.once('unsil',()=>SX.unsilence());
       const n=s>=.6&&s<1.6?Math.min(12,Math.floor((s-.6)/.055)):-1;if(n!==S.typed&&n>0){S.typed=n;SX.typeTick();}
       const seg=s>=1.75&&s<3.6?Math.floor(sstep(1.75,3.45,s)*24):-1;if(seg!==S.seg&&seg>=0){S.seg=seg;tone(420+seg*38,now(),.035,'square',.02);}
-      if(s>=1.8)S.once('portal',()=>{SX.swell(2.6,70,2600,.14,.7);SX.drone(3);SX.crackle(10);});
+      if(s>=1.8)S.once('portal',()=>{const k=S.slow||1;SX.swell(2.6*k,70,2600,.14,.7);SX.drone(3*k);SX.crackle(10);});
       if(s>=3.6)S.once('ready',()=>{SX.jingle();SX.suck(.9);});
       api.pow=s<2.6?1:(Math.random()<.22*sstep(2.6,4,s)?.25:1);api.dim=.15;api.dmdPow=1;
       const pr=s<1.8?0:.025+.17*easeO(sstep(1.8,3.1,s))+.16*sstep(3.6,4.25,s);S.pr=pr;
@@ -312,3 +312,10 @@
           for(let i=-14;i<=12;i++){const y=Math.round(e[1]/.25)*.25+i*.25,lit=((i+Math.floor(t*16))%6+6)%6===0;pt(x,y,z,c%2?.18:1,c%2?.9:.18,c%2?1:.6,lit?1.5:.22,.03);}}}},
     end(){const S=this;if(S.mosaic)gl.deleteTexture(S.mosaic);S.mosaic=null;S.parts=null;S.walls=null;S.helix=null;endShared();}
   };
+
+  /* ===== E · UPLOAD, PACED =====
+     D as it is, with more time to read: the power-up runs 50% slower, and the glitch, the 404 and the upload 25%
+     slower, up to PLAYER 1 READY. From the pull through the portal on, it's D's timing exactly. */
+  VARS.e=Object.assign(Object.create(VARS.d),{name:'Upload, paced',slow:1.25,bootRate:1/1.5,
+    init(){VARS.d.init.call(this);for(const k in G)G[k]*=this.slow;this.at=G.freeze;},
+    rate(s){return s<3.6?1/this.slow:1;}});

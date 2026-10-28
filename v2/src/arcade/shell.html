@@ -1763,7 +1763,7 @@ const AP={light:1,neon:1,amb:1,scr:1};             // arcade power: the intro br
 const IGN={mode:0,c:[0,0,0],r:0,dark:1};          // the power-on wave: 1 = emissive lit inside radius r, dark outside
 const PIN=(()=>{
   const P=PinPhys(),B=P.ball,R=P.R,HW=P.HW,PL=P.L;
-  const TH=6.5*Math.PI/180,TBX=0,TBY=INTRO==='d'?52:30,TBZ=5.78;   // D hangs the table higher, for a longer way down
+  const TH=6.5*Math.PI/180,TBX=0,TBY=INTRO==='d'||INTRO==='e'?52:30,TBZ=5.78;   // D and E hang the table higher, for a longer way down
   const PFM=chain(mT(TBX,TBY,TBZ),mRX(TH));
   const Wp=(u,v,h)=>xf(PFM,u,h,-v);                // playfield (u across, v up-table, h height) → world
   /* small vector kit */
@@ -2418,7 +2418,7 @@ const PIN=(()=>{
   }
   function power(){
     if(api.stage!=='off')return;
-    setStage('boot');api.bootSpeed=1;hideHint();SX.relay(1.2);humOn();loadTunnelArt();
+    setStage('boot');api.bootSpeed=VAR&&VAR.bootRate||1;hideHint();SX.relay(1.2);humOn();loadTunnelArt();
   }
   function updateBoot(dt){
     const bt=api.st;
@@ -2759,7 +2759,8 @@ const PIN=(()=>{
     if(api.fadeHold){if(FADE<=.001){api.fadeHold=false;api.fastFade=true;W_.camYaw=0;finish();const w=walkCam();CAM.eye=w.eye;CAM.tgt=w.tgt;CAM.fov=w.fov;}return;}
     pollPad();audioNodes();imTick();
     const st=api.stage;
-    api.st+=st==='boot'?dt*api.bootSpeed:dt;
+    const sr=st==='suck'&&VAR.rate?VAR.rate(api.st):1;      // a test version may run its own stage slower
+    api.st+=st==='boot'?dt*api.bootSpeed:dt*sr;
     if(st==='off')updateOff(dt);
     else if(st==='boot')updateBoot(dt);
     else if(st==='ready'||st==='play')updateGame(dt);
@@ -2769,7 +2770,7 @@ const PIN=(()=>{
     else if(st==='descend')updateDescend(dt);
     else if(st==='land')updateLand(dt);
     else if(st==='pull')updatePull(dt);
-    else if(st==='suck'||st==='drift')VAR.update(dt,st);
+    else if(st==='suck'||st==='drift')VAR.update(dt*sr,st);
     if(!api.active)return;
     if(st==='off'||st==='boot'||st==='ready'||st==='play'||st==='glitch')HZ.dens=.5;else if(st==='suck')HZ.dens=VAR&&VAR.hazeSuck&&VAR.hazeOn!==false?VAR.hazeSuck:0;else if(st==='dive'||st==='fall'||st==='drift')HZ.dens=0;
     if(api.hintT>0){api.hintT-=dt;if(api.hintT<=0)hideHint();}
