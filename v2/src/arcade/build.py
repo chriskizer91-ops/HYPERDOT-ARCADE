@@ -1,5 +1,5 @@
 """Hyperdot Arcade V2: shell.html (the engine, the room's renderer and the pinball intro) with the modules
-in src/ dropped in at its markers. Writes v2/index.html, and the intro test pages v2/intro-a.html, -b, -c.
+in src/ dropped in at its markers. Writes v2/index.html, and the intro test pages v2/intro-a.html to -d.
 
 shell.html started as V1's intro with V1's build patches already applied, so V2 edits it directly.
 The games themselves are shared with V1 and live one folder up (../games, ../attract); only the
@@ -9,7 +9,7 @@ The intro test pages are the same arcade with a different way into it (src/intro
 links to them: v2/index.html keeps the intro that's live until one of them is picked.
 
     python3 build.py --demo DIR   also writes a stand-alone demo of the intros to DIR (the chooser as index.html,
-                                  intro-a/b/c.html and live.html), looking for the attract loops and the pinball
+                                  intro-a to -d.html and live.html), looking for the attract loops and the pinball
                                   art beside it rather than one folder up, with the machines' games switched off."""
 import os,sys
 D=os.path.dirname(os.path.abspath(__file__));V2=os.path.dirname(os.path.dirname(D))
@@ -30,11 +30,11 @@ def build(intro,out,root='../',demo=False,outdir=None):
     open(os.path.join(outdir or V2,out),'w',encoding='utf-8').write(s)
     print(os.path.join(outdir or 'v2',out),len(s.encode()),'bytes')
 build('live','index.html')
-for v in 'abc':build(v,'intro-'+v+'.html')
+for v in 'abcd':build(v,'intro-'+v+'.html')
 if '--demo' in sys.argv:
     dd=sys.argv[sys.argv.index('--demo')+1];os.makedirs(dd,exist_ok=True)
     build('live','live.html','',True,dd)
-    for v in 'abc':build(v,'intro-'+v+'.html','',True,dd)
+    for v in 'abcd':build(v,'intro-'+v+'.html','',True,dd)
     # the demo's front page is written for the artifact host, which wraps it in its own document
     c=open(os.path.join(D,'demo_index.html'),encoding='utf-8').read()
     open(os.path.join(dd,'index.html'),'w',encoding='utf-8').write(c);print(os.path.join(dd,'index.html'))

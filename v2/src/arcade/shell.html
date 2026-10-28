@@ -1763,7 +1763,7 @@ const AP={light:1,neon:1,amb:1,scr:1};             // arcade power: the intro br
 const IGN={mode:0,c:[0,0,0],r:0,dark:1};          // the power-on wave: 1 = emissive lit inside radius r, dark outside
 const PIN=(()=>{
   const P=PinPhys(),B=P.ball,R=P.R,HW=P.HW,PL=P.L;
-  const TH=6.5*Math.PI/180,TBX=0,TBY=30,TBZ=5.78;
+  const TH=6.5*Math.PI/180,TBX=0,TBY=INTRO==='d'?52:30,TBZ=5.78;   // D hangs the table higher, for a longer way down
   const PFM=chain(mT(TBX,TBY,TBZ),mRX(TH));
   const Wp=(u,v,h)=>xf(PFM,u,h,-v);                // playfield (u across, v up-table, h height) → world
   /* small vector kit */
@@ -1942,6 +1942,7 @@ const PIN=(()=>{
     const g=dmd.g,t=api.t,st=api.stage,gt=api.st;
     if(st==='glitch'&&gt>=G.freeze&&gt<G.type)return;      // frozen: the panel holds its last frame
     g.fillStyle='#000';g.fillRect(0,0,128,32);
+    if(VAR&&VAR.dmd&&VAR.dmd(g,st,gt,t)){dmd.upload();return;}
     if(st==='off'){if(Math.floor(t*1.1)%2===0){g.fillStyle='#4a4a4a';g.fillRect(63,15,2,2);}}
     else if(st==='boot'&&gt<2.05){
       if(gt<.3&&Math.floor(t*8)%2===0){g.fillStyle='#fff';g.fillRect(2,1,3,5);}
@@ -2225,7 +2226,7 @@ const PIN=(()=>{
       const y=F.y0-F.D*(.14+.118*k);
       // read the camera's roll when it is 2 m above the layer, so the words face you as you arrive
       let lo=0,hi=1;for(let i=0;i<30;i++){const m=(lo+hi)/2;if(fallY(m)>y+2)lo=m;else hi=m;}
-      const a=F.roll*easeIO(lo),upv=[-Math.sin(a),0,-Math.cos(a)],rt=[Math.cos(a),0,-Math.sin(a)],c=pathXZ(y);
+      const a=F.a0+F.roll*easeIO(lo),upv=[-Math.sin(a),0,-Math.cos(a)],rt=[Math.cos(a),0,-Math.sin(a)],c=pathXZ(y);
       const pts=g.px.map(([cx,cy])=>{const ox=(cx-g.w/2)*p,oy=(g.h/2-cy)*p;return {b:[c[0]+rt[0]*ox+upv[0]*oy,y+rnd(-.02,.02),c[1]+rt[2]*ox+upv[2]*oy],ph:Math.random()*TAU,j:rnd(-.5,.5)};});
       LAY.push({y,pts,col,p,note:notes[k],passed:false,cx:c[0],cz:c[1]});
     });
@@ -2519,7 +2520,8 @@ const PIN=(()=>{
     }
     // camera: a slow dolly toward the ball, held through the freeze, creeping on toward the hole after
     const bw=Wp(B.u,B.v,B.h);api.camT=mix3(api.camT,bw,Math.min(1,dt*2.5));
-    if(VAR&&gt<G.sink||!VAR&&gt<G.type){
+    if(VAR&&VAR.glitchCam)VAR.glitchCam(gt,dt);
+    else if(VAR&&gt<G.sink||!VAR&&gt<G.type){
       const k=.36*easeIO(clamp(gt/G.freeze,0,1)),g0=api.g0;
       rig.eye=mix3(g0.eye,api.camT,k*.5);rig.fwd=nl(g0.fwd,norm(sub(api.camT,rig.eye)),Math.min(1,k*1.6));rig.up=upFor(rig.fwd);rig.fov=lerp(g0.fov,g0.fov-6,k/.36);
     }else if(!VAR&&gt<G.sink+.3){
@@ -2632,7 +2634,7 @@ const PIN=(()=>{
   function startFall(o={}){
     setStage('fall');api.tableOn=o.table??true;
     const v0=o.v0??2*2.0/(TL.dive-1.25);
-    F={y0:rig.eye[1],x0:rig.eye[0],z0:rig.eye[2],T:o.T||TL.fall,v0,v1:2.4,roll:reduce?0:(o.roll??TAU),panels:o.panels!==false};F.D=F.y0-ROOM.h;F.a=F.v0*F.T/F.D;F.b=F.v1*F.T/F.D;
+    F={y0:rig.eye[1],x0:rig.eye[0],z0:rig.eye[2],T:o.T||TL.fall,v0,v1:2.4,roll:reduce?0:(o.roll??TAU),a0:o.roll0||0,panels:o.panels!==false};F.D=F.y0-ROOM.h;F.a=F.v0*F.T/F.D;F.b=F.v1*F.T/F.D;
     buildLayers(o.layers);if(F.panels)buildPanels();else PANELS.length=0;api.fb={p:add(rig.eye,[0,-1.2,0]),v:[0,0,0],free:false,vis:1};api.dyn=[BALL_L];
     IGN.mode=1;IGN.r=-1;IGN.dark=.012;IGN.c=[CH_.x,0,CH_.z];AP.amb=.03;AP.light=1;AP.neon=1;AP.scr=1;for(const L of LIGHTS.concat(BEAMS))L.pw=0;
     SX.pad([53,57,60,65],2.6,.02);SX.drone(5);
@@ -2640,7 +2642,7 @@ const PIN=(()=>{
   function updateFall(dt){
     const u=Math.min(1,api.st/F.T),y=fallY(u);api.vel=F.D*hermD(u,F.a,F.b)/F.T;
     const xz=pathXZ(y);rig.eye=[xz[0],y,xz[1]];
-    const a=F.roll*easeIO(u);rig.fwd=DOWN;rig.up=[-Math.sin(a),0,-Math.cos(a)];rig.fov=clamp(72+(api.vel-5)*.9,70,80);
+    const a=F.a0+F.roll*easeIO(u);rig.fwd=DOWN;rig.up=[-Math.sin(a),0,-Math.cos(a)];rig.fov=clamp(72+(api.vel-5)*.9,70,80);
     api.post.rad=reduce?.08:clamp(.1+.03*api.vel,0,.36);api.post.dot=api.dotT>0?api.post.dot:0;
     windSet(api.vel);if(F.panels&&TART.length!==PANELS.lastN){buildPanels();PANELS.lastN=TART.length;}if(VAR&&VAR.fall)VAR.fall(dt,u);
     if(rig.eye[1]<TBY-3)api.tableOn=false;
@@ -2769,7 +2771,7 @@ const PIN=(()=>{
     else if(st==='pull')updatePull(dt);
     else if(st==='suck'||st==='drift')VAR.update(dt,st);
     if(!api.active)return;
-    if(st==='off'||st==='boot'||st==='ready'||st==='play'||st==='glitch')HZ.dens=.5;else if(st==='dive'||st==='fall'||st==='suck'||st==='drift')HZ.dens=0;
+    if(st==='off'||st==='boot'||st==='ready'||st==='play'||st==='glitch')HZ.dens=.5;else if(st==='suck')HZ.dens=VAR&&VAR.hazeSuck||0;else if(st==='dive'||st==='fall'||st==='drift')HZ.dens=0;
     if(api.hintT>0){api.hintT-=dt;if(api.hintT<=0)hideHint();}
     const bt=BAR_ON[api.stage]?1:0;setBars(api.bars+(bt-api.bars)*Math.min(1,dt*(bt?1.6:2.4)));
     if(api.dotT>0){api.dotT-=dt;if(api.dotT<=0)api.post.dot=0;}
@@ -2784,6 +2786,7 @@ const PIN=(()=>{
   const VARS={};
   /*@@INTROS@@*/
   const VAR=VARS[INTRO]||null;
+  if(VAR&&VAR.init)VAR.init();
   build();
   B.h=R;
   Object.assign(api,{update,draw,drawScreens,drawPts,setCarve,key,ptr,clearInput,skip,P,HOLE,

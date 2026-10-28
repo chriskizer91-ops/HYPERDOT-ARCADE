@@ -185,3 +185,128 @@
   // the burst: a crack, dots everywhere, the table's lights going with it
   function burst(){S.boom(1.6);SX.crackle(24);SX.whoosh();SX.bits(8);
     for(let i=0;i<260;i++){const d=norm([rnd(-1,1),rnd(-1,1),rnd(-1,1)]),v=rnd(.4,2.6);spawnDeb(add(HOLE.w,scl(d,.1)),scl(d,v),PAL[(Math.random()*5)|0],rnd(.6,1.6),rnd(.006,.014),.2);}}
+
+  /* ===== D · UPLOAD (the opening of C, the tunnel of B) =====
+     The boot list ends on a quiet hint. When the game glitches the camera stays on the whole table and the score
+     display throws ERROR 404. Everything freezes; the display types INITIALIZING, then UPLOADING PLAYER 1 with a bar
+     filling, while a portal opens in the middle of the playfield, on the logo: the art spirals into it, the ball rolls
+     in, the machine starts to shake. PLAYER 1 READY, and you're pulled through. The machine bursts and you fall in slow
+     motion among its giant parts; they drop away as the walls round you light up, screen by screen, with the arcade's
+     games (and once, all together, PLAYER 1). Then the camera swings down, the screens wind into a spiral and the
+     spiral takes you, faster and faster, down to the arcade. */
+  VARS.d={name:'Upload',at:G.freeze,hazeSuck:.45,T:{suck:4.4,parts:3.0,shaft:7.2,spiral:4.4},W:0,
+    init(){BOOT[4]='PLAYER UPLOAD ... STANDBY';ERRS.splice(0,ERRS.length,'ERROR 404','404','NOT FOUND','ERROR 404');},
+    once(k,f){const S=this;if(!S.fired[k]){S.fired[k]=1;f();}},
+    glitchCam(gt){const g0=api.g0,c=Wp(P.UC*.3,PL*.47,0),k=.1*easeIO(clamp(gt/G.freeze,0,1));
+      rig.eye=mix3(g0.eye,c,k);rig.fwd=nl(g0.fwd,norm(sub(c,rig.eye)),k*2);rig.up=upFor(rig.fwd);rig.fov=g0.fov;},
+    start(){const S=this;setStage('suck');S.fired={};S.e0=rig.eye.slice();S.f0=rig.fwd.slice();S.fov0=rig.fov;
+      // the portal: in the middle of the playfield, on the logo; everything that drains now drains into it
+      HOLE.u=P.UC*.3;HOLE.v=PL*.47;HOLE.w=Wp(HOLE.u,HOLE.v,0);S.pc=HOLE.w;S.ax=[S.pc[0],S.pc[2]];S.ball0=[B.u,B.v];
+      S.e1=UPT;S.e2=norm(cross(NRM,UPT));S.dmdC=xf(BBM,0,.115,.007);S.broke=0;S.grow=0;S.W=0;S.typed=-1;S.seg=-1;
+      S.PL_={p:add(S.pc,scl(NRM,.06)),range:.9,col:[1,.4,.95],k:0,pin:true,hz:.8};
+      S.L=[{p:[0,0,0],range:8,col:[1,.35,.8],k:0,pin:true,hz:.3},{p:[0,0,0],range:8,col:[.3,.85,1],k:0,pin:true,hz:.3},{p:[0,0,0],range:7,col:[1,.85,.65],k:0,pin:true,hz:.2}];
+      Object.assign(api.post,{gl:0,dot:0});api.tear.a=.02;api.jit=0;api.ghost=0;api.flick=0;api.dmdPow=1;},
+    warp(){const S=this;return S.W>0?[[S.pc[0],S.pc[1],S.pc[2],S.W],[NRM[0],NRM[1],NRM[2],.1+.25*S.W]]:null;},
+    // the score display, from the 404 on
+    dmd(g,st,gt,t){const S=this;
+      if(st==='glitch'&&gt>=G.stut){const fl=Math.random()<.2;txt5(g,fl?'404':'ERROR 404',64,9,'#fff',2,'c');corruptRows(g,.22);
+        if(Math.random()<.35){g.fillStyle='#fff';g.fillRect((Math.random()*120)|0,(Math.random()*28)|0,(Math.random()*24)|0,2);}return true;}
+      if(st!=='suck')return false;
+      const s=api.st;
+      if(s<.6){txt5(g,'ERROR 404',64,9,'#fff',2,'c');if(Math.random()<.25)corruptRows(g,.15);return true;}
+      if(s<1.6){const W='INITIALIZING',n=Math.min(W.length,Math.floor((s-.6)/.055)),x0=Math.round(64-tw5(W,1)/2);txt5(g,W.slice(0,n),x0,12,'#fff',1);
+        g.fillStyle='#fff';if(n<W.length)g.fillRect(x0+n*6,12,5,7);else for(let i=0;i<(Math.floor(t*5)%4);i++)g.fillRect(x0+tw5(W,1)+3+i*4,17,2,2);return true;}
+      if(s<3.6){const p=sstep(1.75,3.45,s),seg=Math.floor(p*24);txt5(g,'UPLOADING PLAYER 1',64,2,'#fff',1,'c');
+        g.strokeStyle='#bbb';g.lineWidth=1;g.strokeRect(3.5,12.5,121,9);g.fillStyle='#fff';for(let i=0;i<seg;i++)g.fillRect(5+i*5,14,4,6);
+        txt3(g,Math.round(p*100)+'%',64,25,'#ddd','c');if(s>2.6&&Math.random()<.25*sstep(2.6,3.6,s))corruptRows(g,.12);return true;}
+      const on=s<3.75||Math.floor(t*9)%2===0;txt5(g,'PLAYER 1',64,1,on?'#fff':'#777',2,'c');txt5(g,'READY',64,18,'#fff',2,'c');return true;},
+    update(dt,st){const S=this,t=api.st;
+      if(st==='suck')return S.suck(dt,t);
+      // the fall: the parts, the shaft of screens, the spiral
+      const T1=S.T.parts,T2=T1+S.T.shaft,T3=T2+S.T.spiral;
+      const v=t<T1?.85+.12*t:t<T2?lerp(1.2,1.45,(t-T1)/S.T.shaft):1.45+6.2*Math.pow(sstep(T2+.4,T3,t),1.5);
+      S.y-=v*dt;api.vel=v;windSet(v*.5);rig.eye=[S.ax[0],S.y,S.ax[1]];
+      S.hd+=(.3+1.1*sstep(T2+.8,T3,t))*dt;
+      const pitch=t<T1?lerp(-1.25,-.32,easeIO(sstep(0,1.6,t)))+.06*Math.sin(t*.9):t<T2?lerp(-.32,-.1,sstep(T1,T1+1,t))+.04*Math.sin(t*1.1):lerp(-.1,-1.5707,easeIO(sstep(T2,T2+2.0,t)));
+      const look=dirHP(S.hd,pitch),k0=sstep(0,1.1,t);rig.fwd=nl(S.f1,look,k0);
+      const hu=dirHP(S.hd,0),ku=sstep(T2+.7,T2+2.0,t);rig.up=ortho(norm(nl(nl(S.u1,[0,1,0],k0),hu,ku)),rig.fwd);
+      rig.fov=t<T2?lerp(84,62,sstep(0,1.2,t)):lerp(62,74,sstep(T2+1,T3,t));
+      for(const q of S.parts||[])q.ang+=q.w*dt;
+      S.lights(t<T1+1.5?1.7:1.7*(1-sstep(T1+1.5,T1+3,t)));
+      tunA=t<T2?lerp(.15,.06,sstep(0,T1,t)):lerp(.06,.95,sstep(T2+.5,T3-.6,t));
+      api.post.rad=(reduce?.05:.35)*(t<1?1-t:0)+(reduce?.08:.32)*sstep(T2+1.5,T3,t);LOOK.fringe=lerp(.1,.016,sstep(0,1.2,t))+.03*sstep(T2+2,T3,t);
+      // the beats
+      if(t>=T1-.5)S.once('walls',()=>{SX.pad([52,59,64,67],S.T.shaft,.02);SX.drone(S.T.shaft);});
+      if(t>=T1+3.1)S.once('p1',()=>{SX.jingle();S.flash=api.t;});
+      if(t>=T2-.3)S.once('helix',()=>{S.buildHelix();SX.riser(S.T.spiral+.4,.12);SX.pad([48,55,60,64,67],S.T.spiral,.022);});
+      if(t>=T3){const u=rig.up;plunge({T:2.0,v0:v,roll:Math.PI*.9,roll0:Math.atan2(-u[0],-u[2]),layers:3});api.dyn=[BALL_L];}},
+    suck(dt,s){const S=this;
+      // the frozen screen speaks, then a bar fills while the portal opens and takes the art, the ball and then you
+      if(s>=.55)S.once('unsil',()=>SX.unsilence());
+      const n=s>=.6&&s<1.6?Math.min(12,Math.floor((s-.6)/.055)):-1;if(n!==S.typed&&n>0){S.typed=n;SX.typeTick();}
+      const seg=s>=1.75&&s<3.6?Math.floor(sstep(1.75,3.45,s)*24):-1;if(seg!==S.seg&&seg>=0){S.seg=seg;tone(420+seg*38,now(),.035,'square',.02);}
+      if(s>=1.8)S.once('portal',()=>{SX.swell(2.6,70,2600,.14,.7);SX.drone(3);SX.crackle(10);});
+      if(s>=3.6)S.once('ready',()=>{SX.jingle();SX.suck(.9);});
+      api.pow=s<2.6?1:(Math.random()<.22*sstep(2.6,4,s)?.25:1);api.dim=.15;api.dmdPow=1;
+      const pr=s<1.8?0:.025+.17*easeO(sstep(1.8,3.1,s))+.16*sstep(3.6,4.25,s);S.pr=pr;
+      api.carve=pr>0&&!S.broke?{c:add(S.pc,scl(NRM,-.004)),r:pr,y0:-1e9,k:100,col:[1,.55,.95]}:null;
+      S.W=.3*sstep(1.9,3.4,s)+.45*sstep(3.6,4.2,s);
+      if(s>=2.0){if(!S.vx){S.vx=1;api.vxT=0;buildVortex();}api.vxT+=dt*.55;updateVortex(dt*.55);api.drainR=pr*1.5+api.vxT*.12;}
+      const bk=sstep(2.2,3.1,s);B.u=lerp(S.ball0[0],HOLE.u,bk*bk);B.v=lerp(S.ball0[1],HOLE.v,bk*bk);B.h=R-.09*sstep(2.85,3.25,s);
+      const cv=sstep(2.4,4.2,s);api.jit=.0025*cv;for(const f of P.flip)f.held=cv>.15&&Math.random()<.5*cv;for(const b of P.bumpers)if(Math.random()<.15*cv){b.flash=1;b.ring=1;}physTick(dt);
+      S.PL_.k=1.6*sstep(1.8,2.6,s)*(1+.25*Math.sin(s*14));api.dyn=S.broke?S.L:[S.PL_];
+      tunA=.04;
+      if(s<3.6){// push in on the portal, the score display kept at the top of the frame
+        const e=easeIO(sstep(1.3,3.6,s)),E=add(add(S.pc,scl(NRM,.95)),scl(UPT,-.8)),tg=mix3(S.pc,S.dmdC,.33);
+        rig.eye=mix3(S.e0,E,e);rig.fwd=nl(S.f0,norm(sub(tg,rig.eye)),e);rig.up=upFor(rig.fwd);rig.fov=lerp(S.fov0,50,e);
+        shake(.0045*cv*cv);S.E36=rig.eye.slice();S.F36=rig.fwd.slice();S.U36=rig.up.slice();}
+      else{// the pull: in and through
+        const e=Math.pow(sstep(3.6,4.35,s),2.3);rig.eye=mix3(S.E36,sub(S.pc,scl(NRM,.45)),e);
+        rig.fwd=nl(S.F36,scl(NRM,-1),sstep(3.6,4.15,s));rig.up=ortho(nl(S.U36,UPT,sstep(3.6,4.15,s)),rig.fwd);rig.fov=lerp(50,86,e);shake(.006*(1-e));
+        api.post.rad=(reduce?.1:.5)*e;LOOK.fringe=lerp(.012,.09,e);}
+      if(!S.broke&&s>=4.15){S.broke=1;VARS.c.buildParts.call(S);api.tableOn=false;api.carve=null;S.W=0;api.exp=1.2;S.cam0=rig.eye.slice();burst();}
+      if(S.broke){S.grow=sstep(4.15,S.T.suck+.6,s);S.lights(1.7);}
+      if(s>=S.T.suck){setStage('drift');S.y=rig.eye[1];S.f1=rig.fwd.slice();S.u1=rig.up.slice();S.hd=Math.atan2(-UPT[0],-UPT[2])+.5;S.buildWalls();
+        SX.pad([48,55,60,63],S.T.parts+1,.022);}},
+    lights(k){const S=this,e=rig.eye,t=api.t;S.L[0].p=[e[0]+Math.cos(t*.6)*1.8,e[1]+1,e[2]+Math.sin(t*.6)*1.8];S.L[1].p=[e[0]-Math.cos(t*.6)*1.8,e[1]-.6,e[2]-Math.sin(t*.6)*1.8];
+      S.L[2].p=[e[0],e[1]-1.6,e[2]];for(const L of S.L)L.k=k;api.dyn=S.L;},
+    // the parts: in the table, then ballooned round you, then (as the shaft begins) falling away below
+    pose(q){const S=this,st=api.stage,e=rig.eye,u=st==='suck'?S.grow:1,t=st==='drift'?api.st:0,f=Math.max(0,t-S.T.parts+.7);
+      const tw=xf(PFM,q.c[0],q.c[1],q.c[2]),dr=add(add([S.ax[0],e[1],S.ax[1]],q.base),[q.vr[0]*t,q.vr[1]*t-f*f*(1+.3*q.base[1]),q.vr[2]*t]);
+      const p=mix3(tw,dr,u),sc=lerp(1,q.sc,u*u);
+      return chain(mT(...p),mRX(TH*(1-u)),mRot(q.ax,q.ang*u),mS(sc,sc,sc),q.local?m4():mT(-q.c[0],-q.c[1],-q.c[2]));},
+    draw(){const S=this,st=api.stage;if(!S.parts||!(st==='suck'&&S.broke||st==='drift'&&api.st<S.T.parts+4))return;
+      gl.uniform4f(P_LIT.u.uCarve,0,0,0,0);
+      for(const q of S.parts){const M=S.pose(q);if(M[13]<rig.eye[1]-9)continue;
+        for(const pp of q.parts)drawLit(pp.m,pp.y?mmul(M,mT(0,pp.y,0)):M,{emi:pp.emi??0,tint:pp.tint,mode:pp.mode,tex:pp.tex});}
+      setCarve();},
+    // the shaft: four walls of screens, three across, a row every 92 cm; each lights as it comes into view
+    buildWalls(){const S=this;S.walls=[];let k=0;const D=2.15;
+      for(let wall=0;wall<4;wall++){const a=wall*Math.PI/2,n=[-Math.sin(a),0,-Math.cos(a)],c=[Math.sin(a)*D,0,Math.cos(a)*D],rt=[Math.cos(a),0,-Math.sin(a)];
+        for(let row=0;row<15;row++)for(let col=-1;col<=1;col++)S.walls.push({k:k++,row,col,p:[S.ax[0]+c[0]+rt[0]*col*1.42,S.y-1.9-row*.92,S.ax[1]+c[2]+rt[2]*col*1.42],n,ph:Math.random()*10,on:-1,dl:Math.random()*.25});}
+      // PLAYER 1, across three screens by three
+      const cv=mkCanvas(192,108),g=cv.getContext('2d');g.fillStyle='#07040e';g.fillRect(0,0,192,108);
+      for(let y=2;y<108;y+=4)for(let x=2;x<192;x+=4){g.fillStyle='rgba(255,63,164,'+(.08+.06*Math.sin(x*.09+y*.07))+')';g.fillRect(x,y,1.5,1.5);}
+      gradText(g,'PLAYER 1',96,30,3,GRAD.pink);gradText(g,'READY',96,64,2,GRAD.cyan);g.strokeStyle='#35e8ff';g.lineWidth=2;g.strokeRect(4,4,184,100);
+      S.mosaic=texFrom(cv,true);},
+    buildHelix(){const S=this;S.helix=[];for(let k=0;k<16;k++){const y=S.y-2.4-k*1.15,a=S.hd+.9+k*.78;S.helix.push({k:k+3,y,a,ph:Math.random()*10});}},
+    screens(){const S=this;if(api.stage!=='drift')return;const e=rig.eye,t=api.st,T1=S.T.parts,mz=t>=T1+3.1&&t<T1+4.5;
+      if(S.walls&&t>T1-.6&&t<T1+S.T.shaft+1.2)for(const q of S.walls){const dy=q.p[1]-e[1];if(dy<-2.9||dy>2.4)continue;
+        if(q.on<0&&dy>-2.6&&t>T1-.6+q.dl){q.on=t;if(q.k%5===0)S.click();}if(q.on<0)continue;
+        const a=t-q.on,pw=(a<.06?1.8:a<.12?.2:a<.2?1.3:1)*sstep(2.9,1.9,Math.abs(dy))*1.1,M=faceM(q.p,q.n,1.3,1.3*.5625);
+        if(mz){const r=q.row%3;drawSheet(S.mosaic,[(q.col+1)/3,1-(r+1)/3,1/3,1/3],[64,36],M,pw*(t-T1-3.1<.08?2:1));}else drawGame(q.k,M,pw,q.ph);}
+      if(S.helix)for(const q of S.helix){const dy=e[1]-q.y;if(dy<-1.5||dy>9)continue;
+        const a=q.a+.35*t,p=[S.ax[0]+Math.sin(a)*2.05,q.y,S.ax[1]+Math.cos(a)*2.05],n=norm(sub([S.ax[0],q.y+1.7,S.ax[1]],p)),w=1.45;
+        drawGame(q.k,faceM(p,n,w,w*aspectOf(q.k)),1.2*sstep(9,6,dy)*(1-sstep(-.4,-1.5,dy)),q.ph);}},
+    click(){const t=now();noise(t,.02,.035,5000,2400,'bandpass');tone(1900,t,.015,'square',.012);},
+    points(pt,t){const S=this,st=api.stage;
+      if(st==='suck'&&S.pr>0&&!S.broke){const s=api.st,pr=S.pr;
+        // the portal: a rim of dots turning both ways, a swirl draining inward, sparks lifting off
+        for(let i=0;i<72;i++){const a=i/72*TAU+(i%2?1:-1)*s*1.6,c=i%2?PAL[1]:PAL[0],p=add(S.pc,add(scl(S.e1,Math.cos(a)*pr),add(scl(S.e2,Math.sin(a)*pr),scl(NRM,.004))));pt(p[0],p[1],p[2],c[0],c[1],c[2],1.7,.0075);}
+        for(let i=0;i<110;i++){const f=(i*.6180339+s*.7)%1,r=pr*(1-f)*.95,a=i*2.399+s*2.2+f*5,c=PAL[(i%3)+2],p=add(S.pc,add(scl(S.e1,Math.cos(a)*r),add(scl(S.e2,Math.sin(a)*r),scl(NRM,-.03*f))));pt(p[0],p[1],p[2],c[0],c[1],c[2],1.1*(1-f*.5),.005);}
+        for(let i=0;i<40;i++){const f=(i*.37+s*.5)%1,a=i*1.7,r=pr*(.6+.5*((i*.29)%1)),p=add(S.pc,add(scl(S.e1,Math.cos(a)*r),add(scl(S.e2,Math.sin(a)*r),scl(NRM,f*.45))));pt(p[0],p[1],p[2],1,.6,.95,1.2*(1-f),.004);}}
+      if(st==='drift'&&S.walls){const T1=S.T.parts,e=rig.eye;if(t>0&&api.st>T1-.6&&api.st<T1+S.T.shaft+1)
+        for(let c=0;c<4;c++){const a=c*Math.PI/2+Math.PI/4,x=S.ax[0]+Math.sin(a)*3.05,z=S.ax[1]+Math.cos(a)*3.05;
+          for(let i=-14;i<=12;i++){const y=Math.round(e[1]/.25)*.25+i*.25,lit=((i+Math.floor(t*16))%6+6)%6===0;pt(x,y,z,c%2?.18:1,c%2?.9:.18,c%2?1:.6,lit?1.5:.22,.03);}}}},
+    end(){const S=this;if(S.mosaic)gl.deleteTexture(S.mosaic);S.mosaic=null;S.parts=null;S.walls=null;S.helix=null;endShared();}
+  };

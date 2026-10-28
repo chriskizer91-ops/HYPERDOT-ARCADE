@@ -24,6 +24,9 @@ ol.slots{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;g
 .slot:hover,.slot:focus-visible{border-color:var(--pink);outline:none;transform:translateY(-1px)}
 .slot:focus-visible{box-shadow:0 0 0 2px var(--pink)}
 .key{width:56px;height:56px;border-radius:8px;display:grid;place-items:center;font:700 26px/1 var(--display);color:var(--bg);background:var(--cyan);box-shadow:0 0 18px rgba(53,232,255,.35)}
+.slot.new{border-color:var(--pink);box-shadow:0 0 0 1px var(--pink),0 0 28px rgba(255,63,164,.18)}
+.slot.new .key{background:var(--pink);box-shadow:0 0 18px rgba(255,63,164,.4)}
+.sub{font:700 12px/1 var(--display);letter-spacing:.24em;text-transform:uppercase;color:var(--ink-2);margin-top:10px}
 .slot.live .key{background:var(--edge);color:var(--ink-2);box-shadow:none;font-size:12px;letter-spacing:.12em}
 .text{min-width:0;display:flex;flex-direction:column;gap:4px}
 .name{font:700 19px/1.15 var(--display);letter-spacing:.1em;text-transform:uppercase}
@@ -38,9 +41,11 @@ ol.slots{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;g
   <header>
     <span class="eyebrow">Hyperdot Arcade V2</span>
     <h1>Intro tests</h1>
-    <p class="lead">Three new ways into the arcade, plus the one that's live now. In every version the camera stays on the table through the glitch, and the arcade's games pass slowly enough to watch. The landing and the reveal are the same in all of them.</p>
+    <p class="lead">D is the new one: the opening of C and the tunnel of B, with more happening on the way down. A, B and C are the first tries, and the live intro is there to compare. The landing and the reveal are the same in all of them.</p>
   </header>
   <ol class="slots">
+    <li><a class="slot new" href="intro-d.html"><span class="key">D</span><span class="text"><span class="name">Upload</span><span class="what">The score display throws ERROR 404, then types INITIALIZING and UPLOADING PLAYER 1 while a portal opens in the middle of the playfield. PLAYER 1 READY: you're pulled through, the machine bursts, and you fall among its giant parts into a shaft of the arcade's games, which winds into a spiral that drops you into the arcade.</span><span class="watch"><b>Watch</b>the portal opening under the 404, and the swing from the walls down into the spiral</span></span></a></li>
+    <li class="sub">Earlier tries</li>
     <li><a class="slot" href="intro-a.html"><span class="key">A</span><span class="text"><span class="name">Whirlpool</span><span class="what">The table twists into a whirlpool round the frozen ball and spins you down the drain, then you sink slowly through a ring of the games.</span><span class="watch"><b>Watch</b>the moment the table starts to turn</span></span></a></li>
     <li><a class="slot" href="intro-b.html"><span class="key">B</span><span class="text"><span class="name">Into the display</span><span class="what">You're pulled face first into the playfield. It breaks into bigger and bigger LED dots until you pass between them and sink down a shaft lined with video walls of the games.</span><span class="watch"><b>Watch</b>the dots resolving into the walls of screens</span></span></a></li>
     <li><a class="slot" href="intro-c.html"><span class="key">C</span><span class="text"><span class="name">Swallowed</span><span class="what">The machine convulses and bursts. You shrink with it and fall in slow motion among giant bumpers, flippers and slabs of the playfield, the games floating round you, until gravity snaps back.</span><span class="watch"><b>Watch</b>the burst, and the slow fall among the parts</span></span></a></li>
