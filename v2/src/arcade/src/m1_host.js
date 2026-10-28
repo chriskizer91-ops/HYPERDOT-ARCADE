@@ -35,7 +35,7 @@ const GH={el:null,fr:null,a:null,ready:false,openT:0,holdT:0,lastTix:0};
 function openGame(a){
   const G=a.game;GH.a=a;GH.ready=false;GH.gotReady=0;GH.score=null;GH.openT=performance.now();GH.holdT=0;
   $('ghn').textContent=G.title||a.name.toUpperCase();$('ghs').textContent=G.deluxe?'Loading the full game':'Powering up';$('ghl').classList.remove('gone');
-  const f=document.createElement('iframe');f.allow='autoplay; fullscreen; gamepad';f.setAttribute('title',a.name);
+  const f=document.createElement('iframe');f.allow='autoplay; fullscreen; gamepad; accelerometer; gyroscope';f.setAttribute('title',a.name);
   f.src=G.src+(G.src.includes('?')?'&':'?')+'embed=1';GH.fr=f;GH.el.insertBefore(f,GH.el.firstChild);
   GH.el.classList.add('on');W_.mode='game';clearTimeout(GH.sleepT);GH.sleepT=setTimeout(roomSleep,520);
   if(AU.out&&AU.ctx)AU.out.gain.setTargetAtTime(0,AU.ctx.currentTime,.15);
