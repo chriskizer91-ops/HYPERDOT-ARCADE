@@ -1,0 +1,53 @@
+<title>Hyperdot Intro Tests</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Barlow:wght@400;500&display=swap">
+<style>
+/* Layout: one column of four machine "slots", like coin slots on a cabinet; the arcade's single dark look by design. */
+:root{
+  --bg:#07060b; --panel:#110d1b; --edge:#2a2238; --ink:#f4ecff; --ink-2:#a99ec0;
+  --pink:#ff3fa4; --cyan:#35e8ff; --amber:#ffd23f;
+  --display:"Chakra Petch","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+html,body{background:var(--bg);color:var(--ink)}
+body{font-family:var(--body);font-size:16px;line-height:1.5;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+main{max-width:680px;margin:0 auto;padding-block:32px 40px;display:flex;flex-direction:column;gap:22px}
+header{display:flex;flex-direction:column;gap:8px}
+.eyebrow{font:700 12px/1 var(--display);letter-spacing:.24em;text-transform:uppercase;color:var(--cyan)}
+h1{margin:0;font:700 clamp(30px,7vw,46px)/1.02 var(--display);letter-spacing:.04em;text-transform:uppercase;text-wrap:balance;text-shadow:0 0 22px rgba(255,63,164,.45)}
+.lead{margin:0;color:var(--ink-2);max-width:62ch}
+ol.slots{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.slot{display:grid;grid-template-columns:56px 1fr;gap:14px;align-items:start;padding:16px;background:var(--panel);border:1px solid var(--edge);border-radius:10px;text-decoration:none;color:inherit;transition:border-color .2s,transform .2s}
+.slot:hover,.slot:focus-visible{border-color:var(--pink);outline:none;transform:translateY(-1px)}
+.slot:focus-visible{box-shadow:0 0 0 2px var(--pink)}
+.key{width:56px;height:56px;border-radius:8px;display:grid;place-items:center;font:700 26px/1 var(--display);color:var(--bg);background:var(--cyan);box-shadow:0 0 18px rgba(53,232,255,.35)}
+.slot.live .key{background:var(--edge);color:var(--ink-2);box-shadow:none;font-size:12px;letter-spacing:.12em}
+.text{min-width:0;display:flex;flex-direction:column;gap:4px}
+.name{font:700 19px/1.15 var(--display);letter-spacing:.1em;text-transform:uppercase}
+.what{color:var(--ink-2)}
+.watch{font-size:14px;color:var(--ink)}
+.watch b{font:700 11px/1 var(--display);letter-spacing:.18em;text-transform:uppercase;color:var(--amber);margin-right:6px}
+.how{display:flex;flex-direction:column;gap:6px;padding:14px 16px;border-left:2px solid var(--pink);color:var(--ink-2);font-size:15px}
+.how p{margin:0}
+@media (prefers-reduced-motion:reduce){.slot{transition:none}.slot:hover{transform:none}}
+</style>
+<main>
+  <header>
+    <span class="eyebrow">Hyperdot Arcade V2</span>
+    <h1>Intro tests</h1>
+    <p class="lead">Three new ways into the arcade, plus the one that's live now. In every version the camera stays on the table through the glitch, and the arcade's games pass slowly enough to watch. The landing and the reveal are the same in all of them.</p>
+  </header>
+  <ol class="slots">
+    <li><a class="slot" href="intro-a.html"><span class="key">A</span><span class="text"><span class="name">Whirlpool</span><span class="what">The table twists into a whirlpool round the frozen ball and spins you down the drain, then you sink slowly through a ring of the games.</span><span class="watch"><b>Watch</b>the moment the table starts to turn</span></span></a></li>
+    <li><a class="slot" href="intro-b.html"><span class="key">B</span><span class="text"><span class="name">Into the display</span><span class="what">You're pulled face first into the playfield. It breaks into bigger and bigger LED dots until you pass between them and sink down a shaft lined with video walls of the games.</span><span class="watch"><b>Watch</b>the dots resolving into the walls of screens</span></span></a></li>
+    <li><a class="slot" href="intro-c.html"><span class="key">C</span><span class="text"><span class="name">Swallowed</span><span class="what">The machine convulses and bursts. You shrink with it and fall in slow motion among giant bumpers, flippers and slabs of the playfield, the games floating round you, until gravity snaps back.</span><span class="watch"><b>Watch</b>the burst, and the slow fall among the parts</span></span></a></li>
+    <li><a class="slot live" href="live.html"><span class="key">LIVE</span><span class="text"><span class="name">The current intro</span><span class="what">What the V2 arcade plays now, for comparison.</span></span></a></li>
+  </ol>
+  <div class="how">
+    <p>Power the machine on, launch the ball and hit a few bumpers; the glitch starts after a handful of hits. Turn your sound on first.</p>
+    <p>Each page is the whole arcade, so you can walk around after the landing. The machines don't open their games here. "All intros" at the top brings you back to this list.</p>
+  </div>
+</main>

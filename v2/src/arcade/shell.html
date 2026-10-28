@@ -102,6 +102,8 @@ const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
 const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:v}catch(e){return d}},set(k,v){try{localStorage.setItem(k,String(v))}catch(e){}}};
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const INTRO=/*@@INTRO@@*/'live';   // which intro this page plays: 'live' (v2/index.html) or a test version (v2/intro-*.html)
+const ROOT=/*@@ROOT@@*/'../';     // where the shared games and attract loops are: one folder up from v2/
+const DEMO=/*@@DEMO@@*/false;     // a stand-alone demo of the intros: the machines don't open their games
 const touchy=matchMedia('(hover: none)').matches;
 const lin=c=>Math.pow(c/255,2.2);
 const hex=(h,k=1)=>{const n=parseInt(h.slice(1),16);return [lin(n>>16&255)*k,lin(n>>8&255)*k,lin(n&255)*k];};
@@ -1050,6 +1052,7 @@ function setControls(sch,labels){
 }
 function startAttr(a){
   if(W_.mode!=='walk')return;
+  if(DEMO&&a.controls==='iframe'){toast((a.game&&a.game.title||a.name.toUpperCase())+'<br><small style="font-size:12px;color:#f4ecff">Intro demo · the games play in the arcade</small>');return;}
   S.coin();W_.mode='enter';W_.active=a;W_.trans=0;
   W_.camFrom={eye:CAM.eye.slice(),tgt:CAM.tgt.slice(),fov:CAM.fov};
   $('prompt').hidden=true;$('hint').textContent='';
@@ -1153,6 +1156,8 @@ $('back').addEventListener('click',()=>leaveAttr());
 function toggleSound(){AU.muted=!AU.muted;store.set('arcade2-mute',AU.muted?'1':'0');if(AU.out)AU.out.gain.value=AU.muted?0:.6;$('snd').textContent=AU.muted?'Sound off':'Sound on';}
 $('snd').addEventListener('click',()=>{audioInit();toggleSound();});
 if(AU.muted)$('snd').textContent='Sound off';
+/* the intro demo: a way back to the list of intros */
+if(DEMO){const b=document.createElement('a');b.className='pill';b.href='index.html';b.textContent='All intros';b.style.textDecoration='none';$('snd').parentNode.insertBefore(b,$('snd'));}
 $('tixN').textContent=fmt(W_.tickets);
 addEventListener('resize',resize);
 
@@ -2563,9 +2568,9 @@ const PIN=(()=>{
   const TART=[],PANELS=[];
   function loadTunnelArt(){
     const ids=Q.n==='high'?['redline','molten','claw','prisma','whack','lantern']:['redline','molten','claw','lantern'];
-    for(const id of ids)fetch('../attract/'+id+'.json').then(r=>r.ok?r.json():null).then(m=>{if(!m)return;const im=new Image();
+    for(const id of ids)fetch(ROOT+'attract/'+id+'.json').then(r=>r.ok?r.json():null).then(m=>{if(!m)return;const im=new Image();
       im.onload=()=>{if(!api.active)return;const c=mkCanvas(Math.max(1,im.naturalWidth>>1),Math.max(1,im.naturalHeight>>1));c.getContext('2d').drawImage(im,0,0,c.width,c.height);
-        TART.push({id,m,tex:texFrom(c,true),W:im.naturalWidth,H:im.naturalHeight});};im.src='../attract/'+id+'.webp';}).catch(()=>{});
+        TART.push({id,m,tex:texFrom(c,true),W:im.naturalWidth,H:im.naturalHeight});};im.src=ROOT+'attract/'+id+'.webp';}).catch(()=>{});
   }
   function buildPanels(){
     PANELS.length=0;if(!TART.length)return;

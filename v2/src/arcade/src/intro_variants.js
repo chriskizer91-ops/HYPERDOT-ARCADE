@@ -84,7 +84,7 @@
         // the table stays lit, then you hit its surface
         api.pow=1;api.dim=.15;api.dmdPow=1;
         const e=Math.pow(sstep(0,S.T.suck,t),2.4),P1=add(HOLE.w,scl(NRM,.035));
-        rig.eye=mix3(S.e0,P1,e);rig.fwd=nl(S.f0,scl(NRM,-1),sstep(0,1.3,t));rig.up=ortho(nl(S.u0,UPT,sstep(0,1.3,t)),rig.fwd);rig.fov=lerp(S.fov0,58,sstep(0,1.5,t));
+        rig.eye=mix3(S.e0,P1,e);rig.fwd=nl(nl(S.f0,norm(sub(HOLE.w,rig.eye)),sstep(0,.5,t)),scl(NRM,-1),sstep(1.2,2.2,t));rig.up=ortho(nl(S.u0,UPT,sstep(.6,1.8,t)),rig.fwd);rig.fov=lerp(S.fov0,58,sstep(0,1.5,t));
         api.post.dot=t<.35?0:2.5+64*Math.pow(sstep(.35,S.T.suck,t),2.1);
         shake(.002*sstep(1.5,S.T.suck,t));LOOK.fringe=lerp(.012,.05,sstep(1,S.T.suck,t));
         if(t>=S.T.suck){setStage('drift');api.tableOn=false;api.exp=.9;S.y0=rig.eye[1]-.6;S.ax=[rig.eye[0],rig.eye[2]];S.f1=rig.fwd.slice();S.u1=rig.up.slice();
@@ -121,14 +121,15 @@
   VARS.c={name:'Swallowed',at:G.sink+.5,T:{suck:1.7,drift:5.6,brk:.7},
     start(){const S=this;setStage('suck');S.e0=rig.eye.slice();S.f0=rig.fwd.slice();S.u0=rig.up.slice();S.fov0=rig.fov;S.broke=0;
       Object.assign(api.post,{gl:0,dot:0});api.tear.a=0;SX.suck(1.4);SX.bits(6);S.L=[
-        {p:[0,0,0],range:5,col:[1,.35,.8],k:0,pin:true,hz:.3},{p:[0,0,0],range:5,col:[.3,.85,1],k:0,pin:true,hz:.3},{p:[0,0,0],range:4.5,col:[1,.8,.55],k:0,pin:true,hz:.2}];},
+        {p:[0,0,0],range:8,col:[1,.35,.8],k:0,pin:true,hz:.3},{p:[0,0,0],range:8,col:[.3,.85,1],k:0,pin:true,hz:.3},{p:[0,0,0],range:7,col:[1,.85,.65],k:0,pin:true,hz:.2}];},
     // the machine's parts, each with its centre in the playfield's own frame
     buildParts(){const S=this,P2=[],tile=(i,j,NX,NY)=>{const x0=-HW+2*HW*i/NX,x1=-HW+2*HW*(i+1)/NX,z0=-PL*j/NY,z1=-PL*(j+1)/NY,cx=(x0+x1)/2,cz=(z0+z1)/2,m=new MB();
-        m.quad([x0-cx,.001,z0-cz],[x1-cx,.001,z0-cz],[x1-cx,.001,z1-cz],[x0-cx,.001,z1-cz],[1,1,1],0,[[i/NX,j/NY],[(i+1)/NX,j/NY],[(i+1)/NX,(j+1)/NY],[i/NX,(j+1)/NY]]);
+        const uv=[[i/NX,j/NY],[(i+1)/NX,j/NY],[(i+1)/NX,(j+1)/NY],[i/NX,(j+1)/NY]];m.quad([x0-cx,.001,z0-cz],[x1-cx,.001,z0-cz],[x1-cx,.001,z1-cz],[x0-cx,.001,z1-cz],[1,1,1],0,uv);
+        m.quad([x0-cx,-.012,z1-cz],[x1-cx,-.012,z1-cz],[x1-cx,-.012,z0-cz],[x0-cx,-.012,z0-cz],[1,1,1],0,[uv[3],uv[2],uv[1],uv[0]]);
         const b=new MB();b.box(0,-.006,0,x1-x0,.01,z0-z1,hex('#120a20'));return {c:[cx,0,cz],parts:[{m:mesh(m),mode:2,tex:pfTex,emi:.9},{m:mesh(b)}],local:true,sc:7};};
       for(let j=0;j<4;j++)for(let i=0;i<3;i++)if((i+j)%2===0||j===1)P2.push(tile(i,j,3,4));
-      for(const b of P.bumpers)P2.push({c:[b.x,0,-b.y],parts:[{m:bumpBody,emi:.6},{m:bumpCap,emi:1.6,tint:BCOL[b.i]},{m:bumpRing,y:.01}],local:true,sc:9});
-      P.flip.forEach((f,i)=>P2.push({c:[f.x,0,-f.y],parts:[{m:flipM[i],emi:.5}],local:true,sc:9}));
+      for(const b of P.bumpers)P2.push({c:[b.x,0,-b.y],parts:[{m:bumpBody,emi:1.1},{m:bumpCap,emi:2.4,tint:BCOL[b.i]},{m:bumpRing,y:.01,emi:.4}],local:true,sc:9});
+      P.flip.forEach((f,i)=>P2.push({c:[f.x,0,-f.y],parts:[{m:flipM[i],emi:1.1}],local:true,sc:9}));
       [P.slingL,P.slingR].forEach((S2,i)=>{let cx=0,cz=0;for(const p of S2){cx+=p[0];cz-=p[1];}cx/=S2.length;cz/=S2.length;P2.push({c:[cx,0,cz],parts:[{m:slingM[i],emi:1.2,tint:i?[.18,.9,1]:[1,.18,.6]}],sc:9});});
       INS.slice(0,7).forEach(I=>P2.push({c:[I.u,0,-I.v],parts:[{m:I.m,emi:2.6}],sc:9}));
       P2.push({c:[HOLE.u,R,-HOLE.v],parts:[{m:ballM,emi:.3}],local:true,sc:14,ball:true});
@@ -145,23 +146,23 @@
           rig.fov=lerp(S.fov0,80,e);shake(.012*t/B1);api.pow=Math.random()<.35?.2:1;api.flick=.4;
           for(const f of P.flip)f.held=Math.random()<.5;for(const b of P.bumpers)if(Math.random()<.2){b.flash=1;b.ring=1;}physTick(dt);
           return;}
-        if(!S.broke){S.broke=1;S.buildParts();S.tb=t;S.cam0=rig.eye.slice();api.tableOn=false;api.exp=1.2;LOOK.fringe=.1;burst();}
+        if(!S.broke){S.broke=1;S.hdB=Math.atan2(-UPT[0],-UPT[2])+.6;S.buildParts();S.tb=t;S.cam0=rig.eye.slice();api.tableOn=false;api.exp=1.2;LOOK.fringe=.1;burst();}
         const u=sstep(B1,S.T.suck,t);
         // through where the playfield was, while it all balloons round you
-        rig.eye=add(S.cam0,scl(NRM,-.9*u));rig.fwd=nl(rig.fwd,dirHP(0,-.55),u*.2);rig.up=ortho([0,1,0],rig.fwd);rig.fov=lerp(80,66,u);S.grow=u;
-        if(t>=S.T.suck){setStage('drift');S.y0=rig.eye[1];S.ax=[rig.eye[0],rig.eye[2]];S.f1=rig.fwd.slice();S.hd0=Math.atan2(rig.fwd[0],rig.fwd[2]);SX.pad([48,55,60,63],5.6,.022);SX.drone(5.6);}
+        if(!S.f2)S.f2=rig.fwd.slice();rig.eye=add(S.cam0,scl(NRM,-.9*u));rig.fwd=nl(S.f2,dirHP(S.hdB,-.3),sstep(0,1,u));rig.up=ortho([0,1,0],rig.fwd);rig.fov=lerp(80,66,u);S.grow=u;
+        if(t>=S.T.suck){setStage('drift');S.y0=rig.eye[1];S.ax=[rig.eye[0],rig.eye[2]];S.f1=rig.fwd.slice();S.hd0=Math.atan2(rig.fwd[0],rig.fwd[2]);S.f1=rig.fwd.slice();SX.pad([48,55,60,63],5.6,.022);SX.drone(5.6);}
         S.lights(t);return;}
       // the slow fall among the pieces
       const g=sstep(S.T.drift-1.1,S.T.drift,t),y=S.y0-(.8*t+.06*t*t)-4*g*g*(t-(S.T.drift-1.1));api.vel=.8+.12*t+6*g;windSet(api.vel*.6);
       rig.eye=[S.ax[0],y,S.ax[1]];
-      const hd=S.hd0+.34*t,look=dirHP(hd,-.42+.08*Math.sin(t*.8));rig.fwd=nl(S.f1,look,sstep(0,1,t));
+      const hd=S.hd0+.34*t,look=dirHP(hd,-.3+.08*Math.sin(t*.8));rig.fwd=nl(S.f1,look,sstep(0,1,t));
       rig.up=ortho([Math.sin(t*.7)*.12,1,0],rig.fwd);rig.fov=66;
       for(const q of S.parts){q.ang+=q.w*dt;}
       if(g>0){toDown(g,rig.fwd,rig.up);rig.fov=lerp(66,72,g);}
       LOOK.fringe=lerp(.1,.018,sstep(0,1.2,t));S.lights(t);
       if(t>=S.T.drift){S.fallStart=rig.eye[1];plunge({roll:Math.PI*.6});api.dyn=[BALL_L].concat(S.L);}},
     lights(t){const S=this,e=rig.eye;S.L[0].p=[e[0]+Math.cos(t*.6)*1.8,e[1]+1,e[2]+Math.sin(t*.6)*1.8];S.L[1].p=[e[0]-Math.cos(t*.6)*1.8,e[1]-.6,e[2]-Math.sin(t*.6)*1.8];S.L[2].p=[e[0],e[1]-1.6,e[2]];
-      for(const L of S.L)L.k=api.stage==='fall'?L.k*.96:1.1;api.dyn=(api.stage==='fall'?[BALL_L]:[]).concat(S.L);},
+      for(const L of S.L)L.k=api.stage==='fall'?L.k*.96:1.7;api.dyn=(api.stage==='fall'?[BALL_L]:[]).concat(S.L);},
     // in the plunge the pieces fall ahead of you and break up as they hit the ceiling
     fall(dt,u){const S=this;if(!S.parts)return;S.lights(api.t);for(const q of S.parts){q.ang+=q.w*dt;q.drop=(q.drop||0)+dt*(2+q.base[1]);}},
     // where piece q is now: in the table at first, then ballooned round the camera, then (in the plunge) dropping ahead
