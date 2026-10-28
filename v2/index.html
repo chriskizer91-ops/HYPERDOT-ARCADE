@@ -4368,7 +4368,7 @@ const PIN=(()=>{
     else if(st==='pull')updatePull(dt);
     else if(st==='suck'||st==='drift')VAR.update(dt,st);
     if(!api.active)return;
-    if(st==='off'||st==='boot'||st==='ready'||st==='play'||st==='glitch')HZ.dens=.5;else if(st==='suck')HZ.dens=VAR&&VAR.hazeSuck||0;else if(st==='dive'||st==='fall'||st==='drift')HZ.dens=0;
+    if(st==='off'||st==='boot'||st==='ready'||st==='play'||st==='glitch')HZ.dens=.5;else if(st==='suck')HZ.dens=VAR&&VAR.hazeSuck&&VAR.hazeOn!==false?VAR.hazeSuck:0;else if(st==='dive'||st==='fall'||st==='drift')HZ.dens=0;
     if(api.hintT>0){api.hintT-=dt;if(api.hintT<=0)hideHint();}
     const bt=BAR_ON[api.stage]?1:0;setBars(api.bars+(bt-api.bars)*Math.min(1,dt*(bt?1.6:2.4)));
     if(api.dotT>0){api.dotT-=dt;if(api.dotT<=0)api.post.dot=0;}
