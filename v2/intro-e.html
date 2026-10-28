@@ -101,7 +101,7 @@ const clamp=(v,a,b)=>v<a?a:v>b?b:v,lerp=(a,b,t)=>a+(b-a)*t,rnd=(a,b)=>a+Math.ran
 const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
 const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:v}catch(e){return d}},set(k,v){try{localStorage.setItem(k,String(v))}catch(e){}}};
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
-const INTRO='e';   // which intro this page plays: 'live' (v2/index.html) or a test version (v2/intro-*.html)
+const INTRO='e';   // which intro this page plays: 'original' (the first V2 intro, v2/intro-original.html) or a version from src/intro_variants.js (E is v2/index.html's)
 const ROOT='../';     // where the shared games and attract loops are: one folder up from v2/
 const DEMO=false;     // a stand-alone demo of the intros: the machines don't open their games
 const touchy=matchMedia('(hover: none)').matches;
