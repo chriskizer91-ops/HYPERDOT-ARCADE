@@ -1,6 +1,6 @@
 /* ================= the floor plan ================= */
 const RX=Math.PI/2;
-const G_=(id,title,o={})=>Object.assign({id,title,src:'../games/'+id+'.html'},o);
+const G_=(id,title,o={})=>Object.assign({id,title,src:ROOT+'games/'+id+'.html'},o);
 /* VIDEO, along the left wall */
 Cabinet({name:'Star Vanguard',sub:'Vertical shooter · built into the arcade',x:-15.35,z:-6.2,ry:RX,game:StarVanguard(),body:'#120c22',side:'#1d1238',trim:'#58e8ff',art:'#3a62ff',ball:'#ff3b6b',
   marquee(g){const gr=g.createLinearGradient(0,0,0,64);gr.addColorStop(0,'#060a2a');gr.addColorStop(1,'#1a0630');g.fillStyle=gr;g.fillRect(0,0,256,64);
@@ -15,8 +15,8 @@ Upright({name:'Lantern',sub:'A lamplighter, a town of shades',x:-15.35,z:-.7,ry:
 Upright({name:'Molten',sub:'Pour iron, hold the forge',x:-15.35,z:.4,ry:RX,game:G_('molten','MOLTEN'),res:[320,180],body:'#140604',side:'#2a0c06',trim:'#ff5a1a',art:['#2a0604','#ff5a1a','#4fe3ff'],motif:'rays',mCols:GRAD.red,mTop:'#2a0604',glow:[1,.35,.15],col:'#ff5a1a'});
 /* DELUXE, back left: the airship pod you climb into, Ultramassive beside it */
 FlightPod({name:'Skies of Aethermoor',sub:'Deluxe flight pod · climb inside',x:-12.4,z:-8.7,ry:0,game:G_('aethermoor','SKIES OF AETHERMOOR',{deluxe:true}),res:[256,144],transT:1.9});
-Pinball({name:'Ultramassive',sub:'Deluxe pinball',x:-8.9,z:-10.0,ry:0,deluxe:true,game:G_('ultramassive','ULTRAMASSIVE',{deluxe:true,src:'../games/ultramassive/index.html'}),
-  backglass:'../games/ultramassive/img/bg_title.webp',playfield:'../games/ultramassive/img/playfield.webp',sideArt:['../games/ultramassive/img/bg_devourer.webp','../games/ultramassive/img/bg_warden.webp'],boxArt:'../games/ultramassive/img/bg_final.webp',backglassCycle:['bg_devourer','bg_twins','bg_warden','bg_final'].map(n=>'../games/ultramassive/img/'+n+'.webp'),body:'#160a2a',trim:'#ff9a2e',trim2:'#4fe3ff',glow:[1,.45,.25],
+Pinball({name:'Ultramassive',sub:'Deluxe pinball',x:-8.9,z:-10.0,ry:0,deluxe:true,game:G_('ultramassive','ULTRAMASSIVE',{deluxe:true,src:ROOT+'games/ultramassive/index.html'}),
+  backglass:ROOT+'games/ultramassive/img/bg_title.webp',playfield:ROOT+'games/ultramassive/img/playfield.webp',sideArt:[ROOT+'games/ultramassive/img/bg_devourer.webp',ROOT+'games/ultramassive/img/bg_warden.webp'],boxArt:ROOT+'games/ultramassive/img/bg_final.webp',backglassCycle:['bg_devourer','bg_twins','bg_warden','bg_final'].map(n=>ROOT+'games/ultramassive/img/'+n+'.webp'),body:'#160a2a',trim:'#ff9a2e',trim2:'#4fe3ff',glow:[1,.45,.25],
   scores:['GRAND CHAMPION','UMB  60,000,000','DVR  30,000,000']});
 /* the back wall, under the sign: the ticket wheel, the stacker and the whack table */
 Wheel({name:'Cyclone',sub:'The ticket wheel · one button',x:0,z:-11.35,ry:0,game:G_('cyclone','CYCLONE'),res:[256,144]});
@@ -34,8 +34,8 @@ BikeRide({name:'Prisma',sub:'Hover-bike pursuit · ride-on',x:13.1,z:-10.1,ry:0,
 /* SHIFTLIGHT 3, down the right wall: the deluxe motion sim. In V2 its game is in (v2/games/shift3.html) */
 SimPod({name:'Shiftlight 3',sub:'Deluxe motion sim · climb inside',x:14.3,z:-5.7,ry:Math.PI,transT:2.2,game:G_('shift3','SHIFTLIGHT 3',{deluxe:true,src:'games/shift3.html'})});
 /* PINBALL, right wall: Supermassive, and two machines still under wraps */
-Pinball({name:'Supermassive',sub:'Pinball',x:14.15,z:-1.4,ry:-RX,game:G_('supermassive','SUPERMASSIVE',{deluxe:true,src:'../games/supermassive/index.html'}),
-  backglass:'../games/supermassive/img/backglass.jpg',playfield:'../games/supermassive/img/playfield.jpg',sideArt:['../games/supermassive/img/backglass2.jpg','../games/supermassive/img/backglass3.jpg'],body:'#1c0a24',trim:'#ff4fb8',trim2:'#ffd23f',glow:[1,.4,.7],
+Pinball({name:'Supermassive',sub:'Pinball',x:14.15,z:-1.4,ry:-RX,game:G_('supermassive','SUPERMASSIVE',{deluxe:true,src:ROOT+'games/supermassive/index.html'}),
+  backglass:ROOT+'games/supermassive/img/backglass.jpg',playfield:ROOT+'games/supermassive/img/playfield.jpg',sideArt:[ROOT+'games/supermassive/img/backglass2.jpg',ROOT+'games/supermassive/img/backglass3.jpg'],body:'#1c0a24',trim:'#ff4fb8',trim2:'#ffd23f',glow:[1,.4,.7],
   scores:['GRAND CHAMPION','SPM  20,000,000','EVH  10,000,000']});
 /* The Hollow Crown took the first of the two spots held for the bigger games; the other stays under its sheet */
 Upright({name:'The Hollow Crown',sub:'A lantern, a curse, a throne',x:15.35,z:2.3,ry:-RX,game:G_('crown','THE HOLLOW CROWN'),res:[320,180],marq:'HOLLOW CROWN',

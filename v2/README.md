@@ -34,14 +34,27 @@ V2 has to be served from inside the repo, because the games and attract loops it
 - The player: a new character, in a hoodie with headphones and light-up sneakers.
 
 **The intro**
-The pinball table is the same simple table, still the joke. Everything after "STEP INSIDE" is new:
-1. You fall down a tunnel of LED dots and past the arcade's own games, playing their attract loops on screens on the tunnel walls.
-2. The ceiling breaks. Tiles and bits of blacklight tube tumble in slow motion with sparks and dust, and a shaft of pink light pours through the hole into the dark room.
-3. You land: a shockwave runs out across the screen, dust kicks up, and the landing pad lights first. The wave runs on across the floor and switches everything on as it reaches it: lights, beams, signs and screens.
-4. The camera cranes up and back over your shoulder as the room lights, swings round behind the turning rings, and comes to rest on the main sign.
-5. The debris comes apart into dots and floats back up to mend the ceiling, and the camera settles behind you as your character rezzes in.
+The pinball table is the same simple table, still the joke. V2 plays intro E, "Upload":
+1. The machine boots. The boot list ends on a quiet hint: PLAYER UPLOAD ... STANDBY.
+2. You play. After a few bumper hits the game glitches: slow motion, a rewind, the ball stuttering in a loop, and the score display throwing ERROR 404.
+3. Everything freezes. The display types INITIALIZING, then UPLOADING PLAYER 1 with a bar filling. Meanwhile a portal opens in the middle of the playfield, on the logo. The art spirals into it, the ball rolls in and the machine shakes.
+4. PLAYER 1 READY. You're pulled down through the portal, the machine bursts, and you fall in slow motion among its giant parts.
+5. The parts fall away as walls of screens light up round you, row by row, playing the arcade's games. Once, every screen shows PLAYER 1 READY.
+6. The camera swings down, the screens wind into a spiral down an LED tunnel, and the spiral takes you, faster and faster, through the ceiling.
+7. The ceiling breaks. Tiles and bits of blacklight tube tumble in slow motion with sparks and dust, and a shaft of pink light pours through the hole into the dark room.
+8. You land: a shockwave runs out across the screen, dust kicks up, and the landing pad lights first. The wave runs on across the floor and switches everything on as it reaches it: lights, beams, signs and screens.
+9. The camera cranes up and back over your shoulder as the room lights, swings round behind the turning rings, and comes to rest on the main sign.
+10. The debris comes apart into dots and floats back up to mend the ceiling, and the camera settles behind you as your character rezzes in.
 
-Its beats are all timed from `TL` in `src/arcade/shell.html`. The crane's path is `CR`, and where it looks is `CRT`.
+The table, the glitch and the landing are timed from `TL` and `G` in `src/arcade/shell.html`; the crane's path is `CR`, and where it looks is `CRT`. Everything from the freeze to the plunge through the ceiling is intro E in `src/arcade/src/intro_variants.js`.
+
+**The other intros**
+`v2/intros.html` (not linked from the arcade) lists the versions tried on the way to E, each a full arcade with a different way in:
+- A, Whirlpool; B, Into the display; C, Swallowed: the first tries.
+- D, Upload: C's opening and B's tunnel. E is D with a 50% slower power-up and a 25% slower glitch and upload.
+- `intro-original.html`: the first V2 intro, with STEP INSIDE.
+
+`build.py` writes them all, and `LIVE` in it names the one `index.html` plays. `python3 v2/src/arcade/build.py --demo DIR` writes a stand-alone copy of them to `DIR`, with the machines' games switched off.
 
 ## Quality
 
@@ -94,8 +107,9 @@ This writes `v2/index.html` from two sources:
 ## Layout
 
 ```
-v2/index.html          the V2 arcade (built)
+v2/index.html          the V2 arcade (built), playing intro E
+v2/intro-*.html        the intro versions (built), listed on v2/intros.html
 v2/games/shift3.html   Shiftlight 3, with the arcade bridge
-v2/src/arcade/         shell.html + src/m0..m5 + build.py
+v2/src/arcade/         shell.html + src/m0..m5 + src/intro_variants.js + build.py
 v2/src/shift3/         bridge.js + add_bridge.py
 ```

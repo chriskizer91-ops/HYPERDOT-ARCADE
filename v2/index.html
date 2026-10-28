@@ -101,6 +101,9 @@ const clamp=(v,a,b)=>v<a?a:v>b?b:v,lerp=(a,b,t)=>a+(b-a)*t,rnd=(a,b)=>a+Math.ran
 const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
 const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:v}catch(e){return d}},set(k,v){try{localStorage.setItem(k,String(v))}catch(e){}}};
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const INTRO='e';   // which intro this page plays: 'original' (the first V2 intro, v2/intro-original.html) or a version from src/intro_variants.js (E is v2/index.html's)
+const ROOT='../';     // where the shared games and attract loops are: one folder up from v2/
+const DEMO=false;     // a stand-alone demo of the intros: the machines don't open their games
 const touchy=matchMedia('(hover: none)').matches;
 const lin=c=>Math.pow(c/255,2.2);
 const hex=(h,k=1)=>{const n=parseInt(h.slice(1),16);return [lin(n>>16&255)*k,lin(n>>8&255)*k,lin(n&255)*k];};
@@ -154,8 +157,10 @@ function prog(vs,fs){
   return {p,u};
 }
 const VS_MESH=`layout(location=0) in vec3 aP;layout(location=1) in vec3 aN;layout(location=2) in vec3 aC;layout(location=3) in float aE;layout(location=4) in vec2 aT;layout(location=5) in vec2 aM;
-uniform mat4 uVP;uniform mat4 uM;out vec3 vW;out vec3 vN;out vec3 vC;out float vE;out vec2 vT;out vec2 vM;
-void main(){vec4 w=uM*vec4(aP,1.0);vW=w.xyz;vN=mat3(uM)*aN;vC=aC;vE=aE;vT=aT;vM=aM;gl_Position=uVP*w;}`;
+uniform mat4 uVP;uniform mat4 uM;uniform vec4 uWarp;uniform vec4 uWarpN;out vec3 vW;out vec3 vN;out vec3 vC;out float vE;out vec2 vT;out vec2 vM;
+void main(){vec4 w=uM*vec4(aP,1.0);
+  if(uWarp.w>0.0){vec3 ax=uWarpN.xyz,d=w.xyz-uWarp.xyz;float h=dot(d,ax);vec3 r=d-ax*h;float f=uWarp.w*exp(-length(r)/uWarpN.w),an=f*5.5;
+    r=r*cos(an)+cross(ax,r)*sin(an);r*=1.0-.82*f;h-=f*uWarpN.w*1.8;w.xyz=uWarp.xyz+r+ax*h;}vW=w.xyz;vN=mat3(uM)*aN;vC=aC;vE=aE;vT=aT;vM=aM;gl_Position=uVP*w;}`;
 const FS_LIT=`in vec3 vW;in vec3 vN;in vec3 vC;in float vE;in vec2 vT;in vec2 vM;
 uniform vec3 uCam;uniform vec4 uL[32];uniform int uNL;uniform vec3 uAmbT;uniform vec3 uAmbB;uniform vec3 uFog;uniform float uFogD;
 uniform float uMode;uniform sampler2D uTex;uniform float uEmi;uniform vec3 uTint;uniform float uTime;uniform float uAlpha;
@@ -1092,7 +1097,7 @@ function useLit(){
   for(const L of ls){if(n>=16)break;const k=L.pin?L.k:L.k*(L.pw??1)*AP.light;arr.set([L.p[0],L.p[1],L.p[2],L.range,L.col[0],L.col[1],L.col[2],k],n*8);LHZ[n]=hzOf(L);n++;}
   LN=n;gl.uniform4fv(u.uL,arr);gl.uniform1i(u.uNL,n);
   const am=AP.amb;gl.uniform3fv(u.uAmbT,[.24*am,.2*am,.32*am]);gl.uniform3fv(u.uAmbB,[.07*am,.055*am,.1*am]);
-  gl.uniform4f(u.uRez,2,0,1,.03);gl.uniform2f(u.uTear,PIN.active?PIN.tear.a:0,PIN.active?PIN.tear.seed:0);gl.uniform3fv(u.uCarveCol,[0,0,0]);
+  gl.uniform4f(u.uWarp,0,0,0,0);gl.uniform4f(u.uRez,2,0,1,.03);gl.uniform2f(u.uTear,PIN.active?PIN.tear.a:0,PIN.active?PIN.tear.seed:0);gl.uniform3fv(u.uCarveCol,[0,0,0]);
   if(PIN.active)PIN.setCarve();else gl.uniform4f(u.uCarve,0,0,0,0);
   applyIgn();
   gl.activeTexture(gl.TEXTURE5);gl.bindTexture(gl.TEXTURE_2D,AO_TEX);gl.activeTexture(gl.TEXTURE0);gl.uniform1i(u.uAO,5);gl.uniform4fv(u.uAOr,AO_TEX?AOR:[0,0,0,0]);gl.uniform1f(u.uPool,3.2*AP.light);
@@ -1314,6 +1319,7 @@ function setControls(sch,labels){
 }
 function startAttr(a){
   if(W_.mode!=='walk')return;
+  if(DEMO&&a.controls==='iframe'){toast((a.game&&a.game.title||a.name.toUpperCase())+'<br><small style="font-size:12px;color:#f4ecff">Intro demo · the games play in the arcade</small>');return;}
   S.coin();W_.mode='enter';W_.active=a;W_.trans=0;
   W_.camFrom={eye:CAM.eye.slice(),tgt:CAM.tgt.slice(),fov:CAM.fov};
   $('prompt').hidden=true;$('hint').textContent='';
@@ -1417,6 +1423,8 @@ $('back').addEventListener('click',()=>leaveAttr());
 function toggleSound(){AU.muted=!AU.muted;store.set('arcade2-mute',AU.muted?'1':'0');if(AU.out)AU.out.gain.value=AU.muted?0:.6;$('snd').textContent=AU.muted?'Sound off':'Sound on';}
 $('snd').addEventListener('click',()=>{audioInit();toggleSound();});
 if(AU.muted)$('snd').textContent='Sound off';
+/* the intro demo: a way back to the list of intros */
+if(DEMO){const b=document.createElement('a');b.className='pill';b.href='index.html';b.textContent='All intros';b.style.textDecoration='none';$('snd').parentNode.insertBefore(b,$('snd'));}
 $('tixN').textContent=fmt(W_.tickets);
 addEventListener('resize',resize);
 
@@ -1952,7 +1960,7 @@ const ATT=[];
 function Attract(id,scr,o={}){
   const A={id,scr,meta:null,img:null,t:Math.random()*20,fi:-1,asked:false,ph:o.title||id.toUpperCase(),col:o.col||'#ff4fb8'};
   A.load=()=>{if(A.asked)return;A.asked=true;
-    fetch('../attract/'+id+'.json').then(r=>r.ok?r.json():null).then(m=>{if(!m)return;const im=new Image();im.onload=()=>{A.meta=m;A.img=im;};im.src='../attract/'+id+'.webp';}).catch(()=>{});};
+    fetch(ROOT+'attract/'+id+'.json').then(r=>r.ok?r.json():null).then(m=>{if(!m)return;const im=new Image();im.onload=()=>{A.meta=m;A.img=im;};im.src=ROOT+'attract/'+id+'.webp';}).catch(()=>{});};
   /* until its loop arrives a screen shows the game's name, scrolling, in dots */
   A.place=t=>{const g=scr.g,w=scr.w,h=scr.h;g.fillStyle='#000';g.fillRect(0,0,w,h);
     const sc=Math.max(1,Math.floor(h/24)),tw=tw5(A.ph,sc),x=Math.round(w/2-tw/2+Math.sin(t*.9)*Math.max(0,(tw-w)/2+4));
@@ -2926,7 +2934,7 @@ function Covered(o){
 
 /* ================= the floor plan ================= */
 const RX=Math.PI/2;
-const G_=(id,title,o={})=>Object.assign({id,title,src:'../games/'+id+'.html'},o);
+const G_=(id,title,o={})=>Object.assign({id,title,src:ROOT+'games/'+id+'.html'},o);
 /* VIDEO, along the left wall */
 Cabinet({name:'Star Vanguard',sub:'Vertical shooter · built into the arcade',x:-15.35,z:-6.2,ry:RX,game:StarVanguard(),body:'#120c22',side:'#1d1238',trim:'#58e8ff',art:'#3a62ff',ball:'#ff3b6b',
   marquee(g){const gr=g.createLinearGradient(0,0,0,64);gr.addColorStop(0,'#060a2a');gr.addColorStop(1,'#1a0630');g.fillStyle=gr;g.fillRect(0,0,256,64);
@@ -2941,8 +2949,8 @@ Upright({name:'Lantern',sub:'A lamplighter, a town of shades',x:-15.35,z:-.7,ry:
 Upright({name:'Molten',sub:'Pour iron, hold the forge',x:-15.35,z:.4,ry:RX,game:G_('molten','MOLTEN'),res:[320,180],body:'#140604',side:'#2a0c06',trim:'#ff5a1a',art:['#2a0604','#ff5a1a','#4fe3ff'],motif:'rays',mCols:GRAD.red,mTop:'#2a0604',glow:[1,.35,.15],col:'#ff5a1a'});
 /* DELUXE, back left: the airship pod you climb into, Ultramassive beside it */
 FlightPod({name:'Skies of Aethermoor',sub:'Deluxe flight pod · climb inside',x:-12.4,z:-8.7,ry:0,game:G_('aethermoor','SKIES OF AETHERMOOR',{deluxe:true}),res:[256,144],transT:1.9});
-Pinball({name:'Ultramassive',sub:'Deluxe pinball',x:-8.9,z:-10.0,ry:0,deluxe:true,game:G_('ultramassive','ULTRAMASSIVE',{deluxe:true,src:'../games/ultramassive/index.html'}),
-  backglass:'../games/ultramassive/img/bg_title.webp',playfield:'../games/ultramassive/img/playfield.webp',sideArt:['../games/ultramassive/img/bg_devourer.webp','../games/ultramassive/img/bg_warden.webp'],boxArt:'../games/ultramassive/img/bg_final.webp',backglassCycle:['bg_devourer','bg_twins','bg_warden','bg_final'].map(n=>'../games/ultramassive/img/'+n+'.webp'),body:'#160a2a',trim:'#ff9a2e',trim2:'#4fe3ff',glow:[1,.45,.25],
+Pinball({name:'Ultramassive',sub:'Deluxe pinball',x:-8.9,z:-10.0,ry:0,deluxe:true,game:G_('ultramassive','ULTRAMASSIVE',{deluxe:true,src:ROOT+'games/ultramassive/index.html'}),
+  backglass:ROOT+'games/ultramassive/img/bg_title.webp',playfield:ROOT+'games/ultramassive/img/playfield.webp',sideArt:[ROOT+'games/ultramassive/img/bg_devourer.webp',ROOT+'games/ultramassive/img/bg_warden.webp'],boxArt:ROOT+'games/ultramassive/img/bg_final.webp',backglassCycle:['bg_devourer','bg_twins','bg_warden','bg_final'].map(n=>ROOT+'games/ultramassive/img/'+n+'.webp'),body:'#160a2a',trim:'#ff9a2e',trim2:'#4fe3ff',glow:[1,.45,.25],
   scores:['GRAND CHAMPION','UMB  60,000,000','DVR  30,000,000']});
 /* the back wall, under the sign: the ticket wheel, the stacker and the whack table */
 Wheel({name:'Cyclone',sub:'The ticket wheel · one button',x:0,z:-11.35,ry:0,game:G_('cyclone','CYCLONE'),res:[256,144]});
@@ -2960,8 +2968,8 @@ BikeRide({name:'Prisma',sub:'Hover-bike pursuit · ride-on',x:13.1,z:-10.1,ry:0,
 /* SHIFTLIGHT 3, down the right wall: the deluxe motion sim. In V2 its game is in (v2/games/shift3.html) */
 SimPod({name:'Shiftlight 3',sub:'Deluxe motion sim · climb inside',x:14.3,z:-5.7,ry:Math.PI,transT:2.2,game:G_('shift3','SHIFTLIGHT 3',{deluxe:true,src:'games/shift3.html'})});
 /* PINBALL, right wall: Supermassive, and two machines still under wraps */
-Pinball({name:'Supermassive',sub:'Pinball',x:14.15,z:-1.4,ry:-RX,game:G_('supermassive','SUPERMASSIVE',{deluxe:true,src:'../games/supermassive/index.html'}),
-  backglass:'../games/supermassive/img/backglass.jpg',playfield:'../games/supermassive/img/playfield.jpg',sideArt:['../games/supermassive/img/backglass2.jpg','../games/supermassive/img/backglass3.jpg'],body:'#1c0a24',trim:'#ff4fb8',trim2:'#ffd23f',glow:[1,.4,.7],
+Pinball({name:'Supermassive',sub:'Pinball',x:14.15,z:-1.4,ry:-RX,game:G_('supermassive','SUPERMASSIVE',{deluxe:true,src:ROOT+'games/supermassive/index.html'}),
+  backglass:ROOT+'games/supermassive/img/backglass.jpg',playfield:ROOT+'games/supermassive/img/playfield.jpg',sideArt:[ROOT+'games/supermassive/img/backglass2.jpg',ROOT+'games/supermassive/img/backglass3.jpg'],body:'#1c0a24',trim:'#ff4fb8',trim2:'#ffd23f',glow:[1,.4,.7],
   scores:['GRAND CHAMPION','SPM  20,000,000','EVH  10,000,000']});
 /* The Hollow Crown took the first of the two spots held for the bigger games; the other stays under its sheet */
 Upright({name:'The Hollow Crown',sub:'A lantern, a curse, a throne',x:15.35,z:2.3,ry:-RX,game:G_('crown','THE HOLLOW CROWN'),res:[320,180],marq:'HOLLOW CROWN',
@@ -3352,7 +3360,7 @@ const AP={light:1,neon:1,amb:1,scr:1};             // arcade power: the intro br
 const IGN={mode:0,c:[0,0,0],r:0,dark:1};          // the power-on wave: 1 = emissive lit inside radius r, dark outside
 const PIN=(()=>{
   const P=PinPhys(),B=P.ball,R=P.R,HW=P.HW,PL=P.L;
-  const TH=6.5*Math.PI/180,TBX=0,TBY=30,TBZ=5.78;
+  const TH=6.5*Math.PI/180,TBX=0,TBY=INTRO==='d'||INTRO==='e'?52:30,TBZ=5.78;   // D and E hang the table higher, for a longer way down
   const PFM=chain(mT(TBX,TBY,TBZ),mRX(TH));
   const Wp=(u,v,h)=>xf(PFM,u,h,-v);                // playfield (u across, v up-table, h height) → world
   /* small vector kit */
@@ -3458,7 +3466,7 @@ const PIN=(()=>{
     tableM=mesh(mb);
     // playfield art
     const pfc=paintPlayfield();pfTex=texFrom(pfc,false);api.pfData=pfc.getContext('2d').getImageData(0,0,TXW,TXH).data;
-    mb=new MB();mb.quad([-HW,.0006,0],[HW,.0006,0],[HW,.0006,-PL],[-HW,.0006,-PL],[1,1,1],0,[[0,0],[1,0],[1,1],[0,1]]);pfM=mesh(mb);
+    mb=new MB();{const NX=12,NY=24,X=i=>-HW+2*HW*i/NX,Z=j=>-PL*j/NY;for(let j=0;j<NY;j++)for(let i=0;i<NX;i++)mb.quad([X(i),.0006,Z(j)],[X(i+1),.0006,Z(j)],[X(i+1),.0006,Z(j+1)],[X(i),.0006,Z(j+1)],[1,1,1],0,[[i/NX,j/NY],[(i+1)/NX,j/NY],[(i+1)/NX,(j+1)/NY],[i/NX,(j+1)/NY]]);}pfM=mesh(mb);
     // backbox (level, not tilted) with its backglass and DMD
     const top=xf(PFM,0,.06,-1.11);BBM=mT(top[0],top[1],top[2]);
     mb=new MB();mb.box(0,.39,-.1,.66,.78,.2,wood);
@@ -3531,6 +3539,7 @@ const PIN=(()=>{
     const g=dmd.g,t=api.t,st=api.stage,gt=api.st;
     if(st==='glitch'&&gt>=G.freeze&&gt<G.type)return;      // frozen: the panel holds its last frame
     g.fillStyle='#000';g.fillRect(0,0,128,32);
+    if(VAR&&VAR.dmd&&VAR.dmd(g,st,gt,t)){dmd.upload();return;}
     if(st==='off'){if(Math.floor(t*1.1)%2===0){g.fillStyle='#4a4a4a';g.fillRect(63,15,2,2);}}
     else if(st==='boot'&&gt<2.05){
       if(gt<.3&&Math.floor(t*8)%2===0){g.fillStyle='#fff';g.fillRect(2,1,3,5);}
@@ -3805,16 +3814,16 @@ const PIN=(()=>{
   const spritePix=rows=>{const out=[];rows.forEach((row,r)=>{for(let c=0;c<row.length;c++)if(row[c]==='x')out.push([c,r]);});return {px:out,w:rows[0].length,h:rows.length};};
   const COIN=['...xxxxx...','.xx.....xx.','.x.x...x.x.','x..x...x..x','x..x...x..x','x..xxxxx..x','x..x...x..x','x..x...x..x','.x.x...x.x.','.xx.....xx.','...xxxxx...'];
   const STAR=['.....x.....','.....x.....','....xxx....','xxxxxxxxxxx','.xxxxxxxxx.','..xxxxxxx..','...xxxxx...','..xxx.xxx..','..xx...xx..','.xx.....xx.','.x.......x.'];
-  function buildLayers(){
+  function buildLayers(nMax){
     LAY.length=0;
     const items=[[glyphPix(String(Math.min(999999,api.score)).padStart(6,'0')),.085,[1,.8,.3]],[glyphPix('GAME OVER'),.06,[1,.25,.3]],[spritePix(COIN),.11,[1,.78,.2]],
       [glyphPix('INSERT COIN'),.055,[.2,.9,1]],[spritePix(STAR),.11,[1,.3,.75]],[glyphPix('PLAYER 1'),.06,[1,1,1]],[glyphPix('PRESS START'),.058,[.4,1,.75]]];
-    const notes=[69,72,76,79,81,84,88];
+    const notes=[69,72,76,79,81,84,88];if(nMax)items.length=Math.min(items.length,nMax);
     items.forEach(([g,p,col],k)=>{
       const y=F.y0-F.D*(.14+.118*k);
       // read the camera's roll when it is 2 m above the layer, so the words face you as you arrive
       let lo=0,hi=1;for(let i=0;i<30;i++){const m=(lo+hi)/2;if(fallY(m)>y+2)lo=m;else hi=m;}
-      const a=F.roll*easeIO(lo),upv=[-Math.sin(a),0,-Math.cos(a)],rt=[Math.cos(a),0,-Math.sin(a)],c=pathXZ(y);
+      const a=F.a0+F.roll*easeIO(lo),upv=[-Math.sin(a),0,-Math.cos(a)],rt=[Math.cos(a),0,-Math.sin(a)],c=pathXZ(y);
       const pts=g.px.map(([cx,cy])=>{const ox=(cx-g.w/2)*p,oy=(g.h/2-cy)*p;return {b:[c[0]+rt[0]*ox+upv[0]*oy,y+rnd(-.02,.02),c[1]+rt[2]*ox+upv[2]*oy],ph:Math.random()*TAU,j:rnd(-.5,.5)};});
       LAY.push({y,pts,col,p,note:notes[k],passed:false,cx:c[0],cz:c[1]});
     });
@@ -3856,6 +3865,7 @@ const PIN=(()=>{
     for(const d of DEB){const k=clamp(d.life/d.max,0,1),dx=d.p[0]-ce[0],dy=d.p[1]-ce[1],dz=d.p[2]-ce[2];if(dx*dx+dy*dy+dz*dz<.02)continue;pt(d.p[0],d.p[1],d.p[2],d.c[0],d.c[1],d.c[2],1.6*k,d.s);}
     if(api.ringT!=null){const rt=t-api.ringT;if(rt<1.3){const rr=.3+rt*WAVE_V,a0=1-rt/1.3;for(let i=0;i<120;i++){const a=i/120*TAU,c=i%2?PAL[1]:PAL[0];pt(CH_.x+Math.cos(a)*rr,.03,CH_.z+Math.sin(a)*rr,c[0],c[1],c[2],2*a0,.05);}}}
     if(api.rezT!=null){const rt=t-api.rezT;if(rt>=0&&rt<1.6){const a0=Math.max(0,1-rt/1.6);for(let i=0;i<70;i++){const a=i*2.399+rt*1.5,rr=.28+.12*Math.sin(i*1.7),y=((i*.071+rt*.9)%1)*1.9;const px=CH_.x+Math.cos(a)*rr,pz=CH_.z+Math.sin(a)*rr;if(Math.hypot(px-ce[0],y-ce[1],pz-ce[2])<.9)continue;pt(px,y,pz,.3,.95,1,1.0*a0,.02);}}}
+    if(VAR&&VAR.points)VAR.points(pt,t);
     const fb=api.fb;if(fb&&fb.vis>0){pt(fb.p[0],fb.p[1],fb.p[2],1,1,1,1.5*fb.vis,.09);pt(fb.p[0],fb.p[1],fb.p[2],.4,.85,1,.55*fb.vis,.36);}
   }
   function drawPts(){
@@ -3871,6 +3881,8 @@ const PIN=(()=>{
   /* ================= drawing the table ================= */
   function draw(){
     const uL=P_LIT.u;
+    const wp=VAR&&VAR.warp?VAR.warp():null;
+    if(wp){gl.uniform4fv(uL.uWarp,wp[0]);gl.uniform4fv(uL.uWarpN,wp[1]);}
     if(api.tableOn){
       const pw=api.pow,dm=api.dim,j=api.jit;
       const JM=j>0?mT(rnd(-1,1)*j,rnd(-1,1)*j*.5,rnd(-1,1)*j):null,PF_=JM?mmul(JM,PFM):PFM,BB_=JM?mmul(JM,BBM):BBM;
@@ -3906,11 +3918,12 @@ const PIN=(()=>{
           drawLit(shadowM,mmul(PF_,mT(B.u+.003,.0011,-B.v+.004)),{mode:4,tint:[.35,.33,.4]});gl.depthMask(true);gl.disable(gl.BLEND);}
       }
     }
-    drawChunks();
+    if(wp)gl.uniform4f(uL.uWarp,0,0,0,0);
+    drawChunks();if(VAR&&VAR.draw)VAR.draw();
     const fb=api.fb;
     if(fb&&fb.vis>0){gl.uniform4f(uL.uCarve,0,0,0,0);drawLit(ballM,chain(mT(fb.p[0],fb.p[1],fb.p[2]),mS(3,3,3)),{emi:1.4*fb.vis});setCarve();}
   }
-  function drawScreens(){if(api.tableOn&&api.dmdPow>0)drawScreen(dmd,DMDM,api.dmdPow);if(PANELS.length&&(api.stage==='fall'||api.stage==='descend'))drawPanels();}
+  function drawScreens(){if(api.tableOn&&api.dmdPow>0)drawScreen(dmd,DMDM,api.dmdPow);if(PANELS.length&&(api.stage==='fall'||api.stage==='descend'))drawPanels();if(VAR&&VAR.screens)VAR.screens();}
   function setCarve(){
     const u=P_LIT.u,c=api.carve;
     if(c&&c.r>0){gl.uniform4f(u.uCarve,c.c[0],c.c[1],c.c[2],c.r);gl.uniform1f(u.uCarveY,c.y0);gl.uniform1f(u.uCarveK,c.k);gl.uniform3fv(u.uCarveCol,c.col);}
@@ -4002,7 +4015,7 @@ const PIN=(()=>{
   }
   function power(){
     if(api.stage!=='off')return;
-    setStage('boot');api.bootSpeed=1;hideHint();SX.relay(1.2);humOn();loadTunnelArt();
+    setStage('boot');api.bootSpeed=VAR&&VAR.bootRate||1;hideHint();SX.relay(1.2);humOn();loadTunnelArt();
   }
   function updateBoot(dt){
     const bt=api.st;
@@ -4104,20 +4117,21 @@ const PIN=(()=>{
     }
     // camera: a slow dolly toward the ball, held through the freeze, creeping on toward the hole after
     const bw=Wp(B.u,B.v,B.h);api.camT=mix3(api.camT,bw,Math.min(1,dt*2.5));
-    if(gt<G.type){
+    if(VAR&&VAR.glitchCam)VAR.glitchCam(gt,dt);
+    else if(VAR&&gt<G.sink||!VAR&&gt<G.type){
       const k=.36*easeIO(clamp(gt/G.freeze,0,1)),g0=api.g0;
       rig.eye=mix3(g0.eye,api.camT,k*.5);rig.fwd=nl(g0.fwd,norm(sub(api.camT,rig.eye)),Math.min(1,k*1.6));rig.up=upFor(rig.fwd);rig.fov=lerp(g0.fov,g0.fov-6,k/.36);
-    }else if(gt<G.sink+.3){
+    }else if(!VAR&&gt<G.sink+.3){
       // a hard cut to the score display while it types, held through its switch-off
       const v=dmdView(1.2-.14*sstep(G.type,G.sink+.3,gt));rig.eye=v.eye;rig.fwd=v.fwd;rig.up=v.up;rig.fov=v.fov;
     }else{
       // then a tilt down from the display to the hole, to watch the art drain
       if(!api.dv0)api.dv0={eye:rig.eye.slice(),fwd:rig.fwd.slice(),fov:rig.fov};
-      const e=easeIO(clamp((gt-G.sink-.3)/.9,0,1)),DV=add(add(HOLE.w,scl(NRM,.5)),scl(UPT,-.42)),cr=.04*sstep(G.sink+1.2,TL.glitch,gt);
+      const e=easeIO(clamp((gt-G.sink-(VAR?0:.3))/(VAR?1.4:.9),0,1)),DV=add(add(HOLE.w,scl(NRM,.5)),scl(UPT,-.42)),cr=.04*sstep(G.sink+1.2,TL.glitch,gt);
       rig.eye=add(mix3(api.dv0.eye,DV,e),scl(UPT,cr));rig.fwd=nl(api.dv0.fwd,norm(sub(HOLE.w,rig.eye)),e);rig.up=upFor(rig.fwd);rig.fov=lerp(api.dv0.fov,52,e);
     }
     shake(.003*api.post.gl);
-    if(gt>=TL.glitch)startDive();
+    if(VAR?gt>=VAR.at:gt>=TL.glitch)VAR?VAR.start():startDive();
   }
   let V0=null;
   function startDive(){
@@ -4153,9 +4167,9 @@ const PIN=(()=>{
   const TART=[],PANELS=[];
   function loadTunnelArt(){
     const ids=Q.n==='high'?['redline','molten','claw','prisma','whack','lantern']:['redline','molten','claw','lantern'];
-    for(const id of ids)fetch('../attract/'+id+'.json').then(r=>r.ok?r.json():null).then(m=>{if(!m)return;const im=new Image();
+    for(const id of ids)fetch(ROOT+'attract/'+id+'.json').then(r=>r.ok?r.json():null).then(m=>{if(!m)return;const im=new Image();
       im.onload=()=>{if(!api.active)return;const c=mkCanvas(Math.max(1,im.naturalWidth>>1),Math.max(1,im.naturalHeight>>1));c.getContext('2d').drawImage(im,0,0,c.width,c.height);
-        TART.push({id,m,tex:texFrom(c,true),W:im.naturalWidth,H:im.naturalHeight});};im.src='../attract/'+id+'.webp';}).catch(()=>{});
+        TART.push({id,m,tex:texFrom(c,true),W:im.naturalWidth,H:im.naturalHeight});};im.src=ROOT+'attract/'+id+'.webp';}).catch(()=>{});
   }
   function buildPanels(){
     PANELS.length=0;if(!TART.length)return;
@@ -4214,20 +4228,20 @@ const PIN=(()=>{
   const CRT=[[0,1.0,-1.2],[0,.25,-2.4],[-2.4,1.5,-9.2],[-2.4,3.0,-17.1]];
   const crs=(P,u)=>{const n=P.length-1,s2=clamp(u,0,1)*n,i=Math.min(n-1,Math.floor(s2)),f=s2-i,p0=P[Math.max(0,i-1)],p1=P[i],p2=P[i+1],p3=P[Math.min(n,i+2)];
     return [0,1,2].map(k=>.5*(2*p1[k]+(-p0[k]+p2[k])*f+(2*p0[k]-5*p1[k]+4*p2[k]-p3[k])*f*f+(-p0[k]+3*p1[k]-3*p2[k]+p3[k])*f*f*f));};
-  function startFall(){
-    setStage('fall');api.tableOn=true;
-    const v0=2*2.0/(TL.dive-1.25);
-    F={y0:rig.eye[1],x0:rig.eye[0],z0:rig.eye[2],T:TL.fall,v0,v1:2.4,roll:reduce?0:TAU};F.D=F.y0-ROOM.h;F.a=F.v0*F.T/F.D;F.b=F.v1*F.T/F.D;
-    buildLayers();buildPanels();api.fb={p:add(rig.eye,[0,-1.2,0]),v:[0,0,0],free:false,vis:1};api.dyn=[BALL_L];
+  function startFall(o={}){
+    setStage('fall');api.tableOn=o.table??true;
+    const v0=o.v0??2*2.0/(TL.dive-1.25);
+    F={y0:rig.eye[1],x0:rig.eye[0],z0:rig.eye[2],T:o.T||TL.fall,v0,v1:2.4,roll:reduce?0:(o.roll??TAU),a0:o.roll0||0,panels:o.panels!==false};F.D=F.y0-ROOM.h;F.a=F.v0*F.T/F.D;F.b=F.v1*F.T/F.D;
+    buildLayers(o.layers);if(F.panels)buildPanels();else PANELS.length=0;api.fb={p:add(rig.eye,[0,-1.2,0]),v:[0,0,0],free:false,vis:1};api.dyn=[BALL_L];
     IGN.mode=1;IGN.r=-1;IGN.dark=.012;IGN.c=[CH_.x,0,CH_.z];AP.amb=.03;AP.light=1;AP.neon=1;AP.scr=1;for(const L of LIGHTS.concat(BEAMS))L.pw=0;
     SX.pad([53,57,60,65],2.6,.02);SX.drone(5);
   }
   function updateFall(dt){
     const u=Math.min(1,api.st/F.T),y=fallY(u);api.vel=F.D*hermD(u,F.a,F.b)/F.T;
     const xz=pathXZ(y);rig.eye=[xz[0],y,xz[1]];
-    const a=F.roll*easeIO(u);rig.fwd=DOWN;rig.up=[-Math.sin(a),0,-Math.cos(a)];rig.fov=clamp(72+(api.vel-5)*.9,70,80);
+    const a=F.a0+F.roll*easeIO(u);rig.fwd=DOWN;rig.up=[-Math.sin(a),0,-Math.cos(a)];rig.fov=clamp(72+(api.vel-5)*.9,70,80);
     api.post.rad=reduce?.08:clamp(.1+.03*api.vel,0,.36);api.post.dot=api.dotT>0?api.post.dot:0;
-    windSet(api.vel);if(TART.length!==PANELS.lastN){buildPanels();PANELS.lastN=TART.length;}
+    windSet(api.vel);if(F.panels&&TART.length!==PANELS.lastN){buildPanels();PANELS.lastN=TART.length;}if(VAR&&VAR.fall)VAR.fall(dt,u);
     if(rig.eye[1]<TBY-3)api.tableOn=false;
     if(u>.66)api.arcadeOn=true;                    // only once the ceiling fills the view below you
     // the ceiling opens under you, its rim a ring of hot dots
@@ -4324,7 +4338,7 @@ const PIN=(()=>{
   }
   function finish(){
     api.active=false;api.stage='done';W_.mode='walk';CH_.hidden=false;CH_.rez=1;IGN.mode=0;
-    CHUNKS.length=0;freeTunnelArt();SHAFT.k=0;HOLE_L.k=0;Object.assign(HZ,{dens:1,beam:.2});Object.assign(LOOK,{fringe:.012,shock:[0,0,0,0]});
+    CHUNKS.length=0;if(VAR&&VAR.end)VAR.end();freeTunnelArt();SHAFT.k=0;HOLE_L.k=0;Object.assign(HZ,{dens:1,beam:.2});Object.assign(LOOK,{fringe:.012,shock:[0,0,0,0]});
     for(const L of LIGHTS.concat(BEAMS))L.pw=1;Object.assign(AP,{light:1,neon:1,amb:1,scr:1});
     api.carve=null;api.tear.a=0;Object.assign(api.post,{gl:0,dot:0,rad:0});api.music=true;api.dyn=[];api.exp=0;
     CAM.up=[0,1,0];CAM.minH=null;imStop(false);windSet(0);stopNodes();SX.muffle(20000,.05);if(AU.ctx)SX.unsilence();DEB.length=0;NP=0;setBars(0);
@@ -4336,13 +4350,14 @@ const PIN=(()=>{
     if(!api.active||api.fadeHold||api.stage==='pull')return;
     api.fadeHold=true;hideHint();
   }
-  const BAR_ON={glitch:1,dive:1,fall:1,descend:1,land:1};
+  const BAR_ON={glitch:1,dive:1,fall:1,descend:1,land:1,suck:1,drift:1};
   function update(dt){
     api.t+=dt;
     if(api.fadeHold){if(FADE<=.001){api.fadeHold=false;api.fastFade=true;W_.camYaw=0;finish();const w=walkCam();CAM.eye=w.eye;CAM.tgt=w.tgt;CAM.fov=w.fov;}return;}
     pollPad();audioNodes();imTick();
     const st=api.stage;
-    api.st+=st==='boot'?dt*api.bootSpeed:dt;
+    const sr=st==='suck'&&VAR.rate?VAR.rate(api.st):1;      // a test version may run its own stage slower
+    api.st+=st==='boot'?dt*api.bootSpeed:dt*sr;
     if(st==='off')updateOff(dt);
     else if(st==='boot')updateBoot(dt);
     else if(st==='ready'||st==='play')updateGame(dt);
@@ -4352,8 +4367,9 @@ const PIN=(()=>{
     else if(st==='descend')updateDescend(dt);
     else if(st==='land')updateLand(dt);
     else if(st==='pull')updatePull(dt);
+    else if(st==='suck'||st==='drift')VAR.update(dt*sr,st);
     if(!api.active)return;
-    if(st==='off'||st==='boot'||st==='ready'||st==='play'||st==='glitch')HZ.dens=.5;else if(st==='dive'||st==='fall')HZ.dens=0;
+    if(st==='off'||st==='boot'||st==='ready'||st==='play'||st==='glitch')HZ.dens=.5;else if(st==='suck')HZ.dens=VAR&&VAR.hazeSuck&&VAR.hazeOn!==false?VAR.hazeSuck:0;else if(st==='dive'||st==='fall'||st==='drift')HZ.dens=0;
     if(api.hintT>0){api.hintT-=dt;if(api.hintT<=0)hideHint();}
     const bt=BAR_ON[api.stage]?1:0;setBars(api.bars+(bt-api.bars)*Math.min(1,dt*(bt?1.6:2.4)));
     if(api.dotT>0){api.dotT-=dt;if(api.dotT<=0)api.post.dot=0;}
@@ -4361,12 +4377,339 @@ const PIN=(()=>{
     updateLamps(dt);updateDeb(dt);buildPoints();
     if(api.tableOn)drawDMD(dt);
     rollSound();applyRig();
-    api.ballVis=api.tableOn&&B.h>-.05&&['off','boot','ready','play','glitch','dive'].includes(api.stage);
+    api.ballVis=api.tableOn&&B.h>-.05&&['off','boot','ready','play','glitch','dive','suck'].includes(api.stage);
   }
+  /* intro test versions (v2/intro-*.html): each takes over after the glitch with its own way of pulling you into the
+     machine and its own slow drift past the games, then hands back to the plunge through the ceiling */
+  const VARS={};
+    /* ---------- shared by the test versions ---------- */
+  // a quad facing along n, w wide and h tall, centred on p (local +z is the face)
+  const faceM=(p,n,w,h)=>{const up0=Math.abs(n[1])>.95?[0,0,-1]:[0,1,0],x=norm(cross(up0,n)),y=cross(n,x),m=m4();
+    m[0]=x[0]*w;m[1]=x[1]*w;m[2]=x[2]*w;m[4]=y[0]*h;m[5]=y[1]*h;m[6]=y[2]*h;m[8]=n[0];m[9]=n[1];m[10]=n[2];m[12]=p[0];m[13]=p[1];m[14]=p[2];return m;};
+  // the games' attract loops; until they arrive, their names in dots
+  const FALLBACK=[];
+  function artAt(k){
+    if(TART.length)return TART[k%TART.length];
+    if(!FALLBACK.length)for(const [t,c] of [['REDLINE',GRAD.red],['MOLTEN',GRAD.amber],['VOIDLANCE',GRAD.violet],['PRISMA',GRAD.cyan]]){
+      const cv=mkCanvas(128,72),g=cv.getContext('2d');g.fillStyle='#05030a';g.fillRect(0,0,128,72);gradText(g,t,64,26,2,c);
+      FALLBACK.push({m:{w:128,h:72,n:1,cols:1,fps:1},tex:texFrom(cv,true),W:128,H:72});}
+    return FALLBACK[k%FALLBACK.length];
+  }
+  const aspectOf=k=>{const A=artAt(k);return A.m.h/A.m.w;};
+  function drawGame(k,M,pow,ph){const A=artAt(k),m=A.m,f=Math.floor((api.t+ph)*m.fps)%m.n,cl=f%m.cols,rw=(f/m.cols)|0;
+    drawSheet(A.tex,[cl*m.w/A.W,1-(rw+1)*m.h/A.H,m.w/A.W,m.h/A.H],[Math.max(24,m.w>>1),Math.max(14,m.h>>1)],M,pow);}
+  const ortho=(u,f)=>norm(sub(u,scl(f,dot3(u,f))));
+  // a heading and pitch as a direction
+  const dirHP=(hd,p)=>[Math.sin(hd)*Math.cos(p),Math.sin(p),Math.cos(hd)*Math.cos(p)];
+  // the last second of a drift turns you to look straight down, the way the plunge starts
+  function toDown(k,fwd,up){rig.fwd=nl(fwd,DOWN,k);rig.up=ortho(nl(up,[0,0,-1],k),rig.fwd);}
+  function plunge(o){startFall(Object.assign({T:1.9,v0:Math.max(1,api.vel||1.5),roll:Math.PI,layers:3,panels:false,table:false},o));}
+  function endShared(){for(const A of FALLBACK)gl.deleteTexture(A.tex);FALLBACK.length=0;}
+
+  /* ===== A · WHIRLPOOL =====
+     Straight after STEP INSIDE the camera lifts to see the whole table, and the table twists: its art, its rails and
+     bumpers wind into a whirlpool round the frozen ball. Then the spin takes you, faster and faster, down the drain.
+     Below the table you sink slowly through a ring of the arcade's games, each passing close and big, then turn to
+     look down and drop. */
+  VARS.a={name:'Whirlpool',at:G.sink+.25,T:{twist:1.4,suck:3.0,drift:5.6},W:0,
+    start(){const S=this;setStage('suck');S.f0=rig.fwd.slice();S.u0=rig.up.slice();S.fov0=rig.fov;S.e0=rig.eye.slice();
+      S.e1=UPT;S.e2=norm(cross(NRM,UPT));const d=sub(rig.eye,HOLE.w);const h=dot3(d,NRM),r=sub(d,scl(NRM,h));S.p0=Math.atan2(dot3(r,S.e2),dot3(r,S.e1));
+      Object.assign(api.post,{gl:0,dot:0});api.tear.a=0;api.flick=0;api.jit=0;S.W=0;S.crossed=0;api.dmdPow=0;
+      SX.suck(3);SX.swell(3,120,5200,.15,.6);SX.pad([45,57,60,64],3.8,.022);},
+    warp(){const S=this;return S.W>0?[[HOLE.w[0],HOLE.w[1],HOLE.w[2],S.W],[NRM[0],NRM[1],NRM[2],.12+.3*S.W]]:null;},
+    update(dt,st){const S=this,t=api.st,T1=S.T.twist,T2=S.T.suck;
+      if(st==='suck'){
+        api.pow=1;api.dim=.15;
+        // the twist, watched from above; then the dive, the spin speeding up as you go down the middle
+        S.W=.72*sstep(.05,T1,t)+.28*sstep(T1,T2-.4,t);
+        const d=Math.max(0,t-T1),ph=S.p0+.45*t+1.9*d*d,
+          rad=lerp(.32,0,sstep(T1,T2-.5,t)),h=t<T1?lerp(.55,1.15,easeIO(t/T1)):lerp(1.15,-.8,Math.pow(sstep(T1,T2,t),1.7));
+        const rv=add(scl(S.e1,Math.cos(ph)),scl(S.e2,Math.sin(ph))),pos=add(add(HOLE.w,scl(NRM,h)),scl(rv,rad));
+        const k0=sstep(0,.9,t);rig.eye=mix3(S.e0,pos,k0);
+        rig.fwd=nl(S.f0,norm(sub(sub(HOLE.w,scl(NRM,t<T1?0:1.6*sstep(T1,T2,t))),rig.eye)),k0);
+        rig.up=ortho(nl(S.u0,rv,sstep(.2,1.6,t)),rig.fwd);
+        rig.fov=lerp(S.fov0,50,k0)+40*sstep(T1+.6,T2,t);
+        api.carve=h<.2?{c:rig.eye.slice(),r:.42,y0:-1e9,k:100,col:[1,.55,.95]}:{c:add(HOLE.w,scl(NRM,-.004)),r:.13+.22*sstep(T1,T2-.6,t),y0:-1e9,k:100,col:[1,.55,.95]};
+        if(!S.crossed&&h<0){S.crossed=1;api.post.dot=8;api.dotT=.12;SX.crackle(16);SX.whoosh();}
+        B.h=R-.08-.4*sstep(T1,T2-.4,t);
+        api.post.rad=(reduce?.15:.55)*sstep(T1+.7,T2,t);LOOK.fringe=lerp(.012,.07,sstep(T1,T2,t));shake(.0015*sstep(T1,T2,t));
+        tunA=lerp(.1,.9,sstep(T1+.5,T2,t));api.vel=1+6*sstep(T1+.5,T2,t);windSet(api.vel);
+        if(t>=T2){setStage('drift');S.W=0;S.y0=rig.eye[1];S.ax=[HOLE.w[0],HOLE.w[2]];S.f1=rig.fwd.slice();S.u1=rig.up.slice();
+          S.hd0=Math.atan2(rig.up[0],rig.up[2]);api.carve=null;api.tableOn=false;S.buildRing();SX.pad([50,57,62,66],5,.02);SX.drone(5);}
+        return;}
+      // the drift: falling slowly, looking out at the games as they come past
+      const y=S.y(t);api.vel=3.6*Math.exp(-1.9*t)+.9;windSet(api.vel*.6);
+      const hd=S.hd0+.36*t,look=dirHP(hd,-.18+.04*Math.sin(t*1.3));
+      rig.eye=[S.ax[0],y,S.ax[1]];
+      const k=sstep(0,1.3,t);rig.fwd=nl(S.f1,look,k);rig.up=ortho(nl(S.u1,[0,1,0],k),rig.fwd);rig.fov=lerp(90,62,sstep(0,1.1,t));
+      const k2=sstep(S.T.drift-1.1,S.T.drift,t);if(k2>0){toDown(k2,rig.fwd,rig.up);rig.fov=lerp(62,72,k2);}
+      api.post.rad=(reduce?.05:.3)*(1-sstep(0,.8,t));LOOK.fringe=lerp(.07,.02,sstep(0,1,t));tunA=lerp(.9,.3,sstep(0,1.2,t));
+      if(t>=S.T.drift)plunge();},
+    y(t){return this.y0-(3.6/1.9*(1-Math.exp(-1.9*t))+.9*t);},
+    // the games: one after another, each placed where you'll be looking as you sink past it
+    buildRing(){const S=this;S.ring=[];
+      for(let k=0;k<5;k++){const tk=1.2+k*.95;S.ring.push({k,y:S.y(tk)-.05,hd:S.hd0+.36*tk+(k%2?.55:-.55),ph:Math.random()*10});}},
+    screens(){const S=this;if(api.stage!=='drift'||!S.ring)return;const t=api.st,ey=rig.eye;
+      for(const q of S.ring){const dy=ey[1]-q.y;if(dy<-2.6||dy>3)continue;
+        const hd=q.hd+.1*t,p=[S.ax[0]+Math.sin(hd)*2.0,q.y,S.ax[1]+Math.cos(hd)*2.0],n=norm(sub(ey,p)),w=1.75;
+        drawGame(q.k,faceM(p,n,w,w*aspectOf(q.k)),1.25*sstep(3,1.8,Math.abs(dy)),q.ph);}},
+    end(){endShared();}
+  };
+
+  /* ===== B · INTO THE DISPLAY =====
+     You're pulled face first into the playfield. The picture breaks into bigger and bigger LED dots until you pass
+     between them, and come out sinking down a shaft whose walls are video walls of the arcade's games. */
+  VARS.b={name:'Into the display',at:G.sink+.3,T:{suck:2.4,drift:5.4},
+    start(){const S=this;setStage('suck');S.e0=rig.eye.slice();S.f0=rig.fwd.slice();S.u0=rig.up.slice();S.fov0=rig.fov;
+      Object.assign(api.post,{gl:0,dot:0});api.tear.a=0;api.flick=0;S.flash=0;
+      SX.suck(2.3);SX.swell(2.4,300,7000,.12,.7);SX.pad([45,57,60,64],3.6,.022);},
+    update(dt,st){const S=this,t=api.st;
+      if(st==='suck'){
+        // the table stays lit, then you hit its surface
+        api.pow=1;api.dim=.15;api.dmdPow=1;
+        const e=Math.pow(sstep(0,S.T.suck,t),2.4),P1=add(HOLE.w,scl(NRM,.035));
+        rig.eye=mix3(S.e0,P1,e);rig.fwd=nl(nl(S.f0,norm(sub(HOLE.w,rig.eye)),sstep(0,.5,t)),scl(NRM,-1),sstep(1.2,2.2,t));rig.up=ortho(nl(S.u0,UPT,sstep(.6,1.8,t)),rig.fwd);rig.fov=lerp(S.fov0,58,sstep(0,1.5,t));
+        api.post.dot=t<.35?0:2.5+64*Math.pow(sstep(.35,S.T.suck,t),2.1);
+        shake(.002*sstep(1.5,S.T.suck,t));LOOK.fringe=lerp(.012,.05,sstep(1,S.T.suck,t));
+        if(t>=S.T.suck){setStage('drift');api.tableOn=false;api.exp=.9;S.y0=rig.eye[1]-.6;S.ax=[rig.eye[0],rig.eye[2]];S.f1=rig.fwd.slice();S.u1=rig.up.slice();
+          S.hd0=Math.PI;S.buildWalls();SX.whoosh();SX.crackle(20);SX.pad([52,59,64,67],5.4,.02);SX.drone(5.4);}
+        return;}
+      // the shaft: the dots resolve into the video walls as you sink, turning slowly to face each wall in turn
+      const v=1.35+.5*Math.exp(-2*t),y=S.y0-(1.35*t+.25*(1-Math.exp(-2*t)));api.vel=v;windSet(v*.5);
+      rig.eye=[S.ax[0],y,S.ax[1]];
+      const hd=S.hd0+.33*t,look=dirHP(hd,-.1+.03*Math.sin(t*1.1)),k=sstep(0,.9,t);
+      rig.fwd=nl(S.f1,look,k);rig.up=ortho(nl(S.u1,[0,1,0],k),rig.fwd);rig.fov=lerp(58,62,k);
+      api.post.dot=Math.max(0,66*(1-sstep(0,.85,t)));
+      const k2=sstep(S.T.drift-1.0,S.T.drift,t);if(k2>0){toDown(k2,rig.fwd,rig.up);rig.fov=lerp(62,72,k2);}
+      LOOK.fringe=lerp(.05,.015,sstep(0,1,t));tunA=.0;
+      if(t>=S.T.drift){api.post.dot=0;plunge();}},
+    // four walls of screens round a square shaft, three across and a row every metre
+    buildWalls(){const S=this;S.walls=[];let k=0;const D=2.15,sw=1.3;
+      for(let wall=0;wall<4;wall++){const a=wall*Math.PI/2,n=[-Math.sin(a),0,-Math.cos(a)],c=[Math.sin(a)*D,0,Math.cos(a)*D],rt=[Math.cos(a),0,-Math.sin(a)];
+        for(let row=0;row<12;row++)for(let col=-1;col<=1;col++){const y=S.y0+1.4-row*.92;
+          S.walls.push({k:k++,p:[S.ax[0]+c[0]+rt[0]*col*1.42,y,S.ax[1]+c[2]+rt[2]*col*1.42],n,ph:Math.random()*10});}}},
+    screens(){const S=this;if(api.stage!=='drift'||!S.walls)return;const ey=rig.eye,k=sstep(0,.5,api.st);
+      for(const q of S.walls){const dy=q.p[1]-ey[1];if(dy<-2.6||dy>2.4)continue;
+        drawGame(q.k,faceM(q.p,q.n,1.3,1.3*.5625),k*1.1*sstep(2.6,1.6,Math.abs(dy)),q.ph);}},
+    points(pt,t){const S=this;if(api.stage!=='drift'||!S.walls)return;const ey=rig.eye;
+      // the shaft's corners, lined with LED dots
+      for(let c=0;c<4;c++){const a=c*Math.PI/2+Math.PI/4,x=S.ax[0]+Math.sin(a)*3.05,z=S.ax[1]+Math.cos(a)*3.05;
+        for(let i=-14;i<=14;i++){const y=Math.round(ey[1]/.25)*.25+i*.25,lit=((i+Math.floor(t*14))%7+7)%7===0;pt(x,y,z,c%2?.18:1,c%2?.9:.18,c%2?1:.6,lit?1.4:.25,.03);}}},
+    end(){endShared();}
+  };
+
+  /* ===== C · SWALLOWED =====
+     The machine convulses and bursts. You shrink as it goes, so its parts balloon round you: you fall in slow motion
+     among giant bumpers, flippers and slabs of the playfield, with the arcade's games floating among them. Then
+     gravity comes back and everything drops, you with it. */
+  VARS.c={name:'Swallowed',at:G.sink+.5,T:{suck:1.7,drift:5.6,brk:.7},
+    start(){const S=this;setStage('suck');S.e0=rig.eye.slice();S.f0=rig.fwd.slice();S.u0=rig.up.slice();S.fov0=rig.fov;S.broke=0;
+      Object.assign(api.post,{gl:0,dot:0});api.tear.a=0;SX.suck(1.4);SX.bits(6);S.L=[
+        {p:[0,0,0],range:8,col:[1,.35,.8],k:0,pin:true,hz:.3},{p:[0,0,0],range:8,col:[.3,.85,1],k:0,pin:true,hz:.3},{p:[0,0,0],range:7,col:[1,.85,.65],k:0,pin:true,hz:.2}];},
+    // the machine's parts, each with its centre in the playfield's own frame
+    buildParts(){const S=this,P2=[],tile=(i,j,NX,NY)=>{const x0=-HW+2*HW*i/NX,x1=-HW+2*HW*(i+1)/NX,z0=-PL*j/NY,z1=-PL*(j+1)/NY,cx=(x0+x1)/2,cz=(z0+z1)/2,m=new MB();
+        const uv=[[i/NX,j/NY],[(i+1)/NX,j/NY],[(i+1)/NX,(j+1)/NY],[i/NX,(j+1)/NY]];m.quad([x0-cx,.001,z0-cz],[x1-cx,.001,z0-cz],[x1-cx,.001,z1-cz],[x0-cx,.001,z1-cz],[1,1,1],0,uv);
+        m.quad([x0-cx,-.012,z1-cz],[x1-cx,-.012,z1-cz],[x1-cx,-.012,z0-cz],[x0-cx,-.012,z0-cz],[1,1,1],0,[uv[3],uv[2],uv[1],uv[0]]);
+        const b=new MB();b.box(0,-.006,0,x1-x0,.01,z0-z1,hex('#120a20'));return {c:[cx,0,cz],parts:[{m:mesh(m),mode:2,tex:pfTex,emi:.9},{m:mesh(b)}],local:true,sc:7};};
+      for(let j=0;j<4;j++)for(let i=0;i<3;i++)if((i+j)%2===0||j===1)P2.push(tile(i,j,3,4));
+      for(const b of P.bumpers)P2.push({c:[b.x,0,-b.y],parts:[{m:bumpBody,emi:1.1},{m:bumpCap,emi:2.4,tint:BCOL[b.i]},{m:bumpRing,y:.01,emi:.4}],local:true,sc:9});
+      P.flip.forEach((f,i)=>P2.push({c:[f.x,0,-f.y],parts:[{m:flipM[i],emi:1.1}],local:true,sc:9}));
+      [P.slingL,P.slingR].forEach((S2,i)=>{let cx=0,cz=0;for(const p of S2){cx+=p[0];cz-=p[1];}cx/=S2.length;cz/=S2.length;P2.push({c:[cx,0,cz],parts:[{m:slingM[i],emi:1.2,tint:i?[.18,.9,1]:[1,.18,.6]}],sc:9});});
+      INS.slice(0,7).forEach(I=>P2.push({c:[I.u,0,-I.v],parts:[{m:I.m,emi:2.6}],sc:9}));
+      P2.push({c:[HOLE.u,R,-HOLE.v],parts:[{m:ballM,emi:.3}],local:true,sc:14,ball:true});
+      // where each settles round you, and how it drifts and turns
+      P2.forEach((q,i)=>{const a=i*2.39996,el=((i*.618)%1-.5)*1.5,r=1.5+((i*.37)%1)*1.6;
+        q.base=[Math.cos(a)*r,el,Math.sin(a)*r];q.vr=[rnd(-.08,.08),rnd(-.12,.06),rnd(-.08,.08)];q.ax=norm([rnd(-1,1),rnd(-1,1),rnd(-1,1)]);q.ang=0;q.w=rnd(-.9,.9);});
+      S.parts=P2;
+      S.games=[0,1,2,3,4,5].map(k=>{const a=k*1.047+.5,r=2.35;return {k,base:[Math.cos(a)*r,((k*.53)%1-.5)*1.2,Math.sin(a)*r],ph:Math.random()*10,sw:rnd(-.3,.3)};});},
+    update(dt,st){const S=this,t=api.st;
+      if(st==='suck'){
+        const B1=S.T.brk;
+        if(t<B1){// the yank: pulled at the ball, the machine fighting it
+          const e=Math.pow(t/B1,2.2),P1=add(HOLE.w,scl(NRM,.16));rig.eye=mix3(S.e0,P1,e);rig.fwd=nl(S.f0,norm(sub(HOLE.w,rig.eye)),sstep(0,.4,t));rig.up=ortho(S.u0,rig.fwd);
+          rig.fov=lerp(S.fov0,80,e);shake(.012*t/B1);api.pow=Math.random()<.35?.2:1;api.flick=.4;
+          for(const f of P.flip)f.held=Math.random()<.5;for(const b of P.bumpers)if(Math.random()<.2){b.flash=1;b.ring=1;}physTick(dt);
+          return;}
+        if(!S.broke){S.broke=1;S.hdB=Math.atan2(-UPT[0],-UPT[2])+.6;S.buildParts();S.tb=t;S.cam0=rig.eye.slice();api.tableOn=false;api.exp=1.2;LOOK.fringe=.1;burst();}
+        const u=sstep(B1,S.T.suck,t);
+        // through where the playfield was, while it all balloons round you
+        if(!S.f2)S.f2=rig.fwd.slice();rig.eye=add(S.cam0,scl(NRM,-.9*u));rig.fwd=nl(S.f2,dirHP(S.hdB,-.3),sstep(0,1,u));rig.up=ortho([0,1,0],rig.fwd);rig.fov=lerp(80,66,u);S.grow=u;
+        if(t>=S.T.suck){setStage('drift');S.y0=rig.eye[1];S.ax=[rig.eye[0],rig.eye[2]];S.f1=rig.fwd.slice();S.hd0=Math.atan2(rig.fwd[0],rig.fwd[2]);S.f1=rig.fwd.slice();SX.pad([48,55,60,63],5.6,.022);SX.drone(5.6);}
+        S.lights(t);return;}
+      // the slow fall among the pieces
+      const g=sstep(S.T.drift-1.1,S.T.drift,t),y=S.y0-(.8*t+.06*t*t)-4*g*g*(t-(S.T.drift-1.1));api.vel=.8+.12*t+6*g;windSet(api.vel*.6);
+      rig.eye=[S.ax[0],y,S.ax[1]];
+      const hd=S.hd0+.34*t,look=dirHP(hd,-.3+.08*Math.sin(t*.8));rig.fwd=nl(S.f1,look,sstep(0,1,t));
+      rig.up=ortho([Math.sin(t*.7)*.12,1,0],rig.fwd);rig.fov=66;
+      for(const q of S.parts){q.ang+=q.w*dt;}
+      if(g>0){toDown(g,rig.fwd,rig.up);rig.fov=lerp(66,72,g);}
+      LOOK.fringe=lerp(.1,.018,sstep(0,1.2,t));S.lights(t);
+      if(t>=S.T.drift){S.fallStart=rig.eye[1];plunge({roll:Math.PI*.6});api.dyn=[BALL_L].concat(S.L);}},
+    lights(t){const S=this,e=rig.eye;S.L[0].p=[e[0]+Math.cos(t*.6)*1.8,e[1]+1,e[2]+Math.sin(t*.6)*1.8];S.L[1].p=[e[0]-Math.cos(t*.6)*1.8,e[1]-.6,e[2]-Math.sin(t*.6)*1.8];S.L[2].p=[e[0],e[1]-1.6,e[2]];
+      for(const L of S.L)L.k=api.stage==='fall'?L.k*.96:1.7;api.dyn=(api.stage==='fall'?[BALL_L]:[]).concat(S.L);},
+    // in the plunge the pieces fall ahead of you and break up as they hit the ceiling
+    fall(dt,u){const S=this;if(!S.parts)return;S.lights(api.t);for(const q of S.parts){q.ang+=q.w*dt;q.drop=(q.drop||0)+dt*(2+q.base[1]);}},
+    // where piece q is now: in the table at first, then ballooned round the camera, then (in the plunge) dropping ahead
+    pose(q){const S=this,e=rig.eye,st=api.stage,u=st==='suck'?S.grow:1,t=st==='suck'?0:st==='drift'?api.st:S.T.drift;
+      const tw=xf(PFM,q.c[0],q.c[1],q.c[2]),dr=add(add(st==='suck'?S.cam0:[S.ax[0],e[1],S.ax[1]],q.base),scl(q.vr,t));
+      if(st==='fall'){dr[1]=e[1]+q.base[1]-(q.drop||0)*(q.drop||0)*1.2;}
+      const p=mix3(tw,dr,u),sc=lerp(1,q.sc,u*u);
+      return chain(mT(...p),mRX(TH*(1-u)),mRot(q.ax,q.ang*u),mS(sc,sc,sc),q.local?m4():mT(-q.c[0],-q.c[1],-q.c[2]));},
+    draw(){const S=this,st=api.stage;if(!S.parts||!(st==='suck'||st==='drift'||st==='fall'&&rig.eye[1]>ROOM.h+.4))return;
+      gl.uniform4f(P_LIT.u.uCarve,0,0,0,0);
+      for(const q of S.parts){if(st==='fall'&&q.dead)continue;const M=S.pose(q);
+        if(st==='fall'&&M[13]<ROOM.h+.3){q.dead=1;for(let i=0;i<14;i++)spawnDeb([M[12],M[13],M[14]],[rnd(-1,1),rnd(-1,.5),rnd(-1,1)],PAL[(Math.random()*4)|0],rnd(.4,.9),.016,2);continue;}
+        for(const pp of q.parts)drawLit(pp.m,pp.y?mmul(M,mT(0,pp.y,0)):M,{emi:pp.emi??0,tint:pp.tint,mode:pp.mode,tex:pp.tex});}
+      setCarve();},
+    screens(){const S=this;if(api.stage!=='drift'||!S.games)return;const e=rig.eye,t=api.st;
+      for(const q of S.games){const p=add([S.ax[0],e[1],S.ax[1]],add(q.base,[0,Math.sin(t*.5+q.ph)*.15,0])),n=norm(add(sub(e,p),[Math.sin(t*.6+q.ph)*q.sw,0,Math.cos(t*.5+q.ph)*q.sw])),w=1.6;
+        drawGame(q.k,faceM(p,n,w,w*aspectOf(q.k)),1.2*sstep(0,.8,t),q.ph);}},
+    end(){const S=this;S.parts=null;S.games=null;endShared();}
+  };
+  // the burst: a crack, dots everywhere, the table's lights going with it
+  function burst(){S.boom(1.6);SX.crackle(24);SX.whoosh();SX.bits(8);
+    for(let i=0;i<(INTRO==='d'||INTRO==='e'?150:260);i++){const d=norm([rnd(-1,1),rnd(-1,1),rnd(-1,1)]),v=rnd(.4,2.6);spawnDeb(add(HOLE.w,scl(d,.1)),scl(d,v),PAL[(Math.random()*5)|0],rnd(.6,1.6),rnd(.006,.014),.2);}}
+
+  /* ===== D · UPLOAD (the opening of C, the tunnel of B) =====
+     The boot list ends on a quiet hint. When the game glitches the camera stays on the whole table and the score
+     display throws ERROR 404. Everything freezes; the display types INITIALIZING, then UPLOADING PLAYER 1 with a bar
+     filling, while a portal opens in the middle of the playfield, on the logo: the art spirals into it, the ball rolls
+     in, the machine starts to shake. PLAYER 1 READY, and you're pulled through. The machine bursts and you fall in slow
+     motion among its giant parts; they drop away as the walls round you light up, screen by screen, with the arcade's
+     games (and once, all together, PLAYER 1). Then the camera swings down, the screens wind into a spiral and the
+     spiral takes you, faster and faster, down to the arcade. */
+  VARS.d={name:'Upload',at:G.freeze,hazeSuck:.45,get hazeOn(){return !this.broke;},T:{suck:4.4,parts:3.0,shaft:7.2,spiral:4.4},W:0,
+    init(){BOOT[4]='PLAYER UPLOAD ... STANDBY';ERRS.splice(0,ERRS.length,'ERROR 404','404','NOT FOUND','ERROR 404');},
+    once(k,f){const S=this;if(!S.fired[k]){S.fired[k]=1;f();}},
+    glitchCam(gt){const g0=api.g0,c=Wp(P.UC*.3,PL*.47,0),k=.1*easeIO(clamp(gt/G.freeze,0,1));
+      rig.eye=mix3(g0.eye,c,k);rig.fwd=nl(g0.fwd,norm(sub(c,rig.eye)),k*2);rig.up=upFor(rig.fwd);rig.fov=g0.fov;},
+    start(){const S=this;setStage('suck');S.fired={};S.e0=rig.eye.slice();S.f0=rig.fwd.slice();S.fov0=rig.fov;
+      // the portal: in the middle of the playfield, on the logo; everything that drains now drains into it
+      HOLE.u=P.UC*.3;HOLE.v=PL*.47;HOLE.w=Wp(HOLE.u,HOLE.v,0);S.pc=HOLE.w;S.ax=[S.pc[0],S.pc[2]];S.ball0=[B.u,B.v];S.tb=0;
+      S.e1=UPT;S.e2=norm(cross(NRM,UPT));S.dmdC=xf(BBM,0,.115,.007);S.broke=0;S.grow=0;S.W=0;S.typed=-1;S.seg=-1;
+      S.PL_={p:add(S.pc,scl(NRM,.06)),range:.9,col:[1,.4,.95],k:0,pin:true,hz:.8};
+      S.L=[{p:[0,0,0],range:8,col:[1,.35,.8],k:0,pin:true,hz:.3},{p:[0,0,0],range:8,col:[.3,.85,1],k:0,pin:true,hz:.3},{p:[0,0,0],range:7,col:[1,.85,.65],k:0,pin:true,hz:.2}];
+      Object.assign(api.post,{gl:0,dot:0});api.tear.a=.02;api.jit=0;api.ghost=0;api.flick=0;api.dmdPow=1;},
+    warp(){const S=this;return S.W>0?[[S.pc[0],S.pc[1],S.pc[2],S.W],[NRM[0],NRM[1],NRM[2],.1+.25*S.W]]:null;},
+    // the score display, from the 404 on
+    dmd(g,st,gt,t){const S=this;
+      if(st==='glitch'&&gt>=G.stut){const fl=Math.random()<.2;txt5(g,fl?'404':'ERROR 404',64,9,'#fff',2,'c');corruptRows(g,.22);
+        if(Math.random()<.35){g.fillStyle='#fff';g.fillRect((Math.random()*120)|0,(Math.random()*28)|0,(Math.random()*24)|0,2);}return true;}
+      if(st!=='suck')return false;
+      const s=api.st;
+      if(s<.6){txt5(g,'ERROR 404',64,9,'#fff',2,'c');if(Math.random()<.25)corruptRows(g,.15);return true;}
+      if(s<1.6){const W='INITIALIZING',n=Math.min(W.length,Math.floor((s-.6)/.055)),x0=Math.round(64-tw5(W,1)/2);txt5(g,W.slice(0,n),x0,12,'#fff',1);
+        g.fillStyle='#fff';if(n<W.length)g.fillRect(x0+n*6,12,5,7);else for(let i=0;i<(Math.floor(t*5)%4);i++)g.fillRect(x0+tw5(W,1)+3+i*4,17,2,2);return true;}
+      if(s<3.6){const p=sstep(1.75,3.45,s),seg=Math.floor(p*24);txt5(g,'UPLOADING PLAYER 1',64,2,'#fff',1,'c');
+        g.strokeStyle='#bbb';g.lineWidth=1;g.strokeRect(3.5,12.5,121,9);g.fillStyle='#fff';for(let i=0;i<seg;i++)g.fillRect(5+i*5,14,4,6);
+        txt3(g,Math.round(p*100)+'%',64,25,'#ddd','c');if(s>2.6&&Math.random()<.25*sstep(2.6,3.6,s))corruptRows(g,.12);return true;}
+      const on=s<3.75||Math.floor(t*9)%2===0;txt5(g,'PLAYER 1',64,1,on?'#fff':'#777',2,'c');txt5(g,'READY',64,18,'#fff',2,'c');return true;},
+    update(dt,st){const S=this,t=api.st;
+      if(st==='suck')return S.suck(dt,t);
+      // the fall: the parts, the shaft of screens, the spiral
+      const T1=S.T.parts,T2=T1+S.T.shaft,T3=T2+S.T.spiral;
+      const v=t<T1?.85+.12*t:t<T2?lerp(1.2,1.45,(t-T1)/S.T.shaft):1.45+6.2*Math.pow(sstep(T2+.4,T3,t),1.5);
+      S.y-=v*dt;api.vel=v;windSet(v*.5);rig.eye=[S.ax[0],S.y,S.ax[1]];
+      S.hd+=(.3+1.1*sstep(T2+.8,T3,t))*dt;
+      const pitch=t<T1?lerp(-1.25,-.36,easeIO(sstep(0,1.2,t)))+.06*Math.sin(t*.9):t<T2?lerp(-.32,-.1,sstep(T1,T1+1,t))+.04*Math.sin(t*1.1):lerp(-.1,-1.5707,easeIO(sstep(T2,T2+2.0,t)));
+      const look=dirHP(S.hd,pitch),k0=sstep(0,1.1,t);rig.fwd=nl(S.f1,look,k0);
+      const hu=dirHP(S.hd,0),ku=sstep(T2+.7,T2+2.0,t);rig.up=ortho(norm(nl(nl(S.u1,[0,1,0],k0),hu,ku)),rig.fwd);
+      rig.fov=t<T2?lerp(84,62,sstep(0,1.2,t)):lerp(62,74,sstep(T2+1,T3,t));
+      for(const q of S.parts||[])q.ang+=q.w*dt;
+      S.lights(t<T1+1.5?1.7:1.7*(1-sstep(T1+1.5,T1+3,t)));
+      tunA=t<T2?lerp(.15,.06,sstep(0,T1,t)):lerp(.06,.95,sstep(T2+.5,T3-.6,t));
+      api.post.rad=(reduce?.05:.35)*(t<1?1-t:0)+(reduce?.08:.32)*sstep(T2+1.5,T3,t);LOOK.fringe=lerp(.1,.016,sstep(0,1.2,t))+.03*sstep(T2+2,T3,t);
+      // the beats
+      if(t>=T1-.5)S.once('walls',()=>{SX.pad([52,59,64,67],S.T.shaft,.02);SX.drone(S.T.shaft);});
+      if(t>=T1+3.1)S.once('p1',()=>{SX.jingle();S.flash=api.t;});
+      if(t>=T2-.3)S.once('helix',()=>{S.buildHelix();SX.riser(S.T.spiral+.4,.12);SX.pad([48,55,60,64,67],S.T.spiral,.022);});
+      if(t>=T3){const u=rig.up;plunge({T:2.0,v0:v,roll:Math.PI*.9,roll0:Math.atan2(-u[0],-u[2]),layers:3});api.dyn=[BALL_L];}},
+    suck(dt,s){const S=this;
+      // the frozen screen speaks, then a bar fills while the portal opens and takes the art, the ball and then you
+      if(s>=.55)S.once('unsil',()=>SX.unsilence());
+      const n=s>=.6&&s<1.6?Math.min(12,Math.floor((s-.6)/.055)):-1;if(n!==S.typed&&n>0){S.typed=n;SX.typeTick();}
+      const seg=s>=1.75&&s<3.6?Math.floor(sstep(1.75,3.45,s)*24):-1;if(seg!==S.seg&&seg>=0){S.seg=seg;tone(420+seg*38,now(),.035,'square',.02);}
+      if(s>=1.8)S.once('portal',()=>{const k=S.slow||1;SX.swell(2.6*k,70,2600,.14,.7);SX.drone(3*k);SX.crackle(10);});
+      if(s>=3.6)S.once('ready',()=>{SX.jingle();SX.suck(.9);});
+      api.pow=s<2.6?1:(Math.random()<.22*sstep(2.6,4,s)?.25:1);api.dim=.15;api.dmdPow=1;
+      const pr=s<1.8?0:.025+.17*easeO(sstep(1.8,3.1,s))+.16*sstep(3.6,4.25,s);S.pr=pr;
+      api.carve=pr>0&&!S.broke?{c:add(S.pc,scl(NRM,-.004)),r:pr,y0:-1e9,k:100,col:[1,.55,.95]}:null;
+      S.W=.3*sstep(1.9,3.4,s)+.45*sstep(3.6,4.2,s);
+      if(s>=2.0){if(!S.vx){S.vx=1;api.vxT=0;buildVortex();}api.vxT+=dt*.55;updateVortex(dt*.55);api.drainR=pr*1.5+api.vxT*.12;}
+      const bk=sstep(2.2,3.1,s);B.u=lerp(S.ball0[0],HOLE.u,bk*bk);B.v=lerp(S.ball0[1],HOLE.v,bk*bk);B.h=R-.09*sstep(2.85,3.25,s);
+      const cv=sstep(2.4,4.2,s);api.jit=.0025*cv;for(const f of P.flip)f.held=cv>.15&&Math.random()<.5*cv;for(const b of P.bumpers)if(Math.random()<.15*cv){b.flash=1;b.ring=1;}physTick(dt);
+      S.PL_.k=1.6*sstep(1.8,2.6,s)*(1+.25*Math.sin(s*14));api.dyn=S.broke?S.L:[S.PL_];
+      tunA=.04;
+      if(s<3.6){// push in on the portal, the score display kept at the top of the frame
+        const e=easeIO(sstep(1.3,3.6,s)),E=add(add(S.pc,scl(NRM,1.1)),scl(UPT,-.95)),tg=mix3(S.pc,S.dmdC,.42);
+        rig.eye=mix3(S.e0,E,e);rig.fwd=nl(S.f0,norm(sub(tg,rig.eye)),e);rig.up=upFor(rig.fwd);rig.fov=lerp(S.fov0,54,e);
+        shake(.0045*cv*cv);S.E36=rig.eye.slice();S.F36=rig.fwd.slice();S.U36=rig.up.slice();}
+      else{// the pull: in and through
+        const e1=easeIO(sstep(3.6,4.0,s)),e2=Math.pow(sstep(4.0,4.4,s),2),A1=add(S.pc,scl(NRM,.4));
+        rig.eye=e2>0?mix3(A1,sub(S.pc,scl(NRM,.6)),e2):mix3(S.E36,A1,e1);
+        rig.fwd=nl(S.F36,scl(NRM,-1),e1);rig.up=ortho(nl(S.U36,UPT,e1),rig.fwd);rig.fov=lerp(54,62,e1)+26*e2;shake(.005*(1-e2));
+        api.post.rad=(reduce?.1:.5)*e2;LOOK.fringe=lerp(.012,.09,e2);}
+      if(!S.broke&&s>=4.0&&dot3(sub(rig.eye,S.pc),NRM)<.02){S.broke=1;VARS.c.buildParts.call(S);const hp=Math.atan2(-UPT[0],-UPT[2])+.95;
+        // mostly ahead of where you'll be looking, and a little below
+        S.parts.forEach((q,i)=>{q.sc*=.62;for(const pp of q.parts)pp.emi=(pp.emi||0)+.35;const a=hp+((i*.618)%1-.5)*2.7,el=-1.05+((i*.37)%1)*1.35,r=1.35+((i*.53)%1)*1.5;q.base=[Math.sin(a)*r,el,Math.cos(a)*r];});api.tableOn=false;api.carve=null;S.W=0;api.exp=1.2;S.cam0=rig.eye.slice();burst();}
+      if(S.broke){S.grow=sstep(S.tb||(S.tb=s),S.T.suck+.6,s);S.lights(2.2);}
+      if(s>=S.T.suck){setStage('drift');S.y=rig.eye[1];S.f1=rig.fwd.slice();S.u1=rig.up.slice();S.hd=Math.atan2(-UPT[0],-UPT[2])+.5;S.buildWalls();
+        SX.pad([48,55,60,63],S.T.parts+1,.022);}},
+    lights(k){const S=this,e=rig.eye,t=api.t;S.L[0].p=[e[0]+Math.cos(t*.6)*1.8,e[1]+1,e[2]+Math.sin(t*.6)*1.8];S.L[1].p=[e[0]-Math.cos(t*.6)*1.8,e[1]-.6,e[2]-Math.sin(t*.6)*1.8];
+      S.L[2].p=[e[0],e[1]-1.6,e[2]];for(const L of S.L){L.k=k;L.hz=.03;}api.dyn=S.L;},
+    // the parts: in the table, then ballooned round you, then (as the shaft begins) falling away below
+    pose(q){const S=this,st=api.stage,e=rig.eye,u=st==='suck'?S.grow:1,t=st==='drift'?api.st:0,f=Math.max(0,t-S.T.parts+.7);
+      const tw=xf(PFM,q.c[0],q.c[1],q.c[2]),dr=add(add([S.ax[0],e[1],S.ax[1]],q.base),[q.vr[0]*t,q.vr[1]*t-f*f*(1+.3*q.base[1]),q.vr[2]*t]);
+      const p=mix3(tw,dr,u),sc=lerp(1,q.sc,u*u);
+      return chain(mT(...p),mRX(TH*(1-u)),mRot(q.ax,q.ang*u),mS(sc,sc,sc),q.local?m4():mT(-q.c[0],-q.c[1],-q.c[2]));},
+    draw(){const S=this,st=api.stage;if(!S.parts||!(st==='suck'&&S.broke||st==='drift'&&api.st<S.T.parts+4))return;
+      gl.uniform4f(P_LIT.u.uCarve,0,0,0,0);
+      for(const q of S.parts){const M=S.pose(q);if(M[13]<rig.eye[1]-9)continue;
+        for(const pp of q.parts)drawLit(pp.m,pp.y?mmul(M,mT(0,pp.y,0)):M,{emi:pp.emi??0,tint:pp.tint,mode:pp.mode,tex:pp.tex});}
+      setCarve();},
+    // the shaft: four walls of screens, three across, a row every 92 cm; each lights as it comes into view
+    buildWalls(){const S=this;S.walls=[];let k=0;const D=2.15;
+      for(let wall=0;wall<4;wall++){const a=wall*Math.PI/2,n=[-Math.sin(a),0,-Math.cos(a)],c=[Math.sin(a)*D,0,Math.cos(a)*D],rt=[Math.cos(a),0,-Math.sin(a)];
+        for(let row=0;row<15;row++)for(let col=-1;col<=1;col++)S.walls.push({k:k++,row,col,p:[S.ax[0]+c[0]+rt[0]*col*1.42,S.y-1.9-row*.92,S.ax[1]+c[2]+rt[2]*col*1.42],n,ph:Math.random()*10,on:-1,dl:Math.random()*.25});}
+      // PLAYER 1, across three screens by three
+      const cv=mkCanvas(112,63),g=cv.getContext('2d');g.fillStyle='#07040e';g.fillRect(0,0,112,63);
+      gradText(g,'PLAYER 1',56,15,2,GRAD.pink);gradText(g,'READY',56,38,1,GRAD.cyan);
+      S.mosaic=texFrom(cv,true);},
+    buildHelix(){const S=this;S.helix=[];for(let k=0;k<16;k++){const y=S.y-2.4-k*1.15,a=S.hd+.9+k*.78;S.helix.push({k:k+3,y,a,ph:Math.random()*10});}},
+    screens(){const S=this;if(api.stage!=='drift')return;const e=rig.eye,t=api.st,T1=S.T.parts,mz=t>=T1+3.1&&t<T1+4.5;
+      if(S.walls&&t>T1-.6&&t<T1+S.T.shaft+1.2)for(const q of S.walls){const dy=q.p[1]-e[1];if(dy<-2.9||dy>2.4)continue;
+        if(q.on<0&&dy>-2.6&&t>T1-.6+q.dl){q.on=t;if(q.k%5===0)S.click();}if(q.on<0)continue;
+        const a=t-q.on,pw=(a<.06?1.8:a<.12?.2:a<.2?1.3:1)*sstep(2.9,1.9,Math.abs(dy))*1.1,M=faceM(q.p,q.n,1.3,1.3*.5625);
+        if(mz)drawSheet(S.mosaic,[0,0,1,1],[112,63],M,pw*(t-T1-3.1<.08?2:1.15));else drawGame(q.k,M,pw,q.ph);}
+      if(S.helix)for(const q of S.helix){const dy=e[1]-q.y;if(dy<-1.5||dy>9)continue;
+        const a=q.a+.35*t,p=[S.ax[0]+Math.sin(a)*2.05,q.y,S.ax[1]+Math.cos(a)*2.05],n=norm(sub([S.ax[0],q.y+1.7,S.ax[1]],p)),w=1.45;
+        drawGame(q.k,faceM(p,n,w,w*aspectOf(q.k)),1.2*sstep(9,6,dy)*(1-sstep(-.4,-1.5,dy)),q.ph);}},
+    click(){const t=now();noise(t,.02,.035,5000,2400,'bandpass');tone(1900,t,.015,'square',.012);},
+    points(pt,t){const S=this,st=api.stage;
+      if(st==='suck'&&S.pr>0&&!S.broke){const s=api.st,pr=S.pr;
+        // the portal: a rim of dots turning both ways, a swirl draining inward, sparks lifting off
+        for(let i=0;i<72;i++){const a=i/72*TAU+(i%2?1:-1)*s*1.6,c=i%2?PAL[1]:PAL[0],p=add(S.pc,add(scl(S.e1,Math.cos(a)*pr),add(scl(S.e2,Math.sin(a)*pr),scl(NRM,.004))));pt(p[0],p[1],p[2],c[0],c[1],c[2],1.7,.0075);}
+        for(let i=0;i<110;i++){const f=(i*.6180339+s*.7)%1,r=pr*(1-f)*.95,a=i*2.399+s*2.2+f*5,c=PAL[(i%3)+2],p=add(S.pc,add(scl(S.e1,Math.cos(a)*r),add(scl(S.e2,Math.sin(a)*r),scl(NRM,-.03*f))));pt(p[0],p[1],p[2],c[0],c[1],c[2],1.1*(1-f*.5),.005);}
+        for(let i=0;i<40;i++){const f=(i*.37+s*.5)%1,a=i*1.7,r=pr*(.6+.5*((i*.29)%1)),p=add(S.pc,add(scl(S.e1,Math.cos(a)*r),add(scl(S.e2,Math.sin(a)*r),scl(NRM,f*.45))));pt(p[0],p[1],p[2],1,.6,.95,1.2*(1-f),.004);}}
+      if(st==='drift'&&S.walls){const T1=S.T.parts,e=rig.eye;if(t>0&&api.st>T1-.6&&api.st<T1+S.T.shaft+1)
+        for(let c=0;c<4;c++){const a=c*Math.PI/2+Math.PI/4,x=S.ax[0]+Math.sin(a)*3.05,z=S.ax[1]+Math.cos(a)*3.05;
+          for(let i=-14;i<=12;i++){const y=Math.round(e[1]/.25)*.25+i*.25,lit=((i+Math.floor(t*16))%6+6)%6===0;pt(x,y,z,c%2?.18:1,c%2?.9:.18,c%2?1:.6,lit?1.5:.22,.03);}}}},
+    end(){const S=this;if(S.mosaic)gl.deleteTexture(S.mosaic);S.mosaic=null;S.parts=null;S.walls=null;S.helix=null;endShared();}
+  };
+
+  /* ===== E · UPLOAD, PACED =====
+     D as it is, with more time to read: the power-up runs 50% slower, and the glitch, the 404 and the upload 25%
+     slower, up to PLAYER 1 READY. From the pull through the portal on, it's D's timing exactly. */
+  VARS.e=Object.assign(Object.create(VARS.d),{name:'Upload, paced',slow:1.25,bootRate:1/1.5,
+    init(){VARS.d.init.call(this);for(const k in G)G[k]*=this.slow;this.at=G.freeze;},
+    rate(s){return s<3.6?1/this.slow:1;}});
+
+  const VAR=VARS[INTRO]||null;
+  if(VAR&&VAR.init)VAR.init();
   build();
   B.h=R;
   Object.assign(api,{update,draw,drawScreens,drawPts,setCarve,key,ptr,clearInput,skip,P,HOLE,
-    test:{power(){audioInit();power();},launch(p){P.release(p);SX.launch(p);if(!IM.on)imStart();},state:()=>({stage:api.stage,st:+api.st.toFixed(2),dings:api.dings,art:TART.length,panels:PANELS.length})}});
+    test:{power(){audioInit();power();},launch(p){P.release(p);SX.launch(p);if(!IM.on)imStart();},state:()=>({intro:INTRO,stage:api.stage,st:+api.st.toFixed(2),dings:api.dings,art:TART.length,panels:PANELS.length})}});
   updateOff(0);applyRig();
   return api;
 })();

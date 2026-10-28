@@ -94,7 +94,7 @@ const ATT=[];
 function Attract(id,scr,o={}){
   const A={id,scr,meta:null,img:null,t:Math.random()*20,fi:-1,asked:false,ph:o.title||id.toUpperCase(),col:o.col||'#ff4fb8'};
   A.load=()=>{if(A.asked)return;A.asked=true;
-    fetch('../attract/'+id+'.json').then(r=>r.ok?r.json():null).then(m=>{if(!m)return;const im=new Image();im.onload=()=>{A.meta=m;A.img=im;};im.src='../attract/'+id+'.webp';}).catch(()=>{});};
+    fetch(ROOT+'attract/'+id+'.json').then(r=>r.ok?r.json():null).then(m=>{if(!m)return;const im=new Image();im.onload=()=>{A.meta=m;A.img=im;};im.src=ROOT+'attract/'+id+'.webp';}).catch(()=>{});};
   /* until its loop arrives a screen shows the game's name, scrolling, in dots */
   A.place=t=>{const g=scr.g,w=scr.w,h=scr.h;g.fillStyle='#000';g.fillRect(0,0,w,h);
     const sc=Math.max(1,Math.floor(h/24)),tw=tw5(A.ph,sc),x=Math.round(w/2-tw/2+Math.sin(t*.9)*Math.max(0,(tw-w)/2+4));
