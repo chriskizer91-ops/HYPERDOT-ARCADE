@@ -101,6 +101,7 @@ const clamp=(v,a,b)=>v<a?a:v>b?b:v,lerp=(a,b,t)=>a+(b-a)*t,rnd=(a,b)=>a+Math.ran
 const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
 const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:v}catch(e){return d}},set(k,v){try{localStorage.setItem(k,String(v))}catch(e){}}};
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const INTRO='live';   // which intro this page plays: 'live' (v2/index.html) or a test version (v2/intro-*.html)
 const touchy=matchMedia('(hover: none)').matches;
 const lin=c=>Math.pow(c/255,2.2);
 const hex=(h,k=1)=>{const n=parseInt(h.slice(1),16);return [lin(n>>16&255)*k,lin(n>>8&255)*k,lin(n&255)*k];};
@@ -154,8 +155,10 @@ function prog(vs,fs){
   return {p,u};
 }
 const VS_MESH=`layout(location=0) in vec3 aP;layout(location=1) in vec3 aN;layout(location=2) in vec3 aC;layout(location=3) in float aE;layout(location=4) in vec2 aT;layout(location=5) in vec2 aM;
-uniform mat4 uVP;uniform mat4 uM;out vec3 vW;out vec3 vN;out vec3 vC;out float vE;out vec2 vT;out vec2 vM;
-void main(){vec4 w=uM*vec4(aP,1.0);vW=w.xyz;vN=mat3(uM)*aN;vC=aC;vE=aE;vT=aT;vM=aM;gl_Position=uVP*w;}`;
+uniform mat4 uVP;uniform mat4 uM;uniform vec4 uWarp;uniform vec4 uWarpN;out vec3 vW;out vec3 vN;out vec3 vC;out float vE;out vec2 vT;out vec2 vM;
+void main(){vec4 w=uM*vec4(aP,1.0);
+  if(uWarp.w>0.0){vec3 ax=uWarpN.xyz,d=w.xyz-uWarp.xyz;float h=dot(d,ax);vec3 r=d-ax*h;float f=uWarp.w*exp(-length(r)/uWarpN.w),an=f*5.5;
+    r=r*cos(an)+cross(ax,r)*sin(an);r*=1.0-.82*f;h-=f*uWarpN.w*1.8;w.xyz=uWarp.xyz+r+ax*h;}vW=w.xyz;vN=mat3(uM)*aN;vC=aC;vE=aE;vT=aT;vM=aM;gl_Position=uVP*w;}`;
 const FS_LIT=`in vec3 vW;in vec3 vN;in vec3 vC;in float vE;in vec2 vT;in vec2 vM;
 uniform vec3 uCam;uniform vec4 uL[32];uniform int uNL;uniform vec3 uAmbT;uniform vec3 uAmbB;uniform vec3 uFog;uniform float uFogD;
 uniform float uMode;uniform sampler2D uTex;uniform float uEmi;uniform vec3 uTint;uniform float uTime;uniform float uAlpha;
@@ -1092,7 +1095,7 @@ function useLit(){
   for(const L of ls){if(n>=16)break;const k=L.pin?L.k:L.k*(L.pw??1)*AP.light;arr.set([L.p[0],L.p[1],L.p[2],L.range,L.col[0],L.col[1],L.col[2],k],n*8);LHZ[n]=hzOf(L);n++;}
   LN=n;gl.uniform4fv(u.uL,arr);gl.uniform1i(u.uNL,n);
   const am=AP.amb;gl.uniform3fv(u.uAmbT,[.24*am,.2*am,.32*am]);gl.uniform3fv(u.uAmbB,[.07*am,.055*am,.1*am]);
-  gl.uniform4f(u.uRez,2,0,1,.03);gl.uniform2f(u.uTear,PIN.active?PIN.tear.a:0,PIN.active?PIN.tear.seed:0);gl.uniform3fv(u.uCarveCol,[0,0,0]);
+  gl.uniform4f(u.uWarp,0,0,0,0);gl.uniform4f(u.uRez,2,0,1,.03);gl.uniform2f(u.uTear,PIN.active?PIN.tear.a:0,PIN.active?PIN.tear.seed:0);gl.uniform3fv(u.uCarveCol,[0,0,0]);
   if(PIN.active)PIN.setCarve();else gl.uniform4f(u.uCarve,0,0,0,0);
   applyIgn();
   gl.activeTexture(gl.TEXTURE5);gl.bindTexture(gl.TEXTURE_2D,AO_TEX);gl.activeTexture(gl.TEXTURE0);gl.uniform1i(u.uAO,5);gl.uniform4fv(u.uAOr,AO_TEX?AOR:[0,0,0,0]);gl.uniform1f(u.uPool,3.2*AP.light);
@@ -3458,7 +3461,7 @@ const PIN=(()=>{
     tableM=mesh(mb);
     // playfield art
     const pfc=paintPlayfield();pfTex=texFrom(pfc,false);api.pfData=pfc.getContext('2d').getImageData(0,0,TXW,TXH).data;
-    mb=new MB();mb.quad([-HW,.0006,0],[HW,.0006,0],[HW,.0006,-PL],[-HW,.0006,-PL],[1,1,1],0,[[0,0],[1,0],[1,1],[0,1]]);pfM=mesh(mb);
+    mb=new MB();{const NX=12,NY=24,X=i=>-HW+2*HW*i/NX,Z=j=>-PL*j/NY;for(let j=0;j<NY;j++)for(let i=0;i<NX;i++)mb.quad([X(i),.0006,Z(j)],[X(i+1),.0006,Z(j)],[X(i+1),.0006,Z(j+1)],[X(i),.0006,Z(j+1)],[1,1,1],0,[[i/NX,j/NY],[(i+1)/NX,j/NY],[(i+1)/NX,(j+1)/NY],[i/NX,(j+1)/NY]]);}pfM=mesh(mb);
     // backbox (level, not tilted) with its backglass and DMD
     const top=xf(PFM,0,.06,-1.11);BBM=mT(top[0],top[1],top[2]);
     mb=new MB();mb.box(0,.39,-.1,.66,.78,.2,wood);
@@ -3805,11 +3808,11 @@ const PIN=(()=>{
   const spritePix=rows=>{const out=[];rows.forEach((row,r)=>{for(let c=0;c<row.length;c++)if(row[c]==='x')out.push([c,r]);});return {px:out,w:rows[0].length,h:rows.length};};
   const COIN=['...xxxxx...','.xx.....xx.','.x.x...x.x.','x..x...x..x','x..x...x..x','x..xxxxx..x','x..x...x..x','x..x...x..x','.x.x...x.x.','.xx.....xx.','...xxxxx...'];
   const STAR=['.....x.....','.....x.....','....xxx....','xxxxxxxxxxx','.xxxxxxxxx.','..xxxxxxx..','...xxxxx...','..xxx.xxx..','..xx...xx..','.xx.....xx.','.x.......x.'];
-  function buildLayers(){
+  function buildLayers(nMax){
     LAY.length=0;
     const items=[[glyphPix(String(Math.min(999999,api.score)).padStart(6,'0')),.085,[1,.8,.3]],[glyphPix('GAME OVER'),.06,[1,.25,.3]],[spritePix(COIN),.11,[1,.78,.2]],
       [glyphPix('INSERT COIN'),.055,[.2,.9,1]],[spritePix(STAR),.11,[1,.3,.75]],[glyphPix('PLAYER 1'),.06,[1,1,1]],[glyphPix('PRESS START'),.058,[.4,1,.75]]];
-    const notes=[69,72,76,79,81,84,88];
+    const notes=[69,72,76,79,81,84,88];if(nMax)items.length=Math.min(items.length,nMax);
     items.forEach(([g,p,col],k)=>{
       const y=F.y0-F.D*(.14+.118*k);
       // read the camera's roll when it is 2 m above the layer, so the words face you as you arrive
@@ -3856,6 +3859,7 @@ const PIN=(()=>{
     for(const d of DEB){const k=clamp(d.life/d.max,0,1),dx=d.p[0]-ce[0],dy=d.p[1]-ce[1],dz=d.p[2]-ce[2];if(dx*dx+dy*dy+dz*dz<.02)continue;pt(d.p[0],d.p[1],d.p[2],d.c[0],d.c[1],d.c[2],1.6*k,d.s);}
     if(api.ringT!=null){const rt=t-api.ringT;if(rt<1.3){const rr=.3+rt*WAVE_V,a0=1-rt/1.3;for(let i=0;i<120;i++){const a=i/120*TAU,c=i%2?PAL[1]:PAL[0];pt(CH_.x+Math.cos(a)*rr,.03,CH_.z+Math.sin(a)*rr,c[0],c[1],c[2],2*a0,.05);}}}
     if(api.rezT!=null){const rt=t-api.rezT;if(rt>=0&&rt<1.6){const a0=Math.max(0,1-rt/1.6);for(let i=0;i<70;i++){const a=i*2.399+rt*1.5,rr=.28+.12*Math.sin(i*1.7),y=((i*.071+rt*.9)%1)*1.9;const px=CH_.x+Math.cos(a)*rr,pz=CH_.z+Math.sin(a)*rr;if(Math.hypot(px-ce[0],y-ce[1],pz-ce[2])<.9)continue;pt(px,y,pz,.3,.95,1,1.0*a0,.02);}}}
+    if(VAR&&VAR.points)VAR.points(pt,t);
     const fb=api.fb;if(fb&&fb.vis>0){pt(fb.p[0],fb.p[1],fb.p[2],1,1,1,1.5*fb.vis,.09);pt(fb.p[0],fb.p[1],fb.p[2],.4,.85,1,.55*fb.vis,.36);}
   }
   function drawPts(){
@@ -3871,6 +3875,8 @@ const PIN=(()=>{
   /* ================= drawing the table ================= */
   function draw(){
     const uL=P_LIT.u;
+    const wp=VAR&&VAR.warp?VAR.warp():null;
+    if(wp){gl.uniform4fv(uL.uWarp,wp[0]);gl.uniform4fv(uL.uWarpN,wp[1]);}
     if(api.tableOn){
       const pw=api.pow,dm=api.dim,j=api.jit;
       const JM=j>0?mT(rnd(-1,1)*j,rnd(-1,1)*j*.5,rnd(-1,1)*j):null,PF_=JM?mmul(JM,PFM):PFM,BB_=JM?mmul(JM,BBM):BBM;
@@ -3906,11 +3912,12 @@ const PIN=(()=>{
           drawLit(shadowM,mmul(PF_,mT(B.u+.003,.0011,-B.v+.004)),{mode:4,tint:[.35,.33,.4]});gl.depthMask(true);gl.disable(gl.BLEND);}
       }
     }
-    drawChunks();
+    if(wp)gl.uniform4f(uL.uWarp,0,0,0,0);
+    drawChunks();if(VAR&&VAR.draw)VAR.draw();
     const fb=api.fb;
     if(fb&&fb.vis>0){gl.uniform4f(uL.uCarve,0,0,0,0);drawLit(ballM,chain(mT(fb.p[0],fb.p[1],fb.p[2]),mS(3,3,3)),{emi:1.4*fb.vis});setCarve();}
   }
-  function drawScreens(){if(api.tableOn&&api.dmdPow>0)drawScreen(dmd,DMDM,api.dmdPow);if(PANELS.length&&(api.stage==='fall'||api.stage==='descend'))drawPanels();}
+  function drawScreens(){if(api.tableOn&&api.dmdPow>0)drawScreen(dmd,DMDM,api.dmdPow);if(PANELS.length&&(api.stage==='fall'||api.stage==='descend'))drawPanels();if(VAR&&VAR.screens)VAR.screens();}
   function setCarve(){
     const u=P_LIT.u,c=api.carve;
     if(c&&c.r>0){gl.uniform4f(u.uCarve,c.c[0],c.c[1],c.c[2],c.r);gl.uniform1f(u.uCarveY,c.y0);gl.uniform1f(u.uCarveK,c.k);gl.uniform3fv(u.uCarveCol,c.col);}
@@ -4104,20 +4111,20 @@ const PIN=(()=>{
     }
     // camera: a slow dolly toward the ball, held through the freeze, creeping on toward the hole after
     const bw=Wp(B.u,B.v,B.h);api.camT=mix3(api.camT,bw,Math.min(1,dt*2.5));
-    if(gt<G.type){
+    if(VAR&&gt<G.sink||!VAR&&gt<G.type){
       const k=.36*easeIO(clamp(gt/G.freeze,0,1)),g0=api.g0;
       rig.eye=mix3(g0.eye,api.camT,k*.5);rig.fwd=nl(g0.fwd,norm(sub(api.camT,rig.eye)),Math.min(1,k*1.6));rig.up=upFor(rig.fwd);rig.fov=lerp(g0.fov,g0.fov-6,k/.36);
-    }else if(gt<G.sink+.3){
+    }else if(!VAR&&gt<G.sink+.3){
       // a hard cut to the score display while it types, held through its switch-off
       const v=dmdView(1.2-.14*sstep(G.type,G.sink+.3,gt));rig.eye=v.eye;rig.fwd=v.fwd;rig.up=v.up;rig.fov=v.fov;
     }else{
       // then a tilt down from the display to the hole, to watch the art drain
       if(!api.dv0)api.dv0={eye:rig.eye.slice(),fwd:rig.fwd.slice(),fov:rig.fov};
-      const e=easeIO(clamp((gt-G.sink-.3)/.9,0,1)),DV=add(add(HOLE.w,scl(NRM,.5)),scl(UPT,-.42)),cr=.04*sstep(G.sink+1.2,TL.glitch,gt);
+      const e=easeIO(clamp((gt-G.sink-(VAR?0:.3))/(VAR?1.4:.9),0,1)),DV=add(add(HOLE.w,scl(NRM,.5)),scl(UPT,-.42)),cr=.04*sstep(G.sink+1.2,TL.glitch,gt);
       rig.eye=add(mix3(api.dv0.eye,DV,e),scl(UPT,cr));rig.fwd=nl(api.dv0.fwd,norm(sub(HOLE.w,rig.eye)),e);rig.up=upFor(rig.fwd);rig.fov=lerp(api.dv0.fov,52,e);
     }
     shake(.003*api.post.gl);
-    if(gt>=TL.glitch)startDive();
+    if(VAR?gt>=VAR.at:gt>=TL.glitch)VAR?VAR.start():startDive();
   }
   let V0=null;
   function startDive(){
@@ -4214,11 +4221,11 @@ const PIN=(()=>{
   const CRT=[[0,1.0,-1.2],[0,.25,-2.4],[-2.4,1.5,-9.2],[-2.4,3.0,-17.1]];
   const crs=(P,u)=>{const n=P.length-1,s2=clamp(u,0,1)*n,i=Math.min(n-1,Math.floor(s2)),f=s2-i,p0=P[Math.max(0,i-1)],p1=P[i],p2=P[i+1],p3=P[Math.min(n,i+2)];
     return [0,1,2].map(k=>.5*(2*p1[k]+(-p0[k]+p2[k])*f+(2*p0[k]-5*p1[k]+4*p2[k]-p3[k])*f*f+(-p0[k]+3*p1[k]-3*p2[k]+p3[k])*f*f*f));};
-  function startFall(){
-    setStage('fall');api.tableOn=true;
-    const v0=2*2.0/(TL.dive-1.25);
-    F={y0:rig.eye[1],x0:rig.eye[0],z0:rig.eye[2],T:TL.fall,v0,v1:2.4,roll:reduce?0:TAU};F.D=F.y0-ROOM.h;F.a=F.v0*F.T/F.D;F.b=F.v1*F.T/F.D;
-    buildLayers();buildPanels();api.fb={p:add(rig.eye,[0,-1.2,0]),v:[0,0,0],free:false,vis:1};api.dyn=[BALL_L];
+  function startFall(o={}){
+    setStage('fall');api.tableOn=o.table??true;
+    const v0=o.v0??2*2.0/(TL.dive-1.25);
+    F={y0:rig.eye[1],x0:rig.eye[0],z0:rig.eye[2],T:o.T||TL.fall,v0,v1:2.4,roll:reduce?0:(o.roll??TAU),panels:o.panels!==false};F.D=F.y0-ROOM.h;F.a=F.v0*F.T/F.D;F.b=F.v1*F.T/F.D;
+    buildLayers(o.layers);if(F.panels)buildPanels();else PANELS.length=0;api.fb={p:add(rig.eye,[0,-1.2,0]),v:[0,0,0],free:false,vis:1};api.dyn=[BALL_L];
     IGN.mode=1;IGN.r=-1;IGN.dark=.012;IGN.c=[CH_.x,0,CH_.z];AP.amb=.03;AP.light=1;AP.neon=1;AP.scr=1;for(const L of LIGHTS.concat(BEAMS))L.pw=0;
     SX.pad([53,57,60,65],2.6,.02);SX.drone(5);
   }
@@ -4227,7 +4234,7 @@ const PIN=(()=>{
     const xz=pathXZ(y);rig.eye=[xz[0],y,xz[1]];
     const a=F.roll*easeIO(u);rig.fwd=DOWN;rig.up=[-Math.sin(a),0,-Math.cos(a)];rig.fov=clamp(72+(api.vel-5)*.9,70,80);
     api.post.rad=reduce?.08:clamp(.1+.03*api.vel,0,.36);api.post.dot=api.dotT>0?api.post.dot:0;
-    windSet(api.vel);if(TART.length!==PANELS.lastN){buildPanels();PANELS.lastN=TART.length;}
+    windSet(api.vel);if(F.panels&&TART.length!==PANELS.lastN){buildPanels();PANELS.lastN=TART.length;}if(VAR&&VAR.fall)VAR.fall(dt,u);
     if(rig.eye[1]<TBY-3)api.tableOn=false;
     if(u>.66)api.arcadeOn=true;                    // only once the ceiling fills the view below you
     // the ceiling opens under you, its rim a ring of hot dots
@@ -4324,7 +4331,7 @@ const PIN=(()=>{
   }
   function finish(){
     api.active=false;api.stage='done';W_.mode='walk';CH_.hidden=false;CH_.rez=1;IGN.mode=0;
-    CHUNKS.length=0;freeTunnelArt();SHAFT.k=0;HOLE_L.k=0;Object.assign(HZ,{dens:1,beam:.2});Object.assign(LOOK,{fringe:.012,shock:[0,0,0,0]});
+    CHUNKS.length=0;if(VAR&&VAR.end)VAR.end();freeTunnelArt();SHAFT.k=0;HOLE_L.k=0;Object.assign(HZ,{dens:1,beam:.2});Object.assign(LOOK,{fringe:.012,shock:[0,0,0,0]});
     for(const L of LIGHTS.concat(BEAMS))L.pw=1;Object.assign(AP,{light:1,neon:1,amb:1,scr:1});
     api.carve=null;api.tear.a=0;Object.assign(api.post,{gl:0,dot:0,rad:0});api.music=true;api.dyn=[];api.exp=0;
     CAM.up=[0,1,0];CAM.minH=null;imStop(false);windSet(0);stopNodes();SX.muffle(20000,.05);if(AU.ctx)SX.unsilence();DEB.length=0;NP=0;setBars(0);
@@ -4336,7 +4343,7 @@ const PIN=(()=>{
     if(!api.active||api.fadeHold||api.stage==='pull')return;
     api.fadeHold=true;hideHint();
   }
-  const BAR_ON={glitch:1,dive:1,fall:1,descend:1,land:1};
+  const BAR_ON={glitch:1,dive:1,fall:1,descend:1,land:1,suck:1,drift:1};
   function update(dt){
     api.t+=dt;
     if(api.fadeHold){if(FADE<=.001){api.fadeHold=false;api.fastFade=true;W_.camYaw=0;finish();const w=walkCam();CAM.eye=w.eye;CAM.tgt=w.tgt;CAM.fov=w.fov;}return;}
@@ -4352,8 +4359,9 @@ const PIN=(()=>{
     else if(st==='descend')updateDescend(dt);
     else if(st==='land')updateLand(dt);
     else if(st==='pull')updatePull(dt);
+    else if(st==='suck'||st==='drift')VAR.update(dt,st);
     if(!api.active)return;
-    if(st==='off'||st==='boot'||st==='ready'||st==='play'||st==='glitch')HZ.dens=.5;else if(st==='dive'||st==='fall')HZ.dens=0;
+    if(st==='off'||st==='boot'||st==='ready'||st==='play'||st==='glitch')HZ.dens=.5;else if(st==='dive'||st==='fall'||st==='suck'||st==='drift')HZ.dens=0;
     if(api.hintT>0){api.hintT-=dt;if(api.hintT<=0)hideHint();}
     const bt=BAR_ON[api.stage]?1:0;setBars(api.bars+(bt-api.bars)*Math.min(1,dt*(bt?1.6:2.4)));
     if(api.dotT>0){api.dotT-=dt;if(api.dotT<=0)api.post.dot=0;}
@@ -4361,12 +4369,17 @@ const PIN=(()=>{
     updateLamps(dt);updateDeb(dt);buildPoints();
     if(api.tableOn)drawDMD(dt);
     rollSound();applyRig();
-    api.ballVis=api.tableOn&&B.h>-.05&&['off','boot','ready','play','glitch','dive'].includes(api.stage);
+    api.ballVis=api.tableOn&&B.h>-.05&&['off','boot','ready','play','glitch','dive','suck'].includes(api.stage);
   }
+  /* intro test versions (v2/intro-*.html): each takes over after the glitch with its own way of pulling you into the
+     machine and its own slow drift past the games, then hands back to the plunge through the ceiling */
+  const VARS={};
+  
+  const VAR=VARS[INTRO]||null;
   build();
   B.h=R;
   Object.assign(api,{update,draw,drawScreens,drawPts,setCarve,key,ptr,clearInput,skip,P,HOLE,
-    test:{power(){audioInit();power();},launch(p){P.release(p);SX.launch(p);if(!IM.on)imStart();},state:()=>({stage:api.stage,st:+api.st.toFixed(2),dings:api.dings,art:TART.length,panels:PANELS.length})}});
+    test:{power(){audioInit();power();},launch(p){P.release(p);SX.launch(p);if(!IM.on)imStart();},state:()=>({intro:INTRO,stage:api.stage,st:+api.st.toFixed(2),dings:api.dings,art:TART.length,panels:PANELS.length})}});
   updateOff(0);applyRig();
   return api;
 })();

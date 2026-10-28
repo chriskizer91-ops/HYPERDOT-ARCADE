@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Hyperdot V2 · intro tests</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&display=swap">
+<style>
+/* A plain chooser for the intro test pages. Not linked from the arcade. Single dark look, like the arcade. */
+:root{--bg:#07060b;--ink:#f4ecff;--ink-2:#a99ec0;--pink:#ff3fa4;--cyan:#35e8ff;--panel:#120e1c;--edge:rgba(255,255,255,.12);--f:"Chakra Petch","Arial Narrow",system-ui,sans-serif;color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f)}
+main{max-width:720px;margin:0 auto;padding:max(28px,env(safe-area-inset-top)) 16px max(28px,env(safe-area-inset-bottom))}
+h1{font-size:clamp(26px,6vw,38px);letter-spacing:.08em;margin:0 0 6px;text-transform:uppercase;text-shadow:0 0 18px rgba(255,63,164,.55)}
+p.lead{color:var(--ink-2);margin:0 0 24px;line-height:1.5}
+a.card{display:block;text-decoration:none;color:inherit;background:var(--panel);border:1px solid var(--edge);border-radius:12px;padding:16px 18px;margin:0 0 12px;transition:border-color .2s}
+a.card:hover,a.card:focus-visible{border-color:var(--pink);outline:none}
+.card b{display:block;font-size:20px;letter-spacing:.12em;text-transform:uppercase}
+.card b em{font-style:normal;color:var(--cyan);margin-right:10px}
+.card span{display:block;color:var(--ink-2);margin-top:6px;line-height:1.5;font-size:15px}
+.live b em{color:var(--ink-2)}
+small{display:block;color:var(--ink-2);margin-top:20px;line-height:1.5}
+</style>
+</head>
+<body>
+<main>
+  <h1>Intro tests</h1>
+  <p class="lead">The same V2 arcade with different ways in. The pinball table and the landing are the same in all of them; what changes is how the machine pulls you in, and how you pass the games on the way down.</p>
+  <a class="card" href="intro-a.html"><b><em>A</em>Whirlpool</b><span>The table twists into a whirlpool round the ball and spins you down the drain. Then you sink slowly through a ring of the arcade's games.</span></a>
+  <a class="card" href="intro-b.html"><b><em>B</em>Into the display</b><span>You're pulled face first into the playfield. It breaks into giant LED dots, you pass between them, and sink down a shaft lined with video walls of the games.</span></a>
+  <a class="card" href="intro-c.html"><b><em>C</em>Swallowed</b><span>The machine convulses and bursts. You shrink with it and fall in slow motion among giant bumpers, flippers and slabs of the playfield, the games floating round you.</span></a>
+  <a class="card live" href="./"><b><em>Live</em>The current V2 intro</b><span>For comparison: the one the arcade plays now.</span></a>
+  <small>Each version is a full arcade, so after the landing you can walk around as usual. Tickets and prizes are the same as V2's.</small>
+</main>
+</body>
+</html>
