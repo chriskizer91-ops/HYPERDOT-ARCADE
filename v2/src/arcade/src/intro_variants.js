@@ -184,7 +184,7 @@
   };
   // the burst: a crack, dots everywhere, the table's lights going with it
   function burst(){S.boom(1.6);SX.crackle(24);SX.whoosh();SX.bits(8);
-    for(let i=0;i<260;i++){const d=norm([rnd(-1,1),rnd(-1,1),rnd(-1,1)]),v=rnd(.4,2.6);spawnDeb(add(HOLE.w,scl(d,.1)),scl(d,v),PAL[(Math.random()*5)|0],rnd(.6,1.6),rnd(.006,.014),.2);}}
+    for(let i=0;i<(INTRO==='d'?150:260);i++){const d=norm([rnd(-1,1),rnd(-1,1),rnd(-1,1)]),v=rnd(.4,2.6);spawnDeb(add(HOLE.w,scl(d,.1)),scl(d,v),PAL[(Math.random()*5)|0],rnd(.6,1.6),rnd(.006,.014),.2);}}
 
   /* ===== D · UPLOAD (the opening of C, the tunnel of B) =====
      The boot list ends on a quiet hint. When the game glitches the camera stays on the whole table and the score
@@ -265,7 +265,9 @@
         rig.eye=e2>0?mix3(A1,sub(S.pc,scl(NRM,.6)),e2):mix3(S.E36,A1,e1);
         rig.fwd=nl(S.F36,scl(NRM,-1),e1);rig.up=ortho(nl(S.U36,UPT,e1),rig.fwd);rig.fov=lerp(54,62,e1)+26*e2;shake(.005*(1-e2));
         api.post.rad=(reduce?.1:.5)*e2;LOOK.fringe=lerp(.012,.09,e2);}
-      if(!S.broke&&s>=4.0&&dot3(sub(rig.eye,S.pc),NRM)<.02){S.broke=1;VARS.c.buildParts.call(S);for(const q of S.parts){q.sc*=.62;q.base=scl(q.base,.85);for(const pp of q.parts)pp.emi=(pp.emi||0)+.35;}api.tableOn=false;api.carve=null;S.W=0;api.exp=1.2;S.cam0=rig.eye.slice();burst();}
+      if(!S.broke&&s>=4.0&&dot3(sub(rig.eye,S.pc),NRM)<.02){S.broke=1;VARS.c.buildParts.call(S);const hp=Math.atan2(-UPT[0],-UPT[2])+.95;
+        // mostly ahead of where you'll be looking, and a little below
+        S.parts.forEach((q,i)=>{q.sc*=.62;for(const pp of q.parts)pp.emi=(pp.emi||0)+.35;const a=hp+((i*.618)%1-.5)*2.7,el=-1.05+((i*.37)%1)*1.35,r=1.35+((i*.53)%1)*1.5;q.base=[Math.sin(a)*r,el,Math.cos(a)*r];});api.tableOn=false;api.carve=null;S.W=0;api.exp=1.2;S.cam0=rig.eye.slice();burst();}
       if(S.broke){S.grow=sstep(S.tb||(S.tb=s),S.T.suck+.6,s);S.lights(2.2);}
       if(s>=S.T.suck){setStage('drift');S.y=rig.eye[1];S.f1=rig.fwd.slice();S.u1=rig.up.slice();S.hd=Math.atan2(-UPT[0],-UPT[2])+.5;S.buildWalls();
         SX.pad([48,55,60,63],S.T.parts+1,.022);}},
