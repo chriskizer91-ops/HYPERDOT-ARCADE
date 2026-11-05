@@ -12,6 +12,97 @@ from lib import *
 
 HIP, L1, L2, L3, ANK, PHI = 3.2, 1.05, 1.0, .9, .36, .26
 
+def details():
+    """detail pass 2: armour layers, seams, bolts, pistons, cables, vents and lights on top of the base model.
+    Every piece is parented to the same joint empties, so the animation and the game code are unchanged."""
+    O = bpy.data.objects; M_ = MATS
+    org, grey, gun, steel, trim, dark, eye, core = (M_[n] for n in ('org', 'grey', 'gun', 'steel', 'trim', 'dark', 'eye', 'jetcore'))
+    hips, to, hd = O['hips'], O['torso'], O['head']
+    # ---- hips: skirt flaps front, back and sides, with bolts ----
+    box('skirtF', (.62, .07, .42), (0, .56, -.36), hips, org, .03, bot=(.8, 1), rot=(.18, 0, 0))
+    bolts('skirtFb', [(-.22, .6, -.2), (.22, .6, -.2)], .035, hips, steel)
+    box('skirtB', (.8, .07, .36), (0, -.58, -.3), hips, org, .03, bot=(.85, 1), rot=(-.22, 0, 0))
+    for sd in (-1, 1):
+        box('skirtS%d' % sd, (.07, .5, .34), (sd * .7, .05, -.32), hips, grey, .02, rot=(0, sd * .2, 0))
+        seam('skirtSs%d' % sd, (.02, .44, .02), (sd * .74, .05, -.24), hips, dark, rot=(0, sd * .2, 0))
+    for sd in (-1, 1):
+        s = 'L' if sd < 0 else 'R'
+        th, kn, hk, an = O['thigh_' + s], O['knee_' + s], O['hock_' + s], O['ankle_' + s]
+        # ---- thigh: second armour layer, seams, bolt rows, a ram down the outside ----
+        box('thighB_' + s, (.58, .1, .4), (sd * .03, .47, -.28), th, org, .04, top=(1.1, 1), rot=(.12, 0, 0))
+        seam('thighSeam_' + s, (.62, .025, .025), (sd * .03, .46, -.62), th, dark)
+        bolt_grid('thighBolt_' + s, (sd * .03, .46, -.45), .48, .7, 2, 3, .032, th, steel)
+        piston('thighRam_' + s, (sd * .36, -.12, -.12), (sd * .34, -.05, -.92), .07, th, gun, steel)
+        hose('thighCab_' + s, [(-sd * .26, -.3, -.15), (-sd * .3, -.36, -.55), (-sd * .24, -.3, -.95)], .035, th, dark)
+        box('thighLamp_' + s, (.04, .1, .04), (sd * .4, .3, -.2), th, eye, .005)
+        # ---- knee and shin: cap bolts, calf ram, side vents, shin seams ----
+        bolts('kneeBolt_' + s, [(-.16, .4, .1), (.16, .4, .1), (0, .43, -.06)], .03, kn, steel)
+        piston('calf_' + s, (0, -.3, -.12), (0, -.24, -.86), .08, kn, gun, steel)
+        slats('shinVent_' + s, 4, (.04, .3, .05), .1, (sd * .23, -.02, -.62), kn, dark, axis='z')
+        seam('shinSeam_' + s, (.5, .025, .025), (0, .335, -.5), kn, dark)
+        bolt_grid('shinBolt_' + s, (0, .34, -.45), .32, .5, 2, 2, .028, kn, steel)
+        box('shinGuard_' + s, (.3, .08, .28), (0, .33, -.9), kn, grey, .03, top=(.8, 1))
+        # ---- hock and foot: ram, toe knuckles, foot bolts ----
+        piston('hockRam_' + s, (0, -.22, -.12), (0, -.18, -.8), .06, hk, gun, steel)
+        seam('metaSeam_' + s, (.42, .022, .022), (0, .27, -.5), hk, dark)
+        bolts('metaBolt_' + s, [(-.12, .27, -.25), (.12, .27, -.25), (-.12, .27, -.7), (.12, .27, -.7)], .026, hk, steel)
+        for i, x in enumerate((-.25, 0, .25)): cyl('knuck_%s%d' % (s, i), .1, .2, (x, .45, -.22), an, dark, seg=12, axis='x')
+        bolts('footBolt_' + s, [(-.2, .3, .04), (.2, .3, .04)], .03, an, steel, axis='z')
+        box('footStripe_' + s, (.5, .04, .05), (0, .52, -.12), an, trim, .005)
+    # ---- torso: layered chest plates, bolt rows, chest lights, abdomen bands, cables ----
+    for sd in (-1, 1):
+        box('chestL%d' % sd, (.55, .1, .6), (sd * .62, .86, 1.28), to, org, .04, top=(.9, 1), rot=(-.1, 0, sd * .06))
+        seam('chestLs%d' % sd, (.02, .1, .56), (sd * .36, .9, 1.28), to, dark, rot=(-.1, 0, 0))
+        box('chestLight%d' % sd, (.22, .04, .05), (sd * .62, .92, 1.0), to, eye, .008)
+        bolts('chestLb%d' % sd, [(sd * .45, .92, 1.52), (sd * .8, .9, 1.52), (sd * .45, .92, 1.05), (sd * .8, .9, 1.05)], .03, to, steel)
+    bolts('chestTop', [(x, .97, 1.44) for x in (-.4, -.2, 0, .2, .4)], .032, to, steel)
+    box('chestTrim', (.9, .05, .06), (0, .96, .86), to, trim, .008)
+    for i, z in enumerate((.36, .5, .64)): box('abBand%d' % i, (1.12 - i * .04, .16, .1), (0, .45, z), to, org if i % 2 else grey, .03)
+    for sd in (-1, 1):
+        hose('waistCab%d' % sd, [(sd * .42, -.55, 1.0), (sd * .52, -.3, .62), (sd * .36, .05, .38)], .045, to, dark)
+        hose('neckCab%d' % sd, [(sd * .22, .05, 1.7), (sd * .3, .35, 1.82), (sd * .18, .62, 1.9)], .03, to, dark)
+        box('collarP%d' % sd, (.3, .5, .2), (sd * .46, .3, 1.8), to, org, .04, rot=(0, sd * .3, 0))
+    # ---- missile pods: frames, armour skins, hazard lips, mounting rams ----
+    for sd in (-1, 1):
+        s = 'L' if sd < 0 else 'R'; x0 = sd * 1.25
+        box('podSkinO_' + s, (.06, .82, .68), (x0 + sd * .45, -.1, 2.05), to, org, .02)
+        box('podSkinT_' + s, (.84, .86, .07), (x0, -.12, 2.46), to, org, .03, top=(.9, .92))
+        seam('podSeamT_' + s, (.84, .02, .02), (x0, .1, 2.5), to, dark)
+        box('podBack_' + s, (.8, .1, .66), (x0, -.58, 2.05), to, gun, .03)
+        slats('podVent_' + s, 4, (.5, .04, .07), .13, (x0, -.64, 2.05), to, dark, axis='z')
+        box('podHaz_' + s, (.86, .05, .08), (x0, .41, 2.42), to, trim, .006)
+        bolt_grid('podBolt_' + s, (x0, .45, 2.05), .78, .66, 2, 2, .03, to, steel)
+        piston('podRam_' + s, (sd * .7, -.25, 1.65), (x0, -.3, 1.72), .055, to, gun, steel)
+        strut('podAnt_' + s, (x0 - sd * .3, -.45, 2.48), (x0 - sd * .3, -.5, 2.9), .012, to, steel, seg=4)
+    # ---- arms: second pauldron layer, bolts, biceps ram, gun rail, heat sinks, glowing vents ----
+    for sd in (-1, 1):
+        s = 'L' if sd < 0 else 'R'; a, g = O['arm_' + s], O['gun_' + s]
+        box('pauldB_' + s, (.62, .78, .12), (sd * .16, 0, .5), a, org, .04, top=(.8, .85), rot=(0, -sd * .35, 0))
+        box('pauldEdge_' + s, (.06, .9, .08), (sd * .5, 0, .14), a, gun, .02, rot=(0, -sd * .35, 0))
+        bolts('pauldBolt_' + s, [(sd * .1, -.3, .46), (sd * .1, .3, .46), (sd * .3, 0, .4)], .032, a, steel, axis='z')
+        piston('bicep_' + s, (sd * .12, .24, -.12), (sd * .1, .3, -.72), .06, a, gun, steel)
+        box('rail_' + s, (.14, 1.25, .07), (0, .45, .34), g, steel, .02)
+        slats('sink_' + s, 7, (.46, .035, .09), .15, (0, .45, .41), g, dark, axis='y')
+        for i in range(3): box('heatV_%s%d' % (s, i), (.03, .16, .05), (sd * .32, .05 + i * .2, .12), g, core, .006)
+        seam('housSeam_' + s, (.62, .022, .022), (0, .92, .31), g, dark)
+        bolts('housBolt_' + s, [(sd * .31, -.1, -.15), (sd * .31, .95, -.15)], .03, g, steel, axis='x')
+        hose('ammo_' + s, [(sd * .38, -.12, -.1), (sd * .45, -.3, .1), (sd * .3, -.35, .3)], .05, g, dark)
+    # ---- head: teeth, cheek lenses, skull vents, brow bolts ----
+    for i in range(5): box('tooth%d' % i, (.05, .05, .08), (-.12 + i * .06, .88, -.17), hd, steel, .008, bot=(.3, .5))
+    for sd in (-1, 1):
+        ball('lens%d' % sd, .05, (sd * .3, .35, .0), hd, mat('glass', (.02, .03, .04), rough=.1, metal=.6), 10)
+        bolts('browB%d' % sd, [(sd * .2, .42, .32)], .025, hd, steel, axis='z')
+    slats('skullVent', 3, (.3, .05, .03), .08, (0, -.1, .32), hd, dark, axis='y')
+    # ---- back: shield plates, extra radiator fins, fuel lines to the thrusters ----
+    for sd in (-1, 1):
+        box('packShield%d' % sd, (.12, .5, 1.1), (sd * .72, -.82, 1.35), to, org, .03)
+        hose('fuel%d' % sd, [(sd * .5, -1.05, 1.0), (sd * .52, -1.15, .8), (sd * .36, -1.12, .72)], .04, to, steel)
+        j = O['jet_' + s] if False else O['jet_' + ('L' if sd < 0 else 'R')]
+        cyl('bellIn%d' % sd, .24, .5, (0, 0, -.32), j, dark, seg=20, r2=.12, cap=False, thick=.02, bev=0)
+        for z in (-.15, -.45): cyl('bellBand%d%s' % (sd, z), .33, .04, (0, 0, z), j, gun, seg=24)
+    strut('mast', (-.4, -1.1, 1.95), (-.42, -1.2, 2.7), .018, to, steel, seg=5)
+    box('mastTip', (.04, .04, .06), (-.42, -1.2, 2.72), to, eye, .005)
+
 def build():
     reset()
     org = mat('org', (.85, .42, .1), rough=.5, metal=.3); grey = mat('grey', (.5, .5, .52), rough=.5, metal=.45)
@@ -158,6 +249,7 @@ def build():
     decal('dec07_L', .7, .58, (.06, .65, .44, .96), (-1.045, .18, 1.2), to, dec, (0, 0, -math.pi / 2))
     decal('dec07_R', .7, .58, (.06, .65, .44, .96), (1.045, .18, 1.2), to, dec, (0, 0, math.pi / 2))
     decal('decWolf', .78, .64, (.52, .58, .98, .96), (0, -1.206, 1.42), to, dec, (0, 0, 0))
+    details()
     # ---- pose for the shading bake (reset before export) ----
     for th, kn, hk, an in legs:
         hz, hy = ANK + L3 * math.cos(PHI), -L3 * math.sin(PHI)   # the hock sits above and behind the ankle
@@ -170,7 +262,8 @@ def build():
     for o in bpy.context.scene.objects:
         if o.name.startswith('tier') and o.name[4] in '234': o.location.x += 30
     bpy.context.view_layer.update()
-    bake_ao(.5, 20)
+    bake_ao(.5, 24)
+    edge_wear(('org', 'grey', 'trim'))
     for o in bpy.context.scene.objects:
         if o.name.startswith('tier') and o.name[4] in '234': o.location.x -= 30
     return stats()

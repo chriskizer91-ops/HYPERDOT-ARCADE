@@ -257,6 +257,7 @@ def forge():
     bake_ao(1.4, 10); return stats()
 
 if __name__ == '__main__':
+    import lib; lib.AUTO = {'detail': ('egrey',), 'wear': ('egrey',)}
     out = sys.argv[-1]
     for fn in ([globals()[a] for a in sys.argv[1:-1] if a in globals()] or (hornet, tank, mortar, bulwark, stag, maw, forge)):
         t = fn(); p = os.path.join(out, fn.__name__ + '.glb'); export(p); print(fn.__name__, 'tris', t, 'KB', os.path.getsize(p) // 1024)

@@ -86,6 +86,13 @@ function hookWorld(mat,o={}){
       .replace('getDirectionalLightInfo( directionalLight, directLight );','getDirectionalLightInfo( directionalLight, directLight );\ndirectLight.color*=cloudShade();');
     if(o.fade)f=f.replace('#include <clipping_planes_fragment>',`#include <clipping_planes_fragment>
       if(vFade>.01){float dn=fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715))));if(dn<vFade)discard;}`);
+    /* worn paint: models keep a wear mask in the vertex colour alpha (1 clean, 0 bare metal) */
+    if(o.wear)f=f.replace('#include <color_fragment>',`#include <color_fragment>
+      float wr=0.;
+      #ifdef USE_COLOR_ALPHA
+        wr=clamp(1.-vColor.a,0.,1.);diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.5,.49,.47)*vColor.rgb,wr);diffuseColor.a=1.;
+      #endif`).replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=mix(roughnessFactor,.3,wr);')
+      .replace('#include <metalnessmap_fragment>','#include <metalnessmap_fragment>\nmetalnessFactor=mix(metalnessFactor,.9,wr);');
     if(o.leaf)f=f.replace('#include <normal_fragment_begin>',LEAF_NORMAL)
       .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance+=diffuseColor.rgb*uLeafGlow*vec3(.9,1.,.7);');
     if(o.ground)f=f.replace('#include <map_fragment>',`#include <map_fragment>
@@ -100,7 +107,7 @@ function hookWorld(mat,o={}){
        vec3 wn=(vec4(normal,0.)*viewMatrix).xyz;wn=normalize(wn+vec3(nn.x,0.,-nn.y)*uNStr);normal=normalize((viewMatrix*vec4(wn,0.)).xyz);}`);
     sh.fragmentShader=f;
   };
-  mat.customProgramCacheKey=()=>'w'+(o.fade?1:0)+(o.leaf?1:0)+(o.ground?1:0);
+  mat.customProgramCacheKey=()=>'w'+(o.fade?1:0)+(o.leaf?1:0)+(o.ground?1:0)+(o.wear?1:0);
   return mat;
 }
 

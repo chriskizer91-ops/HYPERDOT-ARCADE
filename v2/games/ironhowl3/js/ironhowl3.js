@@ -186,6 +186,13 @@ function hookWorld(mat,o={}){
       .replace('getDirectionalLightInfo( directionalLight, directLight );','getDirectionalLightInfo( directionalLight, directLight );\ndirectLight.color*=cloudShade();');
     if(o.fade)f=f.replace('#include <clipping_planes_fragment>',`#include <clipping_planes_fragment>
       if(vFade>.01){float dn=fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715))));if(dn<vFade)discard;}`);
+    /* worn paint: models keep a wear mask in the vertex colour alpha (1 clean, 0 bare metal) */
+    if(o.wear)f=f.replace('#include <color_fragment>',`#include <color_fragment>
+      float wr=0.;
+      #ifdef USE_COLOR_ALPHA
+        wr=clamp(1.-vColor.a,0.,1.);diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.5,.49,.47)*vColor.rgb,wr);diffuseColor.a=1.;
+      #endif`).replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=mix(roughnessFactor,.3,wr);')
+      .replace('#include <metalnessmap_fragment>','#include <metalnessmap_fragment>\nmetalnessFactor=mix(metalnessFactor,.9,wr);');
     if(o.leaf)f=f.replace('#include <normal_fragment_begin>',LEAF_NORMAL)
       .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance+=diffuseColor.rgb*uLeafGlow*vec3(.9,1.,.7);');
     if(o.ground)f=f.replace('#include <map_fragment>',`#include <map_fragment>
@@ -200,7 +207,7 @@ function hookWorld(mat,o={}){
        vec3 wn=(vec4(normal,0.)*viewMatrix).xyz;wn=normalize(wn+vec3(nn.x,0.,-nn.y)*uNStr);normal=normalize((viewMatrix*vec4(wn,0.)).xyz);}`);
     sh.fragmentShader=f;
   };
-  mat.customProgramCacheKey=()=>'w'+(o.fade?1:0)+(o.leaf?1:0)+(o.ground?1:0);
+  mat.customProgramCacheKey=()=>'w'+(o.fade?1:0)+(o.leaf?1:0)+(o.ground?1:0)+(o.wear?1:0);
   return mat;
 }
 
@@ -255,7 +262,7 @@ function buildEnv(L){const c=x=>new THREE.Color(x),sc=new THREE.Scene();
     vertexShader:'varying vec3 vD;void main(){vD=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
     fragmentShader:`uniform vec3 zen,hor,gr,sun,sc;uniform float k,sk;varying vec3 vD;
       void main(){vec3 d=normalize(vD);float y=d.y;vec3 col=y>0.?mix(hor,zen,pow(y,.55)):mix(hor,gr*.7,pow(min(1.,-y*3.),.6));col*=k;
-        float s=max(0.,dot(d,sun));col+=sc*(pow(s,220.)*sk*5.+pow(s,6.)*sk*.06);gl_FragColor=vec4(col,1.);}`});
+        float s=max(0.,dot(d,sun));col+=sc*(pow(s,220.)*sk*1.6+pow(s,6.)*sk*.05);gl_FragColor=vec4(col,1.);}`});
   sc.add(new THREE.Mesh(new THREE.SphereGeometry(50,32,16),m));const pm=new THREE.PMREMGenerator(R);ENV=pm.fromScene(sc,.02).texture;pm.dispose();}
 function envAll(){if(!ENV)return;const seen=new Set();
   const f=m=>{if(!m||seen.has(m)||!m.isMeshStandardMaterial)return;seen.add(m);if(m.metalness>=.3){m.envMap=ENV;m.envMapIntensity=m.metalness>=.6?.95:.25+m.metalness*.5;m.needsUpdate=true;}};
@@ -630,6 +637,82 @@ MAPS.foundry={name:'FOUNDRY 4',mix:'woods',spawn:{x:0,z:100,yaw:0},bounds:{x0:-1
     if(F.stacks&&Math.random()<dt*6){const s=F.stacks[(Math.random()*F.stacks.length)|0];part({x:s[0]+(Math.random()-.5)*2,y:23,z:s[1]+(Math.random()-.5)*2,vx:1.5,vy:3.5,vz:.5,life:4,s0:4,s1:11,a:.45,col:[.16,.13,.12]});
       if(Math.random()<.4)part({x:s[0],y:22.5,z:s[1],vx:0,vy:4,vz:0,life:.6,s0:3,s1:1,a:1.2,col:[1,.45,.12],glow:true});}}};
 
+/* ---- 04d_props.js ---- */
+/* ===================== detail pass 3: set dressing. Small things you walk through (the mech steps over them), so paths and
+   path-finding stay exactly the same: pebbles, logs, stumps, debris, pallets, cones, drums, puddles that mirror the sky, cracks and oil stains.
+   Each kind is one instanced mesh, so a whole map's clutter costs about 10-16 draw calls. ===================== */
+function rockGeo(r,seed){const g=new THREE.DodecahedronGeometry(r,1),p=g.attributes.position,rnd=mulberry(seed);
+  for(let i=0;i<p.count;i++){const k=.78+rnd()*.4;p.setXYZ(i,p.getX(i)*k,p.getY(i)*k*.7,p.getZ(i)*k);}g.computeVertexNormals();return g;}
+/* place n copies where fn(rnd) says (returns [x,z] or null), avoiding walls, trunks and the spawn */
+function scatter(geo,mat,n,fn,o={}){const rnd=mulberry(o.seed||17),im=new THREE.InstancedMesh(geo,mat,n);let k=0;
+  for(let t=0;t<n*6&&k<n;t++){const q=fn(rnd);if(!q)continue;const [x,z]=q;if(treeAt(x,z,.5)||Math.hypot(x-SPAWN.x,z-SPAWN.z)<(o.clear||8))continue;
+    const s=(o.s0||1)+rnd()*((o.s1||1)-(o.s0||1)),y=hgt(x,z)+(o.y||0)*s;
+    _m4.compose(_w.set(x,y,z),_q.setFromEuler(new THREE.Euler(o.tilt?(rnd()-.5)*o.tilt:0,rnd()*TAU,o.tilt?(rnd()-.5)*o.tilt:0)),_v.set(s,s*(o.sy||1),s));im.setMatrixAt(k++,_m4);}
+  im.count=k;im.castShadow=o.shadow!==false;im.receiveShadow=true;S.add(im);return im;}
+const inPlay=(rnd,m)=>{const e=PLAY-(m||6);return [(rnd()-.5)*2*e,(rnd()-.5)*2*e];};
+const inBounds=(rnd,m)=>{const B=BND(),k=m||4;return [B.x0+k+rnd()*(B.x1-B.x0-2*k),B.z0+k+rnd()*(B.z1-B.z0-2*k)];};
+/* flat decals scattered on the ground (cracks, oil, leaves) */
+function groundDecals(texName,n,fn,size,o={}){const g=new THREE.PlaneGeometry(1,1);g.rotateX(-Math.PI/2);
+  const m=new THREE.MeshStandardMaterial({map:tex(texName,{clamp:true}),transparent:true,depthWrite:false,roughness:o.r||.9,metalness:0,color:o.col||0xffffff,opacity:o.a||1,
+    polygonOffset:true,polygonOffsetFactor:-3,polygonOffsetUnits:-3});
+  const im=scatter(g,m,n,fn,{s0:size[0],s1:size[1],y:0,shadow:false,seed:o.seed||23,clear:2});im.position.y=.04;im.renderOrder=1;return im;}
+/* puddles: a soft blob mask on a dark glossy surface that picks up the sky reflections */
+let PUDDLE_TEX=null;
+function puddleTex(){if(PUDDLE_TEX)return PUDDLE_TEX;const c=document.createElement('canvas');c.width=c.height=256;const g=c.getContext('2d');
+  const rnd=mulberry(5);g.fillStyle='#000';g.fillRect(0,0,256,256);g.filter='blur(10px)';g.fillStyle='#fff';
+  for(let i=0;i<9;i++){g.beginPath();g.ellipse(128+(rnd()-.5)*110,128+(rnd()-.5)*110,30+rnd()*45,20+rnd()*30,rnd()*3,0,TAU);g.fill();}
+  PUDDLE_TEX=new THREE.CanvasTexture(c);return PUDDLE_TEX;}
+function puddles(n,fn,size,o={}){const g=new THREE.PlaneGeometry(1,1);g.rotateX(-Math.PI/2);
+  const m=new THREE.MeshStandardMaterial({color:o.col||0x0c1014,roughness:.06,metalness:.2,envMap:ENV,envMapIntensity:o.k||1.3,alphaMap:puddleTex(),transparent:true,depthWrite:false,
+    polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
+  const im=scatter(g,m,n,fn,{s0:size[0],s1:size[1],shadow:false,seed:o.seed||31,clear:3});im.position.y=.05;im.renderOrder=1;return im;}
+/* ---------------- per map ---------------- */
+MAPS.woods.dress=function(){
+  const rock=tmat('83-mossy-boulder-rock',{r:.95,m:0}),bark=new THREE.MeshStandardMaterial({color:0x4a3c30,roughness:.95,normalMap:nmap('83-mossy-boulder-rock'),normalScale:new THREE.Vector2(1.4,1.4)});
+  scatter(rockGeo(.35,3),rock,900,r=>inPlay(r),{s0:.5,s1:1.6,y:.1,seed:41});                                  // pebbles and stones
+  const log=new THREE.CylinderGeometry(.42,.48,1,10);log.rotateZ(Math.PI/2);
+  scatter(log,bark,90,r=>{const q=inPlay(r);return clearD(q[0],q[1])>4&&trailD(q[0],q[1])>5?q:null;},{s0:4,s1:8,sy:.12,y:.05,seed:43,n2:1});   // fallen logs
+  scatter(new THREE.CylinderGeometry(.5,.65,1,10),bark,150,r=>inPlay(r),{s0:.8,s1:1.3,y:.5,sy:.7,seed:47});          // stumps
+  groundDecals('40-scorch-mark',120,r=>inPlay(r),[2,4.5],{col:0x3a3020,a:.55,seed:49});                                   // dark leaf litter patches
+};
+MAPS.field.dress=function(){
+  const rock=tmat('83-mossy-boulder-rock',{r:.95,m:0,col:0xb8b0a0}),wood=tmat('16-wooden-crate'),gm=tmat('24-gunmetal'),drum=tmat('18-red-drum-label',{r:.5,m:.4});
+  scatter(rockGeo(.4,7),rock,700,r=>inPlay(r),{s0:.4,s1:1.5,y:.1,seed:51});
+  const F=MAPS.field.farm;
+  scatter(new THREE.BoxGeometry(1.2,.16,1.2),wood,26,r=>[F.x+(r()-.5)*40,F.z+(r()-.5)*36],{s0:1,s1:1.2,y:.08,seed:53});            // pallets by the farm
+  scatter(new THREE.CylinderGeometry(.45,.45,1.3,12),drum,18,r=>[F.x+(r()-.5)*44,F.z+(r()-.5)*40],{s0:1,s1:1,y:.65,seed:55});        // drums
+  scatter(new THREE.BoxGeometry(.18,1.2,.18),wood,60,r=>{const q=inPlay(r);return trailD(q[0],q[1])<9&&trailD(q[0],q[1])>5?q:null;},{s0:.8,s1:1.2,y:.4,tilt:.5,seed:57});  // old leaning posts
+  scatter(new THREE.BoxGeometry(.9,.25,.6),gm,70,r=>inPlay(r),{s0:.6,s1:1.4,y:.1,tilt:.4,seed:59});                                     // rusted scrap
+  if(LOOKNOW&&LOOKNOW.rain)puddles(40,r=>{const q=inPlay(r);return trailD(q[0],q[1])<4?q:null;},[2,5]);
+  else puddles(10,r=>{const q=inPlay(r);return trailD(q[0],q[1])<3?q:null;},[1.5,3],{k:1});
+};
+MAPS.docks.dress=function(){
+  const D=MAPS.docks,lane=r=>{const x=D.lanesX[(r()*D.lanesX.length)|0]+(r()-.5)*9,z=D.bounds.z0+4+r()*(D.bounds.z1-D.bounds.z0-8);return [x,z];};
+  const wet=LOOKNOW&&(LOOKNOW.rain||LOOKNOW.night);
+  puddles(wet?170:110,r=>lane(r),[3,8],{k:wet?1.7:1.4});
+  groundDecals('41-impact-cracks',170,r=>lane(r),[1.5,4.5],{col:0x6a6a6a,a:.8,seed:61});
+  groundDecals('40-scorch-mark',110,r=>lane(r),[1.5,4],{col:0x151515,a:.7,seed:63});                                  // oil stains
+  const wood=tmat('16-wooden-crate'),haz=tmat('26-hazard-trim',{r:.6}),drumR=tmat('18-red-drum-label',{r:.5,m:.4}),drumB=tmat('19-blue-drum-label',{r:.5,m:.4});
+  const edge=r=>{const x=D.lanesX[(r()*D.lanesX.length)|0]+(r()<.5?-1:1)*(5.5+r()*1.2),z=D.bounds.z0+4+r()*(D.bounds.z1-D.bounds.z0-8);return [x,z];};
+  scatter(new THREE.BoxGeometry(1.2,.16,1.2),wood,140,edge,{s0:1,s1:1,y:.08,seed:65});
+  scatter(new THREE.BoxGeometry(1.2,.9,1.2),wood,70,edge,{s0:.9,s1:1.1,y:.45,seed:66});
+  scatter(new THREE.ConeGeometry(.28,.8,10),haz,110,edge,{s0:1,s1:1,y:.4,seed:67});                                       // traffic cones
+  scatter(new THREE.CylinderGeometry(.45,.45,1.3,12),drumR,70,edge,{s0:1,s1:1,y:.65,seed:68});
+  scatter(new THREE.CylinderGeometry(.45,.45,1.3,12),drumB,70,edge,{s0:1,s1:1,y:.65,seed:69});
+  scatter(new THREE.TorusGeometry(.5,.14,8,16).rotateX(Math.PI/2),tmat('57-rubber-and-cables'),60,edge,{s0:1,s1:1.3,y:.14,seed:70});   // coiled hoses
+};
+MAPS.foundry.dress=function(){
+  const B=MAPS.foundry.bounds,yard=r=>{const q=inBounds(r,6);return Math.hypot(q[0]-FORGE_AT.x,q[1]-FORGE_AT.z)>30?q:null;};
+  puddles(120,yard,[3,8],{col:0x080808,k:1.6});
+  groundDecals('41-impact-cracks',160,yard,[1.5,4.5],{col:0x5a5a5a,a:.85,seed:71});
+  groundDecals('40-scorch-mark',110,yard,[2,5],{col:0x0a0a0a,a:.8,seed:72});
+  groundDecals('08-painted-hazard-floor',12,yard,[3,5],{col:0x9a9a9a,a:.9,seed:73});
+  const gm=tmat('24-gunmetal'),rust=tmat('12-rusted-steel-plate'),haz=tmat('26-hazard-trim',{r:.6});
+  scatter(new THREE.BoxGeometry(1,.4,.7),rust,200,yard,{s0:.5,s1:1.6,y:.15,tilt:.6,seed:74});                             // scrap plates
+  scatter(new THREE.CylinderGeometry(.25,.25,3,10).rotateZ(Math.PI/2),gm,80,yard,{s0:.8,s1:1.4,y:.25,seed:75});          // loose pipes
+  scatter(new THREE.ConeGeometry(.28,.8,10),haz,30,yard,{s0:1,s1:1,y:.4,seed:76});
+};
+
 /* ---- 05_mech.js ---- */
 /* ===================== Howler 07, the player's mech (models/mech/howler07.glb, built in Blender: v2/src/ironhowl3/blender) =====================
    The model's empties are the joints: hips/thigh/knee/ankle (legs), torso, head, arm/gun/brl (guns), tier1..4 (barrel sets), muzzle, pod_*_mz, jet.
@@ -637,12 +720,12 @@ MAPS.foundry={name:'FOUNDRY 4',mix:'woods',spawn:{x:0,z:100,yaw:0},bounds:{x0:-1
    Shading is baked into the vertex colours. */
 const MT={};
 function mechMats(){
-  const k=(a)=>{a.vertexColors=true;return hookWorld(a);};
-  MT.org=k(new THREE.MeshStandardMaterial({map:tex('22-howler-armour'),normalMap:nmap('22-howler-armour'),normalScale:new THREE.Vector2(nmapK('22-howler-armour'),nmapK('22-howler-armour')),roughness:.46,metalness:.35}));
-  MT.grey=k(new THREE.MeshStandardMaterial({map:tex('23-grey-armour'),normalMap:nmap('23-grey-armour'),normalScale:new THREE.Vector2(nmapK('23-grey-armour'),nmapK('23-grey-armour')),roughness:.5,metalness:.45}));
+  const k=(a,w)=>{a.vertexColors=true;return hookWorld(a,{wear:w});};
+  MT.org=k(new THREE.MeshStandardMaterial({map:tex('22-howler-armour'),normalMap:nmap('22-howler-armour'),normalScale:new THREE.Vector2(nmapK('22-howler-armour'),nmapK('22-howler-armour')),roughness:.46,metalness:.35}),1);
+  MT.grey=k(new THREE.MeshStandardMaterial({map:tex('23-grey-armour'),normalMap:nmap('23-grey-armour'),normalScale:new THREE.Vector2(nmapK('23-grey-armour'),nmapK('23-grey-armour')),roughness:.5,metalness:.45}),1);
   MT.gun=k(new THREE.MeshStandardMaterial({map:tex('24-gunmetal'),normalMap:nmap('24-gunmetal'),normalScale:new THREE.Vector2(nmapK('24-gunmetal'),nmapK('24-gunmetal')),color:0xb4bac4,roughness:.44,metalness:.72}));
   MT.steel=k(new THREE.MeshStandardMaterial({map:tex('25-brushed-steel'),normalMap:nmap('25-brushed-steel'),normalScale:new THREE.Vector2(.6,.6),roughness:.28,metalness:.92}));
-  MT.trim=k(new THREE.MeshStandardMaterial({map:tex('26-hazard-trim'),roughness:.6,metalness:.2}));
+  MT.trim=k(new THREE.MeshStandardMaterial({map:tex('26-hazard-trim'),roughness:.6,metalness:.2}),1);
   MT.dark=k(new THREE.MeshStandardMaterial({color:0x1a1c20,roughness:.68,metalness:.55}));
   MT.glass=k(new THREE.MeshStandardMaterial({color:0x0a0e14,roughness:.12,metalness:.6}));
   MT.glow=new THREE.MeshBasicMaterial({color:new THREE.Color(1,.5,.12).multiplyScalar(2.6)});
@@ -956,8 +1039,8 @@ const EDEF={
 const EN=[],EMAT={},ETPL={};
 let ENEMY_READY=false;
 function loadEnemies(){
-  const k=a=>{a.vertexColors=true;return hookWorld(a);};
-  EMAT.egrey=k(new THREE.MeshStandardMaterial({map:tex('23-grey-armour'),normalMap:nmap('23-grey-armour'),normalScale:new THREE.Vector2(nmapK('23-grey-armour'),nmapK('23-grey-armour')),color:0x9c8884,roughness:.5,metalness:.45}));
+  const k=(a,w)=>{a.vertexColors=true;return hookWorld(a,{wear:w});};
+  EMAT.egrey=k(new THREE.MeshStandardMaterial({map:tex('23-grey-armour'),normalMap:nmap('23-grey-armour'),normalScale:new THREE.Vector2(nmapK('23-grey-armour'),nmapK('23-grey-armour')),color:0x9c8884,roughness:.5,metalness:.45}),1);
   EMAT.egun=k(new THREE.MeshStandardMaterial({map:tex('24-gunmetal'),normalMap:nmap('24-gunmetal'),normalScale:new THREE.Vector2(nmapK('24-gunmetal'),nmapK('24-gunmetal')),color:0x6c7078,roughness:.45,metalness:.7}));
   EMAT.edark=k(new THREE.MeshStandardMaterial({color:0x121316,roughness:.7,metalness:.4}));
   EMAT.esteel=MT.steel;
@@ -1350,8 +1433,8 @@ function loadSet6(){const L=new THREE.GLTFLoader(LM),get=f=>new Promise(ok=>L.lo
     if(t){const red=new THREE.MeshBasicMaterial({color:new THREE.Color(1,.1,.05).multiplyScalar(3)});
       t.traverse(o=>{if(o.isMesh){const n=o.material.name;o.material=n==='red'?red:MT[MECH_MAT[n]||n]||MT.gun;o.castShadow=n!=='eye'&&n!=='glow'&&n!=='red';o.receiveShadow=true;}});mergeParts(t,o=>/^(ty|hub)\d/.test(o.name));TRUCK_TPL=t;}
     if(b){/* the boss gets lighter, less metallic armour than the small machines so its shape reads from far away, and a deeper red so the knees read as red */
-      const k=m=>{m.vertexColors=true;return hookWorld(m);};
-      BMAT.egrey=k(new THREE.MeshStandardMaterial({map:tex('54-forge-armour'),normalMap:nmap('54-forge-armour'),normalScale:new THREE.Vector2(nmapK('54-forge-armour'),nmapK('54-forge-armour')),color:0xc4b8b4,roughness:.55,metalness:.25}));
+      const k=(m,w)=>{m.vertexColors=true;return hookWorld(m,{wear:w});};
+      BMAT.egrey=k(new THREE.MeshStandardMaterial({map:tex('54-forge-armour'),normalMap:nmap('54-forge-armour'),normalScale:new THREE.Vector2(nmapK('54-forge-armour'),nmapK('54-forge-armour')),color:0xc4b8b4,roughness:.55,metalness:.25}),1);
       BMAT.egun=k(new THREE.MeshStandardMaterial({map:tex('24-gunmetal'),normalMap:nmap('24-gunmetal'),normalScale:new THREE.Vector2(nmapK('24-gunmetal'),nmapK('24-gunmetal')),color:0x9a9ea6,roughness:.45,metalness:.45}));
       BMAT.edark=k(new THREE.MeshStandardMaterial({color:0x34363a,roughness:.65,metalness:.35}));BMAT.esteel=MT.steel;BMAT.emblem=EMAT.emblem;
       BMAT.ered=new THREE.MeshBasicMaterial({color:new THREE.Color(1,.08,.03).multiplyScalar(1.5)});
@@ -1992,7 +2075,7 @@ function frame(now){
 }
 function boot(){
   pickMap();setupHud();setQuality(QL);const LK=MISSION&&MISSION.look?Object.assign({},MAPDEF.look,MISSION.look):MAPDEF.look;NIGHT_ON=!!LK.night;applyLook(LK);buildEnv(LK);setupTitle();U.tCloud.value=tex('34-fog',{srgb:false});
-  buildGround();const before=new Set(S.children);MAPDEF.build();mergeStatic(before);M=buildMech();buildFX();buildWeapons();P=mkPlayer();
+  buildGround();const before=new Set(S.children);MAPDEF.build();mergeStatic(before);if(MAPDEF.dress&&!Q.has('nodress'))MAPDEF.dress();M=buildMech();buildFX();buildWeapons();P=mkPlayer();
   const done=()=>{G.mode=G.mode==='load'?'title':G.mode;$('load').style.display='none';$('title').style.display=G.mode==='title'?'flex':'none';document.title='IRONHOWL 3';ARC.post('ready',{title:ARC.title});};
   let vegDone=false,texDone=false;LM.onLoad=()=>{texDone=true;if(vegDone)done();};
   if(LK.rain)buildRain();

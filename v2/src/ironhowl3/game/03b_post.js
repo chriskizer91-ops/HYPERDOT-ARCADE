@@ -32,7 +32,7 @@ function buildEnv(L){const c=x=>new THREE.Color(x),sc=new THREE.Scene();
     vertexShader:'varying vec3 vD;void main(){vD=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
     fragmentShader:`uniform vec3 zen,hor,gr,sun,sc;uniform float k,sk;varying vec3 vD;
       void main(){vec3 d=normalize(vD);float y=d.y;vec3 col=y>0.?mix(hor,zen,pow(y,.55)):mix(hor,gr*.7,pow(min(1.,-y*3.),.6));col*=k;
-        float s=max(0.,dot(d,sun));col+=sc*(pow(s,220.)*sk*5.+pow(s,6.)*sk*.06);gl_FragColor=vec4(col,1.);}`});
+        float s=max(0.,dot(d,sun));col+=sc*(pow(s,220.)*sk*1.6+pow(s,6.)*sk*.05);gl_FragColor=vec4(col,1.);}`});
   sc.add(new THREE.Mesh(new THREE.SphereGeometry(50,32,16),m));const pm=new THREE.PMREMGenerator(R);ENV=pm.fromScene(sc,.02).texture;pm.dispose();}
 function envAll(){if(!ENV)return;const seen=new Set();
   const f=m=>{if(!m||seen.has(m)||!m.isMeshStandardMaterial)return;seen.add(m);if(m.metalness>=.3){m.envMap=ENV;m.envMapIntensity=m.metalness>=.6?.95:.25+m.metalness*.5;m.needsUpdate=true;}};

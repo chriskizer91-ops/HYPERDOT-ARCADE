@@ -75,7 +75,7 @@ function frame(now){
 }
 function boot(){
   pickMap();setupHud();setQuality(QL);const LK=MISSION&&MISSION.look?Object.assign({},MAPDEF.look,MISSION.look):MAPDEF.look;NIGHT_ON=!!LK.night;applyLook(LK);buildEnv(LK);setupTitle();U.tCloud.value=tex('34-fog',{srgb:false});
-  buildGround();const before=new Set(S.children);MAPDEF.build();mergeStatic(before);M=buildMech();buildFX();buildWeapons();P=mkPlayer();
+  buildGround();const before=new Set(S.children);MAPDEF.build();mergeStatic(before);if(MAPDEF.dress&&!Q.has('nodress'))MAPDEF.dress();M=buildMech();buildFX();buildWeapons();P=mkPlayer();
   const done=()=>{G.mode=G.mode==='load'?'title':G.mode;$('load').style.display='none';$('title').style.display=G.mode==='title'?'flex':'none';document.title='IRONHOWL 3';ARC.post('ready',{title:ARC.title});};
   let vegDone=false,texDone=false;LM.onLoad=()=>{texDone=true;if(vegDone)done();};
   if(LK.rain)buildRain();

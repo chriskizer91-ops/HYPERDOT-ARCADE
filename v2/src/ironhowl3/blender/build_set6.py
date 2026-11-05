@@ -109,6 +109,7 @@ def thresher():
     bake_ao(1.2, 12); return stats()
 
 if __name__ == '__main__':
+    import lib; lib.AUTO = {'detail': ('egrey', 'org'), 'wear': ('egrey', 'org', 'grey')}
     out = sys.argv[-1]
     for fn in ([globals()[a] for a in sys.argv[1:-1] if a in globals()] or (truck, thresher)):
         t = fn(); p = os.path.join(out, fn.__name__ + '.glb'); export(p); print(fn.__name__, 'tris', t, 'KB', os.path.getsize(p) // 1024)

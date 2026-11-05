@@ -129,7 +129,10 @@ def mirror_x(fn, *args, **kw):
     """call fn for both sides: fn(sd) with sd = -1 (left) and +1 (right)"""
     return [fn(-1), fn(1)]
 
+AUTO = None   # set by a build script: {'detail': material names, 'wear': material names}
+
 def bake_ao(distance=.6, samples=24):
+    if AUTO and AUTO.get('detail'): auto_detail(AUTO['detail'])
     sc = bpy.context.scene; sc.render.engine = 'CYCLES'; sc.cycles.device = 'CPU'; sc.cycles.samples = samples
     if not sc.world: sc.world = bpy.data.worlds.new('w')
     sc.world.light_settings.distance = distance
@@ -143,6 +146,7 @@ def bake_ao(distance=.6, samples=24):
     bpy.context.view_layer.objects.active = meshes[0]
     sc.render.bake.target = 'VERTEX_COLORS'
     bpy.ops.object.bake(type='AO', target='VERTEX_COLORS')
+    if AUTO and AUTO.get('wear'): edge_wear(AUTO['wear'])
 
 def export(path):
     for o in bpy.context.scene.objects:
@@ -157,3 +161,81 @@ def stats():
         if o.type == 'MESH':
             tris += sum(len(p.vertices) - 2 for p in o.data.polygons)
     return tris
+
+# ===================== detail kit (detail pass 2): bolts, pistons, seams, worn edges =====================
+def bolts(name, pts, r, parent, m, axis='y', depth=.04, seg=8):
+    """small bolt heads at each point, facing along axis"""
+    for i, p in enumerate(pts): cyl('%s%d' % (name, i), r, depth, p, parent, m, seg=seg, axis=axis, bev=r * .25)
+
+def bolt_grid(name, c, w, h, nx, nz, r, parent, m, axis='y'):
+    """bolts in a grid on a face centred at c, spread w wide (x) and h tall (z), facing along y (or x)"""
+    pts = []
+    for i in range(nx):
+        for j in range(nz):
+            u = (i / (nx - 1) - .5) * w if nx > 1 else 0; v = (j / (nz - 1) - .5) * h if nz > 1 else 0
+            pts.append((c[0] + u, c[1], c[2] + v) if axis == 'y' else (c[0], c[1] + u, c[2] + v))
+    bolts(name, pts, r, parent, m, axis)
+
+def piston(name, p0, p1, r, parent, mo, mi, frac=.55):
+    """a hydraulic ram: thick sleeve from p0, polished rod on to p1, a ball joint at each end"""
+    q = tuple(p0[i] + (p1[i] - p0[i]) * frac for i in range(3))
+    strut(name + 'S', p0, q, r, parent, mo, seg=12); strut(name + 'R', q, p1, r * .5, parent, mi, seg=10)
+    ball(name + 'A', r * 1.2, p0, parent, mo, 10); ball(name + 'B', r * .85, p1, parent, mo, 10)
+
+def seam(name, size, loc, parent, m, rot=(0, 0, 0)):
+    """a thin dark line that reads as a panel joint"""
+    return box(name, size, loc, parent, m, min(size) * .3, 1, rot=rot)
+
+def edge_wear(mat_names, amount=.9, seed=3.0):
+    """after bake_ao: store worn paint in the vertex colour alpha (1 = clean, 0 = bare metal) on sharp outer edges,
+    broken up with noise so it looks chipped, not outlined. The game's shader turns low alpha into bare steel."""
+    import bmesh
+    from mathutils import noise, Vector
+    for o in bpy.context.scene.objects:
+        if o.type != 'MESH' or not o.data.materials or o.data.materials[0].name not in mat_names: continue
+        me = o.data; ca = me.color_attributes.get('AO')
+        if ca is None: continue
+        bm = bmesh.new(); bm.from_mesh(me); bm.verts.ensure_lookup_table()
+        wear = {}
+        for v in bm.verts:
+            a = 0.0
+            for e in v.link_edges:
+                if len(e.link_faces) == 2:
+                    s = e.calc_face_angle_signed(0.0)
+                    if s > a: a = s
+            k = max(0.0, min(1.0, (a - .22) / .5))
+            n = noise.noise(Vector(v.co) * 6.0 + Vector((seed, seed * 2, 0))) * .5 + .5
+            wear[v.index] = k * max(0.0, min(1.0, (n - .35) * 2.6)) * amount
+        bm.free()
+        for poly in me.polygons:
+            for li, vi in zip(poly.loop_indices, poly.vertices):
+                c = ca.data[li].color; ca.data[li].color = (c[0], c[1], c[2], 1.0 - wear.get(vi, 0.0))
+
+def auto_detail(mat_names, min_area=.12, seed=5):
+    """detail pass 2 for the machines: on large flat faces of armour pieces, add bolt heads near the corners and a panel seam
+    across the middle. Pieces stay parented to the same joint, so nothing changes for the game."""
+    import random
+    from mathutils import Vector
+    rnd = random.Random(seed); dark = MATS.get('edark') or MATS.get('dark'); stl = MATS.get('esteel') or MATS.get('steel')
+    objs = [o for o in list(bpy.context.scene.objects) if o.type == 'MESH' and o.data.materials and o.data.materials[0].name in mat_names]
+    bpy.context.view_layer.update()
+    pts_all = [o.matrix_world @ Vector(c) for o in bpy.context.scene.objects if o.type == 'MESH' for c in o.bound_box]
+    D = max(max(p[i] for p in pts_all) - min(p[i] for p in pts_all) for i in range(3)) if pts_all else 4
+    min_area = min_area * max(1.0, D / 4.0)   # big machines get fewer, bigger bolts
+    k = 0
+    for o in objs:
+        me = o.data; Mb = o.matrix_basis.copy(); M3 = Mb.to_3x3(); par = o.parent
+        sc = max(o.dimensions) if max(o.dimensions) > 0 else 1
+        for p in me.polygons:
+            if p.area < min_area or len(p.vertices) != 4 or rnd.random() > .6: continue
+            n = p.normal.copy(); c = p.center.copy(); vs = [me.vertices[i].co.copy() for i in p.vertices]
+            e1, e2 = vs[1] - vs[0], vs[3] - vs[0]; L1, L2 = e1.length, e2.length
+            r = max(.022, min(.06 * max(1.0, D / 6.0), min(L1, L2) * .06)); wn = (M3 @ n).normalized(); rot = wn.to_track_quat('Z', 'Y').to_euler()
+            for v in vs:
+                q = Mb @ (c + (v - c) * .8 + n * .01); k += 1
+                cyl('ab%d' % k, r, .035 * max(1.0, D / 6.0), tuple(q), par, stl, seg=6, rot=rot, bev=0)
+            if dark and rnd.random() < .7:
+                e = (e1 if L1 > L2 else e2).normalized() if rnd.random() < .5 else (e2 if L1 > L2 else e1).normalized()
+                span = (L1 if abs(e.dot(e1.normalized())) > .9 else L2) * .42
+                a_ = Mb @ (c + e * span + n * .004); b_ = Mb @ (c - e * span + n * .004); k += 1
+                strut('as%d' % k, tuple(a_), tuple(b_), max(.008, r * .3), par, dark, sq=True)

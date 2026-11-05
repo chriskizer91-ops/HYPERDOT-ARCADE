@@ -316,6 +316,28 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
   - The 4 new enemies together: 260→405 calls.
 - **Not done:** lightning only lights the scene with the hemisphere light, no real shadows. The Stag walks through trees. The Maw can clip containers at the edge of the yard.
 
+## Detail pass (after session 7, 5 Nov 2026)
+
+- **Lighting and effects** (`03b_post.js`):
+  - Bloom: an EffectComposer with RenderPass, UnrealBloomPass and OutputPass, on High and Medium. The high-pass uses the brightest channel above 1.7, so red lights glow but lit ground does not.
+  - Reflections: a small gradient sky per map goes through PMREM into `ENV`, applied to every material with metalness 0.3 or more.
+  - Normal maps from `tools/make_normals.py`: 28 textures, `<name>-n.webp` at 512 px (2.3 MB). Used by the mech, the machines, `tmat` props and the ground. The ground shader blends three normal maps.
+  - Effect art: `tools/make_fx_atlas.py` packs explosions, muzzle flash, sparks and steam into `fx-atlas.webp`. Particles with `img:0..4` use it.
+  - Decals: scorch marks where explosions land, claw prints on soft ground.
+  - The shield hex bubble flashes when the shield takes a hit, and shadows are now PCF soft.
+  - `?nobloom` turns bloom off.
+- **Models:**
+  - The detail kit in `blender/lib.py`: `bolts`, `bolt_grid`, `piston`, `seam`, `edge_wear` (worn paint in the vertex-colour alpha) and `auto_detail` (bolts and seams on large flat faces).
+  - Build scripts set `lib.AUTO` so `bake_ao` adds the detail and the wear.
+  - Howler 07 has a hand-placed `details()`: skirts, layered plates, rams, cables, pod skins, heat sinks, glowing vents, teeth, lenses and fuel lines. It went from 27k to 50k triangles.
+  - The shader's `wear` option turns worn edges into bare steel (lower roughness, higher metalness).
+- **Set dressing** (`04d_props.js`, `MAPDEF.dress()`): walk-through clutter, so paths are unchanged.
+  - Woods: 900 stones, 90 logs, 150 stumps, leaf litter.
+  - Field: rocks, pallets, drums, posts, scrap, puddles.
+  - Docks: 110–170 puddles that mirror the sky, cracks, oil, pallets, cones, drums, hoses.
+  - Foundry: puddles, cracks, scorch, hazard paint, scrap, pipes, cones.
+  - `?nodress` turns it off.
+
 ## Next: session 8 (polish)
 
 - Sound pass, more radio lines, a phone performance pass (instancing enemies if draw calls are a problem), attract demo, Endless mode, final balance after his playtest.
