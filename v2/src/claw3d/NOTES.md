@@ -7,12 +7,44 @@ The plan lives in the claude.ai project as `claude/claw3d-design.md`. This file 
 | Session | What | State |
 |---|---|---|
 | 1 | Christopher's 67 images processed; all 20 plush built as 3D models and painted | done |
-| 2 | Soft-body physics in 3D, the claw rig, Wildwood playable in a plain box | next |
+| 2 | Soft-body physics in 3D, the claw rig, Wildwood playable (case, glass, lights, LED HUD, touch) | done |
+| 2b | Next: the three machines' own cabinets and the machine picker (session 3) | next |
 | 3 | The three machines (cabinets, glass, lights, camera), the machine picker | |
 | 4 | Each machine's rules, tickets, the collection, the win close-up | |
 | 5 | Sound, phone performance, touch tests, cabinet contract, publish `v2/games/claw3d.html` | |
 
-The game page `v2/games/claw3d.html` does not exist yet. Nothing outside `v2/src/claw3d/` has been touched.
+The game page is `v2/games/claw3d.html` (built by `python3 build.py`). Right now it plays Wildwood only. Nothing else in the repo has been touched.
+
+## The game (session 2)
+
+```
+shell.html            the page: canvas, HUD canvas, GO/DROP buttons, pause menu, loading screen
+js/00_base.js         fonts, audio synth, input, the cabinet contract (from Strike Night 3D, input reworked)
+js/01_models.js       decodePlush(): the model format
+js/02_sfx.js          the original Plush Panic's sound effects and music
+js/03_assets.js       unpacks the art and models build.py packed into the page
+js/10_phys.js         soft bodies in 3D: shape matching + springs, ball contacts with friction, the case and chute, sleep
+js/11_claw.js         the claw: winch, pendulum head, geared prong servos, honest friction grip, the carriage
+js/20_machine.js      the machines (Wildwood so far), the credit sequence, strength roll, wins, tickets, the stock, the demo pilot
+js/30_gfx.js          three.js: the case, lights, claw, plush skinned on the GPU from their balls, the camera
+js/31_hud.js          the LED dot HUD
+js/40_play.js         aiming input, title/play/over, pause, frame loop, boot, the test hook
+build.py              -> ../../games/claw3d.html (+ --dev PATH with the test hook)
+test/ptest.js         physics harness, no graphics: node test/ptest.js pile|sleep|rate|trace
+test/autoplay.js      the real machine logic plays N credits: node test/autoplay.js 30 [lowest strength]
+test/shot.py          screenshots at laptop and phone sizes, one credit played
+test/touch.py         drags, taps and GO holds on a phone-sized screen, with where the claw ended up
+test/embed.py         the published file in an iframe: ready, pause, resume, mute, no console errors
+```
+
+Numbers measured in session 2 (this machine's Chrome / node):
+- Physics: about 0.5 ms a tick with the pile asleep, 2–4 ms while the claw is in the pile. A plush that is still for half a second sleeps until something touches it.
+- Drawing: about 82,000 triangles, 74 draw calls for a full Wildwood case.
+- Grip (one plush on an empty floor, aimed perfectly, 30 tries each): strength 42% won 0, 70% won 14, 100% won 25.
+- A full machine with the real strength roll (42–100%) and the demo pilot's aim: 7 wins in 30 credits (23%, the 1-in-4 target). Always-strong demo claw: 11 in 30.
+- Touch on a phone-sized screen: drags at 0.15 / 0.4 / 1 s and taps all set the claw within 0.5–0.8 cm of the finger.
+
+Tuning knobs: `IPI` in js/11_claw.js sets how hard a credit can squeeze (higher = weaker); `roll` per machine in js/20_machine.js sets the strength range; `ks`/`beta`/`ke` per plush type set squishiness.
 
 ## Folders
 
@@ -54,6 +86,8 @@ python3 tools/shot_plush.py out.jpg fox dino --pitch=26  # four sides each; --gr
 Model format: see `write_bin()` in build_plush.py; the matching decoder is `decodePlush()` in tools/preview.html.
 
 ## Known things to fix
+
+- The camera swing to the side view takes about half a second; dragging during the swing works but the mapping moves with the camera.
 
 - Whale: its tail is a block when seen from in front. The side photo shows it raised, the back photo shows the flukes flat.
 - A thin dark line under some chins (fox, owl, hare, red panda, sloth). Hardly visible from the game's camera, which looks down.

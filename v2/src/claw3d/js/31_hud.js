@@ -1,0 +1,74 @@
+/* =====================================================================================
+   31. HUD — an LED dot-matrix strip at the top (time, credits, tickets), the strength meter on the left, big LED
+   messages in the middle. Drawn on one 2-D canvas over the 3-D view; text is cached per string.
+   ===================================================================================== */
+const HUD={cv:null,g:null,w:0,h:0,dpr:1,pops:[],cache:new Map()};
+function hudInit(){HUD.cv=$('hud');HUD.g=HUD.cv.getContext('2d');hudResize();}
+function hudResize(){if(!HUD.cv)return;HUD.dpr=Math.min(2,devicePixelRatio||1);HUD.w=innerWidth;HUD.h=innerHeight;HUD.cv.width=Math.round(HUD.w*HUD.dpr);HUD.cv.height=Math.round(HUD.h*HUD.dpr);HUD.cache.clear();}
+function hudPop(txt,col){HUD.pops.push({txt,col,t:0});}
+/* a string as LED dots: 5x7 glyphs, each lit pixel a round dot with a faint glow; unlit dots faintly visible */
+function ledText(str,dot,col,ghost){
+  const key=str+'|'+dot+'|'+col+'|'+(ghost?1:0);let c=HUD.cache.get(key);if(c)return c;
+  if(HUD.cache.size>300)HUD.cache.clear();
+  const tw=tw5(str,1),th=7,pad=2,cw=Math.ceil((tw+pad*2)*dot),ch=Math.ceil((th+pad*2)*dot);
+  const src=document.createElement('canvas');src.width=tw+1;src.height=th;txt5(src.getContext('2d'),str,0,0,'#fff',1);
+  const d=src.getContext('2d').getImageData(0,0,src.width,th).data;
+  c=document.createElement('canvas');c.width=cw;c.height=ch;const g=c.getContext('2d');
+  const r=dot*.42;g.fillStyle=col;g.shadowColor=col;g.shadowBlur=dot*1.2;
+  for(let y=0;y<th;y++)for(let x=0;x<tw;x++){const on=d[(y*src.width+x)*4+3]>128;if(!on)continue;g.beginPath();g.arc((x+pad+.5)*dot,(y+pad+.5)*dot,r,0,TAU);g.fill();}
+  if(ghost){g.shadowBlur=0;g.fillStyle='rgba(255,255,255,.06)';for(let y=0;y<th;y++)for(let x=0;x<tw;x++){if(d[(y*src.width+x)*4+3]>128)continue;g.beginPath();g.arc((x+pad+.5)*dot,(y+pad+.5)*dot,r*.8,0,TAU);g.fill();}}
+  c.pw=pad*dot;HUD.cache.set(key,c);return c;
+}
+function led(str,x,y,dot,col,al,ghost){const c=ledText(str,dot*HUD.dpr,col,ghost),g=HUD.g,w=c.width,h=c.height,p=c.pw;
+  let X=x*HUD.dpr;if(al==='c')X-=w/2;else if(al==='r')X-=w-p;else X-=p;g.drawImage(c,Math.round(X),Math.round(y*HUD.dpr-p));}
+function panel(x,y,w,h,r){const g=HUD.g,k=HUD.dpr;g.beginPath();g.roundRect(x*k,y*k,w*k,h*k,r*k);g.fillStyle='rgba(10,6,14,.72)';g.fill();g.strokeStyle='rgba(255,210,140,.22)';g.lineWidth=k;g.stroke();}
+function hudDraw(dt){
+  const g=HUD.g;if(!g)return;g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,HUD.cv.width,HUD.cv.height);
+  const W=HUD.w,H=HUD.h,small=W<520,top=Math.max(8,SAFE.top+6);
+  /* the top strip */
+  const sw=Math.min(W-20,small?W-20:520),sx=(W-sw)/2,sh=small?30:34,d=small?2.6:3;
+  panel(sx,top,sw,sh,10);
+  const ty=top+(sh-7*d)/2;
+  if(S.mode==='play'){
+    const tm=Math.ceil(M.timer),urg=M.timer<10&&(M.ph==='aimX'||M.ph==='aimZ');
+    led('TIME',sx+12,ty,d*.75,'#b8a4d8');led(String(tm).padStart(2,'0'),sx+12+tw5('TIME')*d*.75+8,ty,d,urg&&(S.t*4|0)%2?'#ff4a4a':'#ffd040');
+    let cx=W/2-((MC.credits-1)*14)/2;for(let i=0;i<MC.credits;i++){const used=i<S.credit-1,cur=i===S.credit-1;
+      g.beginPath();g.arc((cx+i*14)*HUD.dpr,(top+sh/2)*HUD.dpr,4.2*HUD.dpr,0,TAU);g.fillStyle=used?'#3a2a40':cur?((S.t*3|0)%2?'#ffd040':'#ff9a10'):'#ffd040';g.fill();}
+    led(fmt(S.tickets),sx+sw-12,ty,d,'#ffd040','r');led('TIX',sx+sw-12-tw5(fmt(S.tickets))*d-8,ty,d*.75,'#b8a4d8','r');
+  }else{
+    led('HI '+fmt(S.hi),sx+12,ty,d*.75,'#b8a4d8');led(MC.name,W/2,ty,d,'#ffcf8a','c');led(S.mode==='over'?'THANK YOU':'FREE PLAY',sx+sw-12,ty,d*.75,'#b8a4d8','r');
+  }
+  /* strength meter (and grip while holding) on the left */
+  if(S.mode==='play'){
+    const mh=Math.min(170,H*.32),mx=Math.max(10,SAFE.left+10),my=H*.5-mh/2,seg=10,v=M.ph==='roll'?M.roll:M.S,on=Math.round(v*seg);
+    panel(mx-6,my-26,34,mh+52,9);led('STR',mx+11,my-20,1.6,'#c8ffd0','c');
+    for(let s=0;s<seg;s++){const t=s/(seg-1),yy=my+mh-(s+1)*(mh/seg),c=s<on?`hsl(${t*120},95%,58%)`:'rgba(255,255,255,.07)';g.fillStyle=c;g.beginPath();g.roundRect((mx)*HUD.dpr,(yy+2)*HUD.dpr,22*HUD.dpr,(mh/seg-4)*HUD.dpr,3*HUD.dpr);g.fill();}
+    led(Math.round(v*100)+'%',mx+11,my+mh+8,1.6,'#ffffff','c');
+    if(M.ph==='grab'||M.ph==='lift'||M.ph==='carry'){const gx=mx+40,gv=Math.round(CL.grip*seg);panel(gx-6,my-26,34,mh+52,9);led('GRIP',gx+11,my-20,1.4,'#a6f3ff','c');
+      for(let s=0;s<seg;s++){const yy=my+mh-(s+1)*(mh/seg);g.fillStyle=s<gv?'#5ad8ff':'rgba(255,255,255,.07)';g.beginPath();g.roundRect(gx*HUD.dpr,(yy+2)*HUD.dpr,22*HUD.dpr,(mh/seg-4)*HUD.dpr,3*HUD.dpr);g.fill();}}
+    /* what to do now, under the strip */
+    let pr='';if(!S.demo){if(M.ph==='aimX')pr=touchy?'DRAG OR HOLD GO':'HOLD SPACE OR > TO MOVE';else if(M.ph==='aimZ')pr=touchy?'DEPTH: DRAG OR HOLD GO':'DEPTH: HOLD SPACE OR UP';
+      else if(M.ph==='drop')pr='DROP!';else if(M.ph==='grab')pr='GRAB!';else if(M.ph==='lift'||M.ph==='carry')pr=CL.grip>.05?'HOLD ON...':'';}
+    if(pr)led(pr,W/2,top+sh+10,small?1.7:2,'#ffffff','c');
+    if(M.ph==='roll'){const big=small?4:6,cy=H*.3;led('CREDIT '+S.credit,W/2,cy,big,'#ffd040','c');const pc=Math.round(M.roll*100);
+      led('STRENGTH '+pc+'%',W/2,cy+big*10,big*.55,pc>75?'#6aff5a':pc>55?'#ffd040':'#ff5a5a','c');
+      if(S.credit===MC.credits&&S.prizes.length===0&&M.S>=MC.boost)led('LAST CHANCE BOOST',W/2,cy+big*16,big*.4,'#6aff5a','c');}
+    if(M.msgT>0&&M.msg){const big=small?3.4:5;led(M.msg,W/2,H*.34,big,M.msg==='TIME!'?'#ff4a4a':'#ff6ac0','c');}
+    if(M.ph==='result'&&M.wins.length&&((S.winT*6|0)%2||S.winT>1)){const big=small?4.5:7;led(M.wins.some(b=>b.T.rar===4)?'JACKPOT!':'WINNER!',W/2,H*.24,big,'#ffd040','c');
+      led(M.wins.map(b=>b.T.name).join(' + '),W/2,H*.24+big*10,big*.45,RAR[M.wins[0].T.rar].c,'c');}
+  }
+  /* title: the machine's marquee is the big sign; the game's name and the prompt sit low, under the case */
+  if(S.mode==='title'){const big=small?3.2:4.5,y=H*(small?.8:.76);panel(W/2-Math.min(W*.45,330),y-big*3,Math.min(W*.9,660),big*30,14);
+    led('PLUSH PANIC 3D',W/2,y,big,'#ff6ac0','c');led(MC.name+' . '+MC.sub,W/2,y+big*10,big*.45,'#ffcf8a','c');
+    if((S.t*2|0)%2)led(touchy?'TAP TO PLAY':'PRESS START',W/2,y+big*17,big*.6,'#ffd040','c');}
+  if(S.mode==='over'){const big=small?4:6,y=H*.2;led(S.prizes.length?'YOUR HAUL':'GAME OVER',W/2,y,big,S.prizes.length?'#ffd040':'#ff6ac0','c');
+    S.prizes.forEach((id,i)=>led(CAST[id].name+'  +'+CAST[id].tix,W/2,y+big*10+i*big*5,big*.45,RAR[CAST[id].rar].c,'c'));
+    if(!S.prizes.length)led('NO PRIZE THIS TIME',W/2,y+big*10,big*.45,'#c8c0e0','c');
+    const yy=H*.62;led('TICKETS '+fmt(S.tShown||0),W/2,yy,big*.6,'#ffd040','c');led('SCORE '+fmt(S.score),W/2,yy+big*6,big*.45,'#ffffff','c');
+    if(S.newHi&&(S.t*4|0)%2)led('NEW HIGH SCORE',W/2,yy+big*11,big*.4,'#6aff5a','c');
+    if(S.t>2.5&&(S.t*2|0)%2)led(touchy?'TAP TO CONTINUE':'PRESS START',W/2,H*.88,small?2.4:3,'#ffb040','c');}
+  /* pop-up text */
+  for(const p of HUD.pops){p.t+=dt;const a=p.t<.15?p.t/.15:p.t>1.2?1-(p.t-1.2)/.4:1;if(a<=0)continue;g.globalAlpha=clamp(a,0,1);led(p.txt,W/2,H*.44-p.t*30,small?2.6:3.4,p.col,'c');g.globalAlpha=1;}
+  HUD.pops=HUD.pops.filter(p=>p.t<1.6);
+  if(S.paused){g.fillStyle='rgba(5,3,10,.45)';g.fillRect(0,0,HUD.cv.width,HUD.cv.height);}
+}
