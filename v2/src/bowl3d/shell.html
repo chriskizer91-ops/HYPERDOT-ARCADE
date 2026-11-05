@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Strike Night 3D</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&display=swap">
+<style>
+/* STRIKE NIGHT 3D — Hyperdot Arcade. Full-resolution 3D in three.js; the HUD and the alley's
+   screens are LED dots. Dark-only by design (it is a blacklit bowling alley). */
+:root{--bg:#07060b;--ink:#efeaf6;--ink-2:#a39cb4;--accent:#ffb040;--accent-2:#4fe3ff;--pink:#ff5ab4;
+  --panel:rgba(18,15,24,.78);--edge:rgba(255,255,255,.14);--f:"Chakra Petch","Arial Narrow",system-ui,sans-serif;color-scheme:dark}
+[hidden]{display:none!important}
+html{height:100%;box-sizing:border-box;background:var(--bg)}
+*,*::before,*::after{box-sizing:inherit}
+body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:var(--f);overflow:hidden;overscroll-behavior:none;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+#gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+.bar{position:fixed;left:0;right:0;top:0;display:flex;align-items:center;justify-content:space-between;gap:10px;pointer-events:none;
+  padding-top:max(8px,env(safe-area-inset-top,0px));padding-left:max(14px,env(safe-area-inset-left,0px));padding-right:max(14px,env(safe-area-inset-right,0px))}
+.brand{font:700 13px/1 var(--f);letter-spacing:.3em;color:var(--accent);text-shadow:0 0 12px rgba(255,176,64,.55);white-space:nowrap}
+.brand span{color:var(--ink-2);letter-spacing:.2em;font-weight:500;font-size:10px;margin-left:8px;text-shadow:none}
+.opts{display:flex;gap:8px}
+.chip{pointer-events:auto;height:32px;padding:0 12px;border-radius:999px;border:1px solid var(--edge);background:var(--panel);color:var(--ink);cursor:pointer;
+  font:600 11px/1 var(--f);letter-spacing:.12em;text-transform:uppercase;white-space:nowrap;backdrop-filter:blur(6px)}
+.chip.on{border-color:rgba(79,227,255,.7);color:#bff6ff;box-shadow:0 0 12px rgba(79,227,255,.35) inset}
+.chip:focus-visible,.mb:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+@media (max-width:560px){.brand span{display:none}#snd{display:none}}
+/* phones and the arcade: one small pause button in the bottom-right corner; the menu holds the rest */
+body.touch .bar{display:none}
+#pz{position:fixed;right:max(10px,env(safe-area-inset-right,0px));bottom:max(10px,env(safe-area-inset-bottom,0px));width:40px;height:40px;border-radius:50%;padding:0;display:none;
+  border:1px solid var(--edge);background:var(--panel);color:var(--ink);font:700 12px/1 var(--f);letter-spacing:.05em;cursor:pointer;opacity:.75}
+body.touch #pz{display:grid;place-items:center}
+body.embed .bar,body.embed .keys{display:none!important}
+body.embed #pz{display:grid;place-items:center}
+body.embed:not(.touch) #pz{opacity:.35}
+.keys{position:fixed;left:0;right:0;bottom:max(8px,env(safe-area-inset-bottom,0px));margin:0;text-align:center;font:500 11px/1.5 var(--f);letter-spacing:.08em;color:var(--ink-2);pointer-events:none;
+  text-shadow:0 0 6px #000,0 0 2px #000}
+.keys b{color:var(--ink);font-weight:600}
+body.touch .keys{display:none}
+body.paused .keys,body.playing .keys{opacity:0}
+.keys{transition:opacity .4s}
+/* the pause menu */
+#menu{position:fixed;inset:0;display:grid;place-items:center;background:rgba(5,3,12,.62);backdrop-filter:blur(3px);z-index:5}
+#menu .card{min-width:240px;max-width:86vw;padding:22px 20px 16px;border-radius:18px;border:1px solid var(--edge);background:rgba(16,12,26,.92);box-shadow:0 0 40px rgba(255,90,180,.18);text-align:center}
+#menu h2{margin:0 0 14px;font:700 20px/1 var(--f);letter-spacing:.3em;color:#fff;text-shadow:0 0 14px var(--pink)}
+.mb{display:block;width:100%;margin:8px 0 0;height:42px;border-radius:12px;border:1px solid var(--edge);background:rgba(255,255,255,.05);color:var(--ink);
+  font:600 12px/1 var(--f);letter-spacing:.14em;text-transform:uppercase;cursor:pointer}
+.mb.big{background:linear-gradient(90deg,rgba(255,90,180,.35),rgba(79,227,255,.3));border-color:rgba(255,255,255,.3)}
+.mb.sm{display:inline-block;width:auto;padding:0 12px;height:34px;font-size:10px;margin:8px 3px 0}
+#err{position:fixed;inset:0;display:none;place-items:center;padding:24px;text-align:center;font:500 14px/1.6 var(--f);color:var(--ink-2)}
+</style>
+</head>
+<body>
+<canvas id="gl" tabindex="0" aria-label="Strike Night 3D"></canvas>
+<div id="sa" style="position:fixed;visibility:hidden;pointer-events:none;padding-top:env(safe-area-inset-top,0px)"></div>
+<div class="bar">
+  <span class="brand">STRIKE NIGHT 3D<span>HYPERDOT ARCADE</span></span>
+  <div class="opts"><button class="chip" id="dots" type="button" title="Show the 3D through LED dots">Dots</button><button class="chip" id="snd" type="button">Sound on</button><button class="chip" id="pauseBtn" type="button">Pause</button></div>
+</div>
+<button id="pz" type="button" aria-label="Pause">II</button>
+<div id="menu" hidden><div class="card">
+  <h2>PAUSED</h2>
+  <button class="mb big" id="mRes" type="button">Resume</button>
+  <button class="mb" id="mRe" type="button">New game</button>
+  <div><button class="mb sm" id="mDots" type="button">Dots: off</button><button class="mb sm" id="mQ" type="button">Graphics: auto</button><button class="mb sm" id="mSnd" type="button">Sound: on</button></div>
+  <button class="mb" id="mEx" type="button">Exit to arcade</button>
+</div></div>
+<p class="keys" id="keys"></p>
+<div id="err">This game needs WebGL2, which this browser has turned off.</div>
+<script>
+/* three.js r170 (MIT, https://threejs.org), bundled as one object */
+const THREE=(()=>{
+/*@@THREE@@*/
+})();
+(()=>{
+'use strict';
+const CAB={
+  id:'bowl3d',title:'STRIKE NIGHT 3D',tickets:true,
+  keys:'<b>Drag</b> the ball sideways · <b>swipe up</b> to bowl, curve it to hook · or <b>Arrows</b> + <b>Space</b>: line, aim, power · <b>Shift</b> spin · <b>Esc</b> pause'
+};
+/*@@GAME@@*/
+})();
+</script>
+</body>
+</html>
