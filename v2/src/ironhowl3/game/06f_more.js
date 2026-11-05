@@ -2,9 +2,9 @@
    Missions 5-8 themselves are listed in 06d_missions.js. Models: models/mech/lancer.glb, truck.glb, thresher.glb (blender/build_set6.py). */
 EDEF.lancer={hp:170,r:1.4,cy:3.6,speed:3.6,score:450,drop:.7,file:'lancer',sc:1,scrap:40};
 let TRUCK_TPL=null,BOSS_TPL=null;
-const NEED_BOSS=!!(MISSION&&MISSION.steps.some(s=>s.t==='boss'));
+const BOSS_ID=MISSION&&MISSION.boss||null;
 function loadSet6(){const L=new THREE.GLTFLoader(LM),get=f=>new Promise(ok=>L.load('models/mech/'+f+'.glb',g=>ok(g.scene),undefined,()=>ok(null)));
-  return Promise.all([get('truck'),NEED_BOSS?get('thresher'):null]).then(([t,b])=>{
+  return Promise.all([get('truck'),BOSS_ID?get(BOSS_ID):null]).then(([t,b])=>{
     if(t){const red=new THREE.MeshBasicMaterial({color:new THREE.Color(1,.1,.05).multiplyScalar(3)});
       t.traverse(o=>{if(o.isMesh){const n=o.material.name;o.material=n==='red'?red:MT[MECH_MAT[n]||n]||MT.gun;o.castShadow=n!=='eye'&&n!=='glow'&&n!=='red';o.receiveShadow=true;}});mergeParts(t,o=>/^(ty|hub)\d/.test(o.name));TRUCK_TPL=t;}
     if(b){/* the boss gets lighter, less metallic armour than the small machines so its shape reads from far away, and a deeper red so the knees read as red */
@@ -13,6 +13,7 @@ function loadSet6(){const L=new THREE.GLTFLoader(LM),get=f=>new Promise(ok=>L.lo
       BMAT.egun=k(new THREE.MeshStandardMaterial({map:tex('24-gunmetal'),color:0x9a9ea6,roughness:.45,metalness:.45}));
       BMAT.edark=k(new THREE.MeshStandardMaterial({color:0x34363a,roughness:.65,metalness:.35}));BMAT.esteel=MT.steel;BMAT.emblem=EMAT.emblem;
       BMAT.ered=new THREE.MeshBasicMaterial({color:new THREE.Color(1,.08,.03).multiplyScalar(1.5)});
+      if(NIGHT_ON){BMAT.egrey.emissive.setRGB(.035,.025,.02);BMAT.egun.emissive.setRGB(.025,.02,.02);}   /* at night the bosses keep a faint glow so their shape reads */
       b.traverse(o=>{if(o.isMesh){o.material=BMAT[o.material.name]||BMAT.egun;o.castShadow=o.material!==BMAT.emblem&&o.material!==BMAT.ered;o.receiveShadow=true;}});mergeParts(b);BOSS_TPL=b;}});}
 const BMAT={};
 let BURNT=null;
@@ -137,4 +138,4 @@ function bossStep(s,dt){const B=BOSS;B.idle=false;
     if(k.t<=0){boom(k.x,hgt(k.x,k.z)+.5,k.z,.9);if(Math.hypot(P.x-k.x,P.z-k.z)<4.9&&P.y-hgt(P.x,P.z)<2.5)hurtPlayer(26,k.x,k.z);S.remove(k.m);k.m.material.dispose();B.marks.splice(i,1);}}
   const pos=B.coreT&&!B.coreT.dead?B.coreT:(B.legT.find(t=>!t.dead)||null);
   return {txt:B.dead?'THRESHER DOWN':legsLeft?s.label+' · KNEES '+(4-legsLeft)+'/4':'HIT THE CORE · '+Math.max(0,Math.ceil(B.coreT.hp/B.coreT.hpMax*100))+'%',ok:B.dead&&B.deadT>2.5,pos:pos||{x:B.x,z:B.z}};}
-function bossClearMarks(){for(const k of BOSS.marks||[])S.remove(k.m);if(BOSS.marks)BOSS.marks.length=0;}
+function bossClearMarks(){clearMarks();for(const k of BOSS.marks||[])S.remove(k.m);if(BOSS.marks)BOSS.marks.length=0;}

@@ -11,7 +11,7 @@ function loadEnemies(){
   EMAT.egun=k(new THREE.MeshStandardMaterial({map:tex('24-gunmetal'),color:0x6c7078,roughness:.45,metalness:.7}));
   EMAT.edark=k(new THREE.MeshStandardMaterial({color:0x121316,roughness:.7,metalness:.4}));
   EMAT.esteel=MT.steel;
-  EMAT.ered=new THREE.MeshBasicMaterial({color:new THREE.Color(1,.14,.06).multiplyScalar(3.4)});
+  EMAT.ered=new THREE.MeshBasicMaterial({color:new THREE.Color(1,.12,.05).multiplyScalar(2.2)});
   EMAT.emblem=hookWorld(new THREE.MeshStandardMaterial({map:tex('29-enemy-emblem',{clamp:true,glb:true}),transparent:true,alphaTest:.35,roughness:.55,polygonOffset:true,polygonOffsetFactor:-3,polygonOffsetUnits:-3}));
   const L=new THREE.GLTFLoader(LM),jobs=Object.keys(EDEF).map(id=>new Promise(ok=>L.load('models/mech/'+EDEF[id].file+'.glb',g=>{
     g.scene.traverse(o=>{if(o.isMesh){o.material=EMAT[o.material.name]||EMAT.egun;o.castShadow=o.material!==EMAT.emblem;o.receiveShadow=true;}});
@@ -48,9 +48,10 @@ function los(x,z){const dx=P.x-x,dz=P.z-z,d=Math.hypot(dx,dz),st=Math.ceil(d/3);
 /* ---- spawning ---- */
 function spawnEnemy(id,x,z){const d=EDEF[id],tp=ETPL[id];if(!tp)return null;
   const o=tp.clone(true);const N=n=>o.getObjectByName(n);
-  const e={id,d,o,x,z,y:hgt(x,z),yaw:Math.atan2(-(P.x-x),-(P.z-z)),hp:d.hp*G.hpK,dead:false,spawnT:1.3,st:'move',t:0,cd:1+Math.random()*1.5,
+  const e={id,d,o,x,z,y:hgt(x,z),yaw:Math.atan2(-(P.x-x),-(P.z-z)),hp:d.hp*G.hpK*DIFF.hp,dead:false,spawnT:1.3,st:'move',t:0,cd:1+Math.random()*1.5,
     kx:0,kz:0,flash:0,phase:Math.random()*10,strafe:Math.random()<.5?1:-1,strT:2+Math.random()*2,vx:0,vz:0};
-  if(id==='skitter'){e.body=N('body');e.legs=[0,1,2,3].map(i=>N('leg'+i));}
+  if(d.init)d.init(e,N);
+  else if(id==='skitter'){e.body=N('body');e.legs=[0,1,2,3].map(i=>N('leg'+i));}
   else if(id==='hound'){e.body=N('body');e.head=N('head');e.legs=['FL','FR','BL','BR'].map(s=>({up:N('leg'+s),kn:N('knee'+s)}));}
   else{e.hips=N('hips');e.torso=N('torso');e.armR=N('armR');e.armL=N('armL');e.mzR=N('mzR');e.mzL=N('mzL');
     e.legs=[-1,1].map(sd=>{const s=sd<0?'L':'R';return {thigh:N('thigh_'+s),knee:N('knee_'+s),ankle:N('ankle_'+s),sd};});e.gp=0;}
@@ -75,14 +76,14 @@ function startWave(){
       const cl=collide(x,z,EDEF[id].r);spawnEnemy(id,cl[0],cl[1]);}}
 }
 /* ---- damage ---- */
-function hurtEnemy(e,dmg,x,y,z){if(e.dead)return;e.hp-=dmg;e.flash=1;if(e.hp<=0)killEnemy(e);}
+function hurtEnemy(e,dmg,x,y,z){if(e.dead)return;if(e.d.armor)dmg*=e.d.armor(e,x,z);e.hp-=dmg;e.flash=1;if(e.hp<=0)killEnemy(e);}
 function killEnemy(e){e.dead=true;S.remove(e.o);if(e.beam)S.remove(e.beam);e.mat.dispose();
-  boom(e.x,e.y+e.d.cy,e.z,e.id==='skitter'?.7:e.id==='hound'?1.1:1.5);
+  boom(e.x,e.y+e.d.cy,e.z,e.d.boom||(e.id==='skitter'?.7:e.id==='hound'?1.1:1.5));
   const now=G.t;G.combo=now-G.lastKill<3?G.combo+1:1;G.lastKill=now;const mult=Math.min(3,1+.25*(G.combo-1));
   addScore(Math.round(e.d.score*mult*(G.hpK||1)));G.kills++;addScrap(e.d.scrap||10);
-  if(Math.random()<e.d.drop)dropPickup(e.x,e.z,e.id==='gunner'&&Math.random()<.55?'chip':null);
+  if(Math.random()<e.d.drop)dropPickup(e.x,e.z,Math.random()<(e.d.chip||(e.id==='gunner'?.55:0))?'chip':null);
 }
-function hurtPlayer(dmg,fx,fz){if(P.dead||G.mode!=='play'&&G.mode!=='demo')return;P.regenT=P.regenDelay||3;
+function hurtPlayer(dmg,fx,fz){if(P.dead||G.mode!=='play'&&G.mode!=='demo')return;dmg*=DIFF.dmg;P.regenT=P.regenDelay||3;
   const s=Math.min(P.shield,dmg);P.shield-=s;dmg-=s;if(s>0){sShield();HUD.hit(fx,fz,'s');}
   if(dmg>0){P.hull-=dmg;sHurt();HUD.hit(fx,fz,'h');CAMS.shake=Math.max(CAMS.shake,.3+dmg*.02);}
   if(P.hull<=0){P.hull=0;playerDown();}}
@@ -121,6 +122,7 @@ function updEnemies(dt){
     const dx=P.x-e.x,dz=P.z-e.z,dist=Math.hypot(dx,dz)||1,face=Math.atan2(-dx,-dz);let mvx=0,mvz=0,sp=e.d.speed,want=face;
     const tg=truckGoal(e,dist);
     if(tg){mvx=tg[0];mvz=tg[1];sp=tg[2];if(sp)want=Math.atan2(-mvx,-mvz);}
+    else if(e.d.brain){const r=e.d.brain(e,dt,dist,dx,dz,face);mvx=r[0];mvz=r[1];sp=r[2];want=r[3];}
     else if(e.id==='lancer'){const r=lancerBrain(e,dt,dist,dx,dz);mvx=r[0];mvz=r[1];sp=r[2];want=face;}
     else if(e.id==='skitter'){
       if(dist>2.8){const nd=navDir(e.x,e.z);mvx=nd[0];mvz=nd[1];want=Math.atan2(-mvx,-mvz);
@@ -149,8 +151,8 @@ function updEnemies(dt){
     if(dist<e.d.r+RAD&&!(e.st==='charge')){mvx-=dx/dist;mvz-=dz/dist;}
     e.vx+=(mvx*sp-e.vx)*damp(6,dt);e.vz+=(mvz*sp-e.vz)*damp(6,dt);
     let nx=e.x+(e.vx+e.kx)*dt,nz=e.z+(e.vz+e.kz)*dt;e.kx*=Math.exp(-dt*4);e.kz*=Math.exp(-dt*4);
-    const c=collide(nx,nz,e.d.r),B=BND();e.x=clamp(c[0],B.x0,B.x1);e.z=clamp(c[1],B.z0,B.z1);e.y=hgt(e.x,e.z);
-    e.yaw+=clamp(angD(want,e.yaw),-dt*(e.st==='aim'?6:4),dt*(e.st==='aim'?6:4));
+    const c=e.d.fly?[nx,nz]:collide(nx,nz,e.d.r),B=BND();e.x=clamp(c[0],B.x0,B.x1);e.z=clamp(c[1],B.z0,B.z1);e.y=hgt(e.x,e.z)+(e.d.fly?e.alt:0);
+    {const tr=e.d.turn||(e.st==='aim'?6:4);e.yaw+=clamp(angD(want,e.yaw),-dt*tr,dt*tr);}
     poseEnemy(e,dt,Math.hypot(e.vx,e.vz));
   }
   for(let i=EN.length-1;i>=0;i--)if(EN[i].dead)EN.splice(i,1);
@@ -158,10 +160,11 @@ function updEnemies(dt){
 }
 function poseEnemy(e,dt,sp){
   e.o.position.set(e.x,e.y,e.z);e.o.rotation.y=e.yaw;e.phase+=dt*(1.2+sp*(e.id==='skitter'?.9:e.id==='hound'?.42:.5));const ph=e.phase;
+  if(e.d.pose){e.d.pose(e,dt,sp);return;}
   if(e.id==='skitter'){e.body.position.y=.95+Math.abs(Math.sin(ph*2))*.08;e.legs.forEach((L,i)=>{const s=(i===0||i===3)?1:-1;L.rotation.y=Math.sin(ph*2)*.35*s*Math.min(1,sp/3);L.rotation.x=Math.max(0,Math.cos(ph*2)*s)*.25*Math.min(1,sp/3);});}
   else if(e.id==='hound'){const run=Math.min(1,sp/6),aim=e.st==='aim'?1:0;e.body.position.y=1.75-aim*.35+Math.sin(ph*2)*.08*run;e.body.rotation.x=aim*.12;
     e.legs.forEach((L,i)=>{const o=i<2?0:Math.PI*.9,s=Math.sin(ph*2+o+(i%2)*.4);L.up.rotation.x=s*.65*run-aim*.3;L.kn.rotation.x=(i<2?-.35:.35)+Math.cos(ph*2+o)*.4*run;});
-    EMAT.ered.color.setRGB(1,.14,.06).multiplyScalar(3.4);}
+    EMAT.ered.color.setRGB(1,.12,.05).multiplyScalar(2.2);}
   else{const ln=e.id==='lancer',HY=ln?3.0:1.9,run=Math.min(1,sp/4);e.gp+=dt*sp/(ln?2.2:1.6);e.hips.position.y=HY-Math.abs(Math.sin(e.gp*TAU))*.07*run;e.torso.position.y=e.hips.position.y;
     e.legs.forEach(L=>{let u=(e.gp+(L.sd>0?.5:0))%1;let tz=0,lift=0;const S_=1.2*run;if(u<.5)tz=lerp(-S_/2,S_/2,u/.5);else{const s=(u-.5)/.5;tz=lerp(S_/2,-S_/2,s);lift=Math.sin(Math.PI*s)*.35*run;}
       if(ln)legIK(L,-(2.95-.2-lift),tz*1.4,0,1.55,1.55,true);   /* the Lancer's knees bend backward */

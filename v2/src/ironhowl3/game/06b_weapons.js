@@ -14,7 +14,7 @@ function buildWeapons(){
   const g=new THREE.CylinderGeometry(.1,.1,1,6,1,true);g.rotateX(Math.PI/2);
   BM=new THREE.InstancedMesh(g,new THREE.MeshBasicMaterial({color:new THREE.Color(1,.78,.4).multiplyScalar(3),transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}),160);
   const g2=new THREE.SphereGeometry(.22,10,6);g2.scale(1,1,2.6);
-  EBM=new THREE.InstancedMesh(g2,new THREE.MeshBasicMaterial({color:new THREE.Color(1,.22,.08).multiplyScalar(3.2),transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}),80);
+  EBM=new THREE.InstancedMesh(g2,new THREE.MeshBasicMaterial({color:new THREE.Color(1,.22,.08).multiplyScalar(3.2),transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}),220);
   const g3=new THREE.CylinderGeometry(.09,.12,.9,8);g3.rotateX(Math.PI/2);
   MSM=new THREE.InstancedMesh(g3,hookWorld(new THREE.MeshStandardMaterial({color:0xd8d8d0,roughness:.5,metalness:.4})),40);
   for(const m of [BM,EBM,MSM]){m.count=0;m.frustumCulled=false;m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);S.add(m);}
@@ -122,7 +122,7 @@ function updShots(dt){
     part({x:m.x,y:m.y,z:m.z,vx:0,vy:0,vz:0,life:.06,s0:.7,s1:.3,a:1.6,col:[1,.6,.25],glow:true});
     const near=m.tg&&Math.hypot(tx-m.x,ty-m.y,tz-m.z)<m.tg.d.r+.6;
     if(near||m.life<=0||m.y<hgt(m.x,m.z)+.1||treeAt(m.x,m.z,m.y)){boom(m.x,Math.max(m.y,hgt(m.x,m.z)+.3),m.z,1);splash(m.x,m.y,m.z,4.8,75);MISS.splice(i,1);}}
-  for(let i=EBOLTS.length-1;i>=0;i--){const b=EBOLTS[i];b.life-=dt;if(b.life<=0){EBOLTS.splice(i,1);continue;}
+  for(let i=EBOLTS.length-1;i>=0;i--){const b=EBOLTS[i];b.life-=dt;if(b.g)b.vy-=b.g*dt;if(b.life<=0){EBOLTS.splice(i,1);continue;}
     const nx=b.x+b.vx*dt,ny=b.y+b.vy*dt,nz=b.z+b.vz*dt;
     if(!P.dead&&segSphere(b.x,b.y,b.z,nx,ny,nz,P.x,P.y+3.3,P.z,2.0)>=0){hurtPlayer(b.dmg,b.x-b.vx,b.z-b.vz);sparks(nx,ny,nz,6,[.6,.8,1]);EBOLTS.splice(i,1);continue;}
     if(ny<hgt(nx,nz)||treeAt(nx,nz,ny)){sparks(nx,ny,nz,4,[1,.35,.15]);EBOLTS.splice(i,1);continue;}
@@ -135,7 +135,7 @@ function drawShots(){
   let n=0;for(const b of BOLTS){if(n>=160)break;const l=Math.hypot(b.vx,b.vy,b.vz);_v.set(b.vx/l,b.vy/l,b.vz/l);_q.setFromUnitVectors(_z,_v);
     _m4.compose(_w.set(b.x-_v.x*1.8,b.y-_v.y*1.8,b.z-_v.z*1.8),_q,V3(1,1,3.6));BM.setMatrixAt(n++,_m4);}
   BM.count=n;BM.instanceMatrix.needsUpdate=true;BM.visible=n>0;
-  n=0;for(const b of EBOLTS){if(n>=80)break;const l=Math.hypot(b.vx,b.vy,b.vz);_v.set(b.vx/l,b.vy/l,b.vz/l);_q.setFromUnitVectors(_z,_v);_m4.compose(_w.set(b.x,b.y,b.z),_q,V3(1,1,1));EBM.setMatrixAt(n++,_m4);}
+  n=0;for(const b of EBOLTS){if(n>=220)break;const l=Math.hypot(b.vx,b.vy,b.vz);_v.set(b.vx/l,b.vy/l,b.vz/l);_q.setFromUnitVectors(_z,_v);_m4.compose(_w.set(b.x,b.y,b.z),_q,V3(b.s||1,b.s||1,b.s||1));EBM.setMatrixAt(n++,_m4);}
   EBM.count=n;EBM.instanceMatrix.needsUpdate=true;EBM.visible=n>0;
   n=0;for(const m of MISS){if(m.t<m.delay)continue;const l=Math.hypot(m.vx,m.vy,m.vz)||1;_v.set(m.vx/l,m.vy/l,m.vz/l);_q.setFromUnitVectors(_z,_v);_m4.compose(_w.set(m.x,m.y,m.z),_q,V3(1,1,1));MSM.setMatrixAt(n++,_m4);}
   MSM.count=n;MSM.instanceMatrix.needsUpdate=true;MSM.visible=n>0;

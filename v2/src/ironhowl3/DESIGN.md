@@ -1,6 +1,6 @@
 # IRONHOWL 3 — design plan
 
-*Version 1.3 · 5 Nov 2026 · designer: Claude, for Christopher (Hyperdot Arcade)*
+*Version 1.4 · 5 Nov 2026 · designer: Claude, for Christopher (Hyperdot Arcade)*
 
 Ironhowl 3 is a new game in the Ironhowl series, not a patch on Ironhowl 3D. You pilot one big mech, seen from behind, across 12 missions with checkpoints, upgrades between missions, and three kinds of places that take turns: **open fields**, **crowded docks**, and **woods**.
 
@@ -93,7 +93,7 @@ Prices go up per level, so by mission 12 a good player has maxed about three tra
 
 ## 7. Enemies
 
-All of them carry FORGE's mark. Each new type is introduced alone before it shows up in a mix. Built so far: Skitter, Hound, Gunner, Lancer and the spawner pods. The Hornet, Tank, Mortar crawler and Bulwark come in session 7, so their first missions moved later.
+All of them carry FORGE's mark. Each new type is introduced alone before it shows up in a mix. All nine are built (sessions 3, 6 and 7).
 
 | Enemy | Role | First mission |
 |---|---|---|
@@ -102,7 +102,7 @@ All of them carry FORGE's mark. Each new type is introduced alone before it show
 | Hornet | Flying drone. Dives from above. Hides in the forest canopy. | 9 |
 | Hound | Four-legged runner. Charges and rams. Hop over it. | 3 |
 | Tank | Tracked, heavy cannon, slow turret. Shoot it from the side. | 10 |
-| Mortar crawler | Long-range artillery with red ground circles before impact (the Thresher already fires this way). | 9 |
+| Mortar crawler | Long-range artillery with red ground circles before impact. | 10 |
 | Bulwark | Carries a front shield. Flank it, or missile over it. | 10 |
 | Lancer | Sniper with a visible charging laser line. Break line of sight. | 8 |
 | Spawners | Factory pods that keep making Skitters until you destroy them. | 5 |
@@ -185,12 +185,12 @@ Each session ends with something playable at the same link, so progress can be s
 | 4 ✅ | Places: field (sun, cloud shadows, farm), docks (container stacks, cranes, water, neon, sunset), woods polish (forest floor, boulders, trail), mech rebuilt from your turnaround | One test map of each kind |
 | 5 ✅ | Missions: objectives, fight zones, checkpoints, briefing and results screens, radio lines, missions 1–4 (arenas also grew 1.6×) | Play the first four missions |
 | 6 ✅ | Hangar and saves, scrap, missions 5–8, the Thresher (also: spawner pods, the Lancer, rain, Rook's truck) | Two thirds of the campaign |
-| 7 | Missions 9–12, the Stag, the Maw, FORGE, difficulty tuning | The whole campaign |
+| 7 ✅ | Missions 9–12, the Stag, the Maw, FORGE, difficulty tuning (also: Hornet, Tank, Mortar crawler, Bulwark, the Foundry 4 map) | The whole campaign |
 | 8 | Polish: sound, radio lines, phone performance pass, attract demo, cabinet contract, Endless | Ready for the cabinet |
 
 Putting it on its cabinet stays a separate step, done only when you say so.
 
-**To continue (here or in a new chat), say:** "Continue Ironhowl 3, session 7 (missions 9–12 and the bosses)." The build log `v2/src/ironhowl3/NOTES.md` in the repo says what is built, how to test it and what comes next.
+**To continue (here or in a new chat), say:** "Continue Ironhowl 3, session 8 (polish and Endless)." The build log `v2/src/ironhowl3/NOTES.md` in the repo says what is built, how to test it and what comes next.
 
 ## 12. Still open (you can change any of this)
 

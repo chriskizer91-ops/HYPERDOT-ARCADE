@@ -117,7 +117,7 @@ docks:{name:'DOCKS',mix:'woods',spawn:{x:9,z:88,yaw:0},bounds:{x0:-128,x1:128,z0
     const L=12.2,H=2.6,W=2.44,cg=new THREE.BoxGeometry(L,H,W),endM=tmat('11-container-door-end',{r:.7,m:.3}),roofM=tmat('73-container-roof',{r:.7,m:.3}),botM=tmat('24-gunmetal');
     const kinds=[tmat('71-red-shipping-container-side',{r:.65,m:.35}),tmat('72-blue-shipping-container-side',{r:.65,m:.35}),tmat('10-corrugated-metal',{col:0x5f8a7a,r:.65,m:.35,rep:[3,1]}),tmat('10-corrugated-metal',{col:0xc8a040,r:.65,m:.35,rep:[3,1]})];
     const lists=kinds.map(()=>[]);
-    for(const bx of MAPS.docks.blocksX)for(const bz of MAPS.docks.blocksZ){
+    for(const bx of MAPS.docks.blocksX)for(const bz of MAPS.docks.blocksZ){if(MISSION&&MISSION.yard&&Math.abs(bx)<50&&bz>-70&&bz<30)continue;   /* mission 11 clears a crane yard in the middle */
       if(Math.hypot(bx-SPAWN.x,bz-SPAWN.z)<18)continue;
       for(let ix=0;ix<2;ix++)for(let iz=0;iz<3;iz++){if(rnd()<.12)continue;const x=bx-L/2+ix*L+(ix?.15:-.15),z=bz-W+iz*W*1.02,n=1+(rnd()*3|0);
         for(let k=0;k<n;k++)lists[rnd()*4|0].push([x,H/2+k*H,z,rnd()<.5?0:Math.PI]);addBox(x-L/2,z-W/2,x+L/2,z+W/2,n*H,0);}}

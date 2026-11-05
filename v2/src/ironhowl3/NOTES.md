@@ -14,7 +14,7 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
   - Headless Chrome here takes about a second per drawn frame, so always move time with `ff()` and only wait for screenshots.
   - `__ih3.info()` returns calls, triangles, position, fuel and hops. `__ih3.VEGN.by` gives triangles per vegetation kind and level of detail.
 - Cabinet check: `python3 v2/src/ironhowl3/tools/embed_check.py`. It uses `tools/embed_check.html`, loads the game in an iframe and sends start, pause, resume, mute, unmute and attract.
-- Models: `blender/build_howler.py` (the player's mech) `blender/build_enemies.py` (skitter, hound, gunner, lancer) and `blender/build_set6.py` (truck, thresher) build the GLBs in `games/ironhowl3/models/mech/`. They use the small kit in `blender/lib.py` (chamfered boxes, cylinders, struts, slats, hoses, decal quads, ambient-occlusion bake into vertex colours, glTF export).
+- Models: `blender/build_howler.py` (the player's mech) `blender/build_enemies.py` (skitter, hound, gunner, lancer) `blender/build_set6.py` (truck, thresher) and `blender/build_set7.py` (hornet, tank, mortar, bulwark, stag, maw, forge) build the GLBs in `games/ironhowl3/models/mech/`. They use the small kit in `blender/lib.py` (chamfered boxes, cylinders, struts, slats, hoses, decal quads, ambient-occlusion bake into vertex colours, glTF export).
   - Blender's Python module: `python3.13 -m venv bvenv && bvenv/bin/pip install bpy==5.2.3`, then `bvenv/bin/python blender/build_howler.py <repo>/v2/games/ironhowl3/models/mech/howler07.glb` and `bvenv/bin/python blender/build_enemies.py [names...] <repo>/v2/games/ironhowl3/models/mech` (give names such as `lancer` to rebuild only those; same for `build_set6.py truck`).
   - `blender/render_preview.py build_howler out.png` renders four quick views.
   - Empties are the joints. Their rotations are zeroed at export (the bake pose is only for the shading).
@@ -31,6 +31,7 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
 | 03_render | Renderer, `QUAL` table, sun and hemisphere light, shadow box that follows the mech (snapped to texels), sky dome (gradient, sun, clouds from `34-fog`), `hookWorld(mat,{fade,leaf,ground})` (cloud shadows on the sun light, dither fade per instance, leaf lighting, forest-floor tint). |
 | 04_world | Map-neutral world code.<br>`pickMap()` (`?map=` or the saved `hd-ironhowl3-map`) and `hgt()` calls `MAPDEF.h`.<br>`buildGround()` blends three textures in world space (base, b by `aMix`, c by `aTrail`), and `ribbon()` drapes a road over the ground.<br>Vegetation instancing, and colliders: trunks (`addCol`) and boxes (`addBox`), with `collide()` handling both. |
 | 04b_maps | `MAPS.woods`, `MAPS.field` and `MAPS.docks`. Each has `h`, `ground`, `look` (sun, sky colours, fog, painted sky `pano`, horizon `ring`), `layout` (plants), `build` (structures), spawn, trail, route and bounds.<br>Shared builders: `tmat`, `sbox` (per-face metre repeats), `put`, `gable`, `boulders`.<br>`mergeStatic()` joins fixed map pieces per material. `BND()` gives the walkable bounds and `boxAt()` the box test used by the camera. |
+| 04c_foundry | `MAPS.foundry` (Foundry 4 at night): blast walls, yard buildings, the main hall with the FOUNDRY 4 neon, FORGE's platform and collider (`FORGE_AT`), molten channels, furnace stacks with smoke, cover, lamp pools. |
 | 05_mech | Loads `models/mech/howler07.glb`, swaps in the game materials, `mergeParts` (about 170 pieces become about 60 draw calls), `setTier` (shows one of four barrel sets), 2-bone leg IK (`rev` = knee bends backwards), walk cycle with foot planting, jets. |
 | 06b_weapons | Autocannon tiers I–IV, heat and overheat, VENT (dumps heat, shoves enemies), missiles (salvo of 2, homing), bolts, hit tests (`segSphere`, `treeAt`, ground), crosshair ray with aim assist (`rayAim`), sparks and explosions. |
 | 06c_enemies | Loads the three enemy GLBs, flow-field path-finding on a 2 m grid (`navBuild`/`navDir`), line-of-sight test, brains (skitter swarms and zaps, hound aims then charges, gunner keeps 24–42 m, strafes and fires bursts), waves spawned 55–80 m ahead with red beacons, damage, score with combo, pickups. |
@@ -38,6 +39,7 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
 | 06d_missions | Mission list and looks (`NIGHT_DOCKS`, `DUSK_FIELD`, `RAIN_DOCKS`, `FOG_CREEK`, `HAZE_DRY`), steps, targets, checkpoints, radio, results. What a step builds is kept in `MS.built[step]`, so a repair does not rebuild (or bring back) what you already destroyed. |
 | 06e_hangar | Six upgrade tracks (`UPG`), costs 150/300/500/800/1200 scrap, `applyUpgrades()` (called at the start of a run and after a repair), the hangar screen. |
 | 06f_more | Session 6 pieces: spawner pods, the Lancer brain, rain, Rook's truck (`loadSet6`, `truckModel`, escort), the Thresher boss (`makeThresher`, `bossStep`, `bossIdle`, mortar warning discs). |
+| 06g_set7 | Session 7 pieces. Enemies Hornet, Tank, Mortar crawler and Bulwark use hooks in `EDEF`: `init`, `brain`, `pose`, `armor` and `fly`. Also: shared artillery marks (`mortarAt`, `volley`, `updMarks`), fire, lightning, searchlights, capture points, and the Stag, Maw and FORGE (`BOSS_DEF`: make, step and idle for each boss). |
 | 07_fx | One particle system (smoke blends, glow adds, using premultiplied alpha). Sounds made on the fly: steps, jet, landing, no-fuel click, birds, wind. |
 | 08_camera | The two follow cameras (see below), portrait step-back, camera stays above the terrain, shake, FOV kick on hops. |
 | 09_hud | DOM HUD. Top left: shield, hull, jets, gun tier, missiles. Top middle: score and combo. Crosshair with heat bar, hit marker, messages, wave banner, damage arcs, edge arrows for unseen machines (60 m). Phone: FIRE (hold and drag to aim), JET, MSL, VENT. Pause menu. |
@@ -123,6 +125,7 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
   - Art processed (46 images → 49 files, 8.2 MB).
   - Forest pack stored with its catalog, three.js bundle built.
   - `DESIGN.md` written; `preview.html` is the first look.
+- **Session 7 (5 Nov 2026):** missions 9–12, four new enemies, the Stag, the Maw and FORGE, the Foundry 4 map, difficulty across the campaign.
 - **Session 6 (5 Nov 2026):** hangar and scrap, missions 5–8, spawner pods, the Lancer, rain, Rook's truck model and escort, the Thresher boss.
 - **Session 5 (5 Nov 2026):** arenas 1.6× bigger, mission system and missions 1–4.
 - **Session 4b (5 Nov 2026):** after his playtest: longer jet hops, aim down at your feet, the SALVO auto-aim burst. Q and E no longer turn (the arrows still do).
@@ -268,7 +271,56 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
   - Game logic per tick: 0.26 ms (mission 5) and 0.81 ms (mission 7).
 - **Not done:** Hornet, Tank, Mortar crawler and Bulwark (sheet 50) are still to come. There is no lightning or storm in mission 4 yet. The tanker does not visibly sail away.
 
-## Next: session 7
+## Done in session 7 (missions 9–12, the campaign is complete)
+
+- **New enemies** (from sheet 50, models in `build_set7.py`):
+  - **Hornet:** 45 HP, flies about 11 m up and circles at 24 m. It dives to 4.5 m, fires 3 stinger shots, then climbs away. It ignores trees, and the salvo locks on to it.
+  - **Tank:** 420 HP. Its turret turns on its own at 1.1 rad/s and fires a lobbed shell (24 damage) every 4.4–5.4 s. Damage depends on where you hit it: front ×0.33, side ×1, back ×1.5.
+  - **Mortar crawler:** 260 HP, six legs, stays 46–92 m away. Every 7–9 s it lobs 3 shells onto red discs, and they land 2.2 s later. It needs no line of sight.
+  - **Bulwark:** 380 HP. Shots on its shield from the front do ×0.1. It bashes up close (18 damage and a shove) and fires a 5-pellet shotgun at 8–30 m.
+- **Bosses** (sheet 51):
+  - **The Stag:** 15 m tall.
+    - Phase 1: two antler pods, 600 HP each. Twin artillery fires volleys of 6. It stomps if you are within 18 m (warned by a red ring 1.1 s ahead) and calls Hornets.
+    - Phase 2: the chest plate opens on the furnace (1500 HP). Volleys of 8, and a charge every 9 s after it lowers its head for 1 s.
+  - **The Maw:**
+    - Its mouth core (2400 HP) only takes damage while the jaw is open: 3.6 s out of every 8.5, and every 6 s once both side guns (450 HP each) are gone.
+    - While open it sprays fans of 9 bolts. It lunges and bites within 15 m (36 damage) and calls Hounds every 22 s.
+  - **FORGE:** stands still.
+    - Phase 1: four pylons (500 HP) hold a shield dome. It fires spiral bolt bursts and sends waves through the yard gates.
+    - Phase 2: the doors slide open on the furnace (2000 HP), and shells are added.
+    - Phase 3: the eye (2200 HP). Lava bursts, faster spirals, and a red beam that sweeps 160° at hip height. Hop over the beam: it does 30 damage.
+- **Missions:**
+  9. Burning Pines: woods at night (conifer mix), 80 burning trees with glow and smoke, embers. Ridge, clear, then the Stag.
+  10. Storm Front: field, rain and lightning. Every 6–13 s a strike lands 18–70 m away and does 140 damage to machines within 7 m. Capture 3 relays (25 s each inside a 13 m ring), with waves every 20 s (tanks, bulwarks, mortars, hornets).
+  11. Lockdown: docks at night with the middle blocks removed to make a crane yard (`yard:true`). Destroy 3 searchlight towers: if a beam stays on you for 0.6 s, a volley of shells follows. Then the Maw.
+  12. Heart of the Forge: the new Foundry 4 map. Enter the yard, then FORGE in 3 phases.
+- **Difficulty (`DIFF`):** enemy damage runs ×0.8 in mission 1 up to ×1.25 in mission 12, and toughness ×0.85 up to ×1.15.
+- **Smaller changes:**
+  - Enemy bolts can fall with gravity and have their own size. Up to 220 are drawn.
+  - `hurtTarget` respects `immune()`.
+  - Bosses glow faintly at night.
+  - The enemy red is less washed out.
+  - FOUNDRY joins the map buttons for free play.
+- **Tested headless** (fast-forward):
+  - Each new enemy spawns and attacks. 4 of them together took 154 HP off me in 10 s.
+  - Armour: tank front 0.33, side 1, back 1.5; Bulwark front 0.1.
+  - Mission 9: Stag antlers → chest → MISSION COMPLETE.
+  - Mission 10: 3 relays captured → complete.
+  - Mission 11: searchlights → Maw. A closed jaw took 0 damage, an open one 500 → complete.
+  - Mission 12: pylons → furnace → beam → eye → complete. The spiral fired 70 bolts in 1.6 s.
+  - Missions 1 and 7 still work. The cabinet check passes.
+- **Numbers (High, headless):**
+  - Mission 9: 175–280 draw calls and 380–460k triangles.
+  - Mission 11: 300–450 calls (searchlights and lanes).
+  - Mission 12: 250–275 calls and 145–175k triangles.
+  - The 4 new enemies together: 260→405 calls.
+- **Not done:** lightning only lights the scene with the hemisphere light, no real shadows. The Stag walks through trees. The Maw can clip containers at the edge of the yard.
+
+## Next: session 8 (polish)
+
+- Sound pass, more radio lines, a phone performance pass (instancing enemies if draw calls are a problem), attract demo, Endless mode, final balance after his playtest.
+
+## (old) session 7 plan
 
 - Missions 9–12: Burning Pines (woods at night, fire, the Stag), Storm Front (field, lightning, hold 3 points), Lockdown (docks crane yard at night, the Maw), Heart of the Forge (Foundry 4, FORGE).
 - Enemies from sheet 50: Hornet (flying), Tank, Mortar crawler, Bulwark (shield). Bosses from sheet 51: the Stag, the Maw, FORGE.
