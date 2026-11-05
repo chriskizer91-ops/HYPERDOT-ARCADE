@@ -13,6 +13,9 @@ const NP=20,P_TORSO=0,P_PELVIS=1,P_NECK=2,P_HEAD=3,P_EYE0=4,P_EYE1=5,P_UAN=6,P_F
 const YAW_T=28*D2R,YAW_P=16*D2R,YAW_H=34*D2R;
 
 /* ---------- toon ramp (the original's four bands: dark, mid, base, highlight) ---------- */
+/* a softer light ramp for painted fighters whose pictures already carry smooth shading */
+const TOONSOFT=(()=>{const n=64,d=new Uint8Array(n);for(let i=0;i<n;i++){const c=i/(n-1),t=Math.min(1,Math.max(0,(c-.3)/.6));d[i]=Math.round(255*(.22+.78*t*t*(3-2*t)));}
+  const t=new THREE.DataTexture(d,n,1,THREE.RedFormat);t.minFilter=t.magFilter=THREE.LinearFilter;t.generateMipmaps=false;t.needsUpdate=true;return t;})();
 const TOONRAMP=(()=>{const n=64,d=new Uint8Array(n);for(let i=0;i<n;i++){const c=i/(n-1);d[i]=Math.round(255*(c<.53?.16:c<.68?.42:c<.86?.78:1));}
   const t=new THREE.DataTexture(d,n,1,THREE.RedFormat);t.minFilter=t.magFilter=THREE.NearestFilter;t.generateMipmaps=false;t.needsUpdate=true;return t;})();
 
@@ -192,7 +195,8 @@ function fighterGeo(def){
 }
 function geoFinish(def,G,R,nl,Lt,uv){
   const sk=skinBuild(def,G,{nl,R});
-  const geo=new THREE.BufferGeometry();if(uv){geo.setAttribute('uv',new THREE.BufferAttribute(uv.uv,2));geo.setAttribute('uvB',new THREE.BufferAttribute(uv.uv2,2));geo.setAttribute('aWb',new THREE.BufferAttribute(uv.wb,1));}
+  const geo=new THREE.BufferGeometry();{const cut=new Float32Array(G.p.length/3);if(G.cutRanges)for(const [a,b] of G.cutRanges)cut.fill(1,a,b);geo.setAttribute('aCut',new THREE.BufferAttribute(cut,1));}
+  if(uv){geo.setAttribute('uv',new THREE.BufferAttribute(uv.uv,2));geo.setAttribute('uvB',new THREE.BufferAttribute(uv.uv2,2));geo.setAttribute('aWb',new THREE.BufferAttribute(uv.wb,1));}
   geo.setAttribute('position',new THREE.Float32BufferAttribute(G.p,3));geo.setAttribute('normal',new THREE.Float32BufferAttribute(G.n,3));
   geo.setAttribute('color',new THREE.Float32BufferAttribute(G.c,3));geo.setAttribute('aPart',new THREE.Float32BufferAttribute(G.part,1));
   geo.setAttribute('aEmi',new THREE.Float32BufferAttribute(G.emi,1));geo.setAttribute('aOl',new THREE.Float32BufferAttribute(G.ol,1));
@@ -200,7 +204,7 @@ function geoFinish(def,G,R,nl,Lt,uv){
   geo.setAttribute('aPart2',new THREE.BufferAttribute(sk.part2,1));geo.setAttribute('aW',new THREE.BufferAttribute(sk.w,1));
   geo.setAttribute('aP2',new THREE.BufferAttribute(sk.p2,3));geo.setAttribute('aN2',new THREE.BufferAttribute(sk.n2,3));
   geo.boundingSphere=new THREE.Sphere(new THREE.Vector3(),100);
-  GEOS[def.id]={geo,R,nl,Lt,tris:G.p.length/9,blended:sk.blended,art:!!uv};return GEOS[def.id];
+  GEOS[def.id]={geo,R,nl,Lt,tris:G.p.length/9,blended:sk.blended,art:!!uv,knotL:G.knotL||[-R*1.02,R*.44,0]};return GEOS[def.id];
 }
 /* skin weights: work out where every vertex sits in the fighter's own stance, then let vertices near each joint follow the
    neighbouring part too (half-and-half right at the joint), by storing their position in that part's frame as well */
@@ -236,18 +240,18 @@ function skinBuild(def,G,o){
 }
 
 /* ---------- materials: toon (lit, shadows, gloss, metal, rim, aura), shadow depth, outline, reflection, afterimage ---------- */
-const PARTDECL=`uniform mat4 uPart[${NP}];attribute float aPart,aPart2,aW,aEmi,aOl;attribute vec3 aP2,aN2;attribute vec2 aMat;
+const PARTDECL=`uniform mat4 uPart[${NP}];attribute float aPart,aPart2,aW,aEmi,aOl,aCut;attribute vec3 aP2,aN2;attribute vec2 aMat;
 vec3 skP(vec3 p){vec3 a=(uPart[int(aPart+.5)]*vec4(p,1.)).xyz;if(aW>0.)a=mix(a,(uPart[int(aPart2+.5)]*vec4(aP2,1.)).xyz,aW);return a;}
 vec3 skN(vec3 n){vec3 a=mat3(uPart[int(aPart+.5)])*n;if(aW>0.)a=mix(a,mat3(uPart[int(aPart2+.5)])*aN2,aW);return a;}`;
 function mkToon(U){
   const m=new THREE.MeshToonMaterial({vertexColors:true,gradientMap:TOONRAMP});
   m.onBeforeCompile=sh=>{
     Object.assign(sh.uniforms,U);
-    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\n'+PARTDECL+'varying float vEmi;varying vec2 vMat;uniform float uGlitch,uTime;attribute vec2 uvB;attribute float aWb;varying vec2 vUvB;varying float vWb;')
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\n'+PARTDECL+'varying float vEmi;varying vec2 vMat;uniform float uGlitch,uTime;attribute vec2 uvB;attribute float aWb;varying vec2 vUvB;varying float vWb,vCut;')
       .replace('#include <beginnormal_vertex>','vec3 objectNormal=skN(normal);vEmi=aEmi;vMat=aMat;')
-      .replace('#include <begin_vertex>','vec3 transformed=skP(position);vUvB=uvB;vWb=aWb;if(uGlitch>0.){float bnd=floor(transformed.y*9.+floor(uTime*13.));transformed.x+=uGlitch*step(.82,fract(sin(bnd*12.9898)*43758.5453))*.06*sign(sin(bnd*7.3));}');
-    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform vec3 uRim,uRimDir,uKeyDirV,uKeyColF,uSkyC,uGndC;uniform vec4 uAura;uniform float uFlash,uEmiK,uHolo,uTime,uDimF,uArtEmi,uArtGold,uArtK,uArtBump;varying float vEmi;varying vec2 vMat;varying vec2 vUvB;varying float vWb;\nvec3 artPerturb(vec3 sp,vec3 sn,vec2 dH){vec3 sx=dFdx(sp),sy=dFdy(sp),r1=cross(sy,sn),r2=cross(sn,sx);float det=dot(sx,r1);vec3 g=sign(det)*(dH.x*r1+dH.y*r2);return normalize(abs(det)*sn-g);}')
-      .replace('#include <map_fragment>','float artH=.5;\n#ifdef USE_MAP\nif(vMapUv.x>-.5){vec4 tA=texture2D(map,vMapUv),tB=texture2D(map,vUvB),tM=mix(tA,tB,clamp(vWb,0.,1.));diffuseColor.rgb*=tM.rgb;artH=tM.a;}\n#endif')
+      .replace('#include <begin_vertex>','vec3 transformed=skP(position);vUvB=uvB;vWb=aWb;vCut=aCut;if(uGlitch>0.){float bnd=floor(transformed.y*9.+floor(uTime*13.));transformed.x+=uGlitch*step(.82,fract(sin(bnd*12.9898)*43758.5453))*.06*sign(sin(bnd*7.3));}');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform vec3 uRim,uRimDir,uKeyDirV,uKeyColF,uSkyC,uGndC;uniform vec4 uAura;uniform float uFlash,uEmiK,uHolo,uTime,uDimF,uArtEmi,uArtGold,uArtK,uArtBump;varying float vEmi;varying vec2 vMat;varying vec2 vUvB;varying float vWb,vCut;\nvec3 artPerturb(vec3 sp,vec3 sn,vec2 dH){vec3 sx=dFdx(sp),sy=dFdy(sp),r1=cross(sy,sn),r2=cross(sn,sx);float det=dot(sx,r1);vec3 g=sign(det)*(dH.x*r1+dH.y*r2);return normalize(abs(det)*sn-g);}')
+      .replace('#include <map_fragment>','float artH=.5;\n#ifdef USE_MAP\nif(vMapUv.x>-.5){vec4 tA=texture2D(map,vMapUv),tB=texture2D(map,vUvB),tM=mix(tA,tB,clamp(vWb,0.,1.));diffuseColor.rgb*=tM.rgb;artH=tM.a;if(vCut>.5){if(tM.a<.75)discard;artH=.5;}}\n#endif')
       .replace('#include <normal_fragment_maps>','#include <normal_fragment_maps>\nif(uArtBump>0.){normal=artPerturb(-vViewPosition,normal,vec2(dFdx(artH),dFdy(artH))*uArtBump*.012);}')
       .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\nif(uArtK>0.){float lg=dot(diffuseColor.rgb,vec3(.3,.59,.11));diffuseColor.rgb=max(mix(vec3(lg),diffuseColor.rgb,1.08),0.)*uArtK;}\ntotalEmissiveRadiance+=vColor.rgb*vEmi*uEmiK+diffuseColor.rgb*uArtEmi*smoothstep(.3,.65,min(diffuseColor.g,diffuseColor.b)-diffuseColor.r*.8);')
       .replace('#include <opaque_fragment>',`
@@ -277,14 +281,14 @@ function mkToon(U){
 function mkDepth(U){
   const m=new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking});
   m.onBeforeCompile=sh=>{sh.uniforms.uPart=U.uPart;sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\n'+PARTDECL)
-    .replace('#include <begin_vertex>','vec3 transformed=skP(position);');};
+    .replace('#include <begin_vertex>','vec3 transformed=aCut>.5?vec3(0.):skP(position);');};
   m.customProgramCacheKey=()=>'vf3depth';
   return m;
 }
 function mkOutline(U){
   return new THREE.ShaderMaterial({uniforms:{uPart:U.uPart,uW:{value:.0085},uCol:SHU.uOlCol,uA:{value:1}},side:THREE.BackSide,
     vertexShader:PARTDECL+`uniform float uW;void main(){vec3 n=normalize(skN(normal));vec4 wp=vec4(skP(position),1.);
-      vec4 mv=viewMatrix*wp;wp.xyz+=n*uW*aOl*(1.+(-mv.z)*.08);gl_Position=projectionMatrix*viewMatrix*wp;}`,
+      vec4 mv=viewMatrix*wp;wp.xyz+=n*uW*aOl*(1.+(-mv.z)*.08);gl_Position=projectionMatrix*viewMatrix*wp;if(aCut>.5)gl_Position=vec4(0.);}`,
     fragmentShader:`uniform vec3 uCol;void main(){gl_FragColor=vec4(uCol,1.);}`});
 }
 function mkReflect(U){
@@ -294,7 +298,7 @@ function mkReflect(U){
        so the floor hides what is behind it and anything standing in front still covers the reflection */
     vertexShader:PARTDECL+`varying vec3 vC,vN;varying float vY,vE;void main(){vec4 wp=vec4(skP(position),1.);wp.y=-wp.y;vY=wp.y;
       vec3 n=skN(normal);n.y=-n.y;vN=n;vC=color;vE=aEmi;
-      vec3 C=cameraPosition;float t=C.y/max(C.y-wp.y,1e-3);vec3 Qp=C+(wp.xyz-C)*t;Qp.y=.004;gl_Position=projectionMatrix*viewMatrix*vec4(Qp,1.);}`,
+      vec3 C=cameraPosition;float t=C.y/max(C.y-wp.y,1e-3);vec3 Qp=C+(wp.xyz-C)*t;Qp.y=.004;gl_Position=projectionMatrix*viewMatrix*vec4(Qp,1.);if(aCut>.5)gl_Position=vec4(0.);}`,
     fragmentShader:`uniform float uRefl,uFlash,uHolo;uniform vec3 uKeyDir,uKeyCol,uAmb;varying vec3 vC,vN;varying float vY,vE;
       void main(){float a=uRefl*exp(vY*1.25);vec3 n=normalize(vN);vec3 c=vC*(uAmb*1.6+uKeyCol*max(dot(n,uKeyDir),0.)*.8)+vC*vE*2.2;c=mix(c,vec3(1.6),uFlash);if(uHolo>.5)a*=.7;
       gl_FragColor=vec4(c,a);}`});
@@ -302,7 +306,7 @@ function mkReflect(U){
 function mkGhost(){
   const mats=[];for(let i=0;i<NP;i++)mats.push(new THREE.Matrix4());
   return new THREE.ShaderMaterial({uniforms:{uPart:{value:mats},uCol:{value:new THREE.Color()},uA:{value:0}},transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
-    vertexShader:PARTDECL+`varying vec3 vN,vV;void main(){vec4 wp=vec4(skP(position),1.);vN=normalize(mat3(viewMatrix)*skN(normal));vec4 mv=viewMatrix*wp;vV=-mv.xyz;gl_Position=projectionMatrix*mv;}`,
+    vertexShader:PARTDECL+`varying vec3 vN,vV;void main(){vec4 wp=vec4(skP(position),1.);vN=normalize(mat3(viewMatrix)*skN(normal));vec4 mv=viewMatrix*wp;vV=-mv.xyz;gl_Position=aCut>.5?vec4(0.):projectionMatrix*mv;}`,
     fragmentShader:`uniform vec3 uCol;uniform float uA;varying vec3 vN,vV;void main(){float f=1.-clamp(dot(normalize(vN),normalize(vV)),0.,1.);gl_FragColor=vec4(uCol*(.12+f*f*1.4)*uA,1.);}`});
 }
 
@@ -325,7 +329,7 @@ function mkActorMesh(def){
   const U={uPart:{value:mats},uFlash:{value:0},uEmiK:{value:def.look.holo?1.1:2.2},uHolo:{value:def.look.holo?1:0},uGlitch:{value:0},uRim:SHU.uRim,uRimDir:SHU.uRimDir,uTime:SHU.uTime,uDimF:{value:1},
     uKeyDirV:SHU.uKeyDirV,uKeyColF:SHU.uKeyColF,uSkyC:SHU.uSkyC,uGndC:SHU.uGndC,uAura:{value:new THREE.Vector4(0,0,0,0)},
     uArtEmi:{value:info.art?(ARTFX[def.id]||{}).emi||0:0},uArtGold:{value:info.art?(ARTFX[def.id]||{}).gold||0:0},uArtK:{value:info.art?1.27:0},uArtBump:{value:info.art?(ARTFX[def.id]||{}).bump||0:0}};
-  const toon=mkToon(U),depth=mkDepth(U),ol=mkOutline(U),rf=mkReflect(U);if(info.art)toon.map=artTex(def.id);
+  const toon=mkToon(U),depth=mkDepth(U),ol=mkOutline(U),rf=mkReflect(U);if(info.art){toon.map=artTex(def.id);if((ARTFX[def.id]||{}).soft)toon.gradientMap=TOONSOFT;}
   if(def.look.holo){toon.transparent=true;ol.uniforms.uCol={value:new THREE.Color(.05,.25,.45)};}
   const grp=new THREE.Group();
   const body=new THREE.Mesh(info.geo,toon);body.frustumCulled=false;body.castShadow=true;body.customDepthMaterial=depth;
@@ -428,6 +432,7 @@ function poseParts(def,x,y,face,J,mats,extra){
   if(extra&&extra.z)for(let i=0;i<=P_ID;i++)mats[i].elements[14]+=extra.z;
 }
 /* cloth vertices for one actor (world space), from the engine's chains */
+const _kv=new THREE.Vector3();
 function poseCloth(A,actor){
   if(!A.cgeo||!actor.chains)return;
   const pos=A.cgeo.attributes.position.array,nor=A.cgeo.attributes.normal.array,h=actor.def.body.h;let k=0;
@@ -436,11 +441,15 @@ function poseCloth(A,actor){
     const s=A.spec[ci],ch=actor.chains[ci],n=s.o.n;
     if(!ch||!ch.p){k+=n*CLOTH_SIDES*6;continue;}
     const pts=ch.p,rings=[];
+    /* headband tails hang from the knot on the 3D head (which turns toward the camera), not from the flat fight plane */
+    let ox=0,oy=0,oz=0;
+    if(s.o.anchor==='band'&&A.U&&GEOS[actor.def.id]){const kl=GEOS[actor.def.id].knotL;_kv.set(kl[0],kl[1],kl[2]+(s.z>0?.012:-.012)).applyMatrix4(A.U.uPart.value[P_HEAD]);
+      ox=_kv.x-pts[0][0];oy=_kv.y-pts[0][1];oz=_kv.z-s.z;}
     for(let i=0;i<=n;i++){
       const p=pts[i],pa=pts[Math.max(0,i-1)],pb=pts[Math.min(n,i+1)];let tx=pb[0]-pa[0],ty=pb[1]-pa[1];const tl=Math.hypot(tx,ty)||1;tx/=tl;ty/=tl;
       const nx=-ty,ny=tx,w=lerp(s.o.w[0],s.o.w[1],i/n)*h,z=s.z+Math.sin(FRAMET*.05+i*.9+ci)*.012*i;
       const rr=[];for(let j=0;j<CLOTH_SIDES;j++){const a=j/CLOTH_SIDES*TAU,ca=Math.cos(a),sa=Math.sin(a);
-        rr.push([p[0]+nx*ca*w,p[1]+ny*ca*w,z+sa*w*s.kz,nx*ca,ny*ca,sa]);}
+        rr.push([p[0]+nx*ca*w+ox,p[1]+ny*ca*w+oy,z+sa*w*s.kz+oz,nx*ca,ny*ca,sa]);}
       rings.push(rr);
     }
     for(let i=0;i<n;i++)for(let j=0;j<CLOTH_SIDES;j++){

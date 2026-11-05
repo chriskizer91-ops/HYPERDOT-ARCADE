@@ -10,7 +10,7 @@
 const ART_OFF=/[?&]classic=1/.test(location.search);
 const smoothstep=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
 const ARTA=2048,ARTFITS={},ARTTEX={};
-const ARTFX={kai:{bump:.8},runa:{bump:.8},magnus:{gold:1,bump:1},nova:{emi:2.4,bump:.7},echo:{emi:.45,bump:.5}};
+const ARTFX={kai:{bump:.8,soft:1,cards:1},runa:{bump:.8},magnus:{gold:1,bump:1},nova:{emi:2.4,bump:.7},echo:{emi:.45,bump:.5}};
 function artTex(id){
   if(ARTTEX[id])return ARTTEX[id];
   const t=new THREE.Texture();t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;t.generateMipmaps=true;t.minFilter=THREE.LinearMipmapLinearFilter;t.premultiplyAlpha=false;
@@ -84,6 +84,7 @@ function gbHull(G,part,ys,rf,o={}){
   for(let i=0;i<n;i++){const r=[];for(let j=0;j<M_;j++){const th=j/M_*TAU,cx=Math.cos(th),cz=Math.sin(th),k=rf(i,cx,cz);r.push([cx*k,ys[i],cz*k]);}P_.push(r);}
   const nrm=(Pp,i,j)=>{const a=Pp[Math.max(0,i-1)][j],b_=Pp[Math.min(n-1,i+1)][j],c=Pp[i][(j+M_-1)%M_],d=Pp[i][(j+1)%M_];return v3n(v3cross(v3sub(a,b_),v3sub(d,c)));};
   let N_=P_.map((r,i)=>r.map((_,j)=>nrm(P_,i,j)));
+  if(o.reshape){for(let i=0;i<n;i++)for(let j=0;j<M_;j++)P_[i][j]=o.reshape(P_[i][j],N_[i][j],i);N_=P_.map((r,i)=>r.map((_,j)=>nrm(P_,i,j)));}
   if(A&&o.amp){const amp=o.amp;
     const Q_=P_.map((r,i)=>r.map((p,j)=>{const nn=N_[i][j],k=amp*artDisp(A,projUV(A,part,p,nn))*(o.ampF?o.ampF(i):1);return [p[0]+nn[0]*k,p[1]+nn[1]*k,p[2]+nn[2]*k];}));
     for(let i=0;i<n;i++)P_[i]=Q_[i];N_=P_.map((r,i)=>r.map((_,j)=>nrm(P_,i,j)));}
@@ -195,14 +196,54 @@ function headFrom8(G,A,def){
   const raw0=rows.map(r=>r[1]);for(let i=0;i<nr;i++){let mn=1e9;for(let k=-6;k<=6;k++)mn=Math.min(mn,raw0[clamp(i+k,0,nr-1)]);rows[i][1]=mn;}sm(1,4);for(const j of [3,5,7])sm(j,2);
   const bump=raw0.map((v,i)=>Math.max(0,v-rows[i][1]));
   const DIR=[0,1,2,3,4,5,6,7].map(k=>k*Math.PI/4);
-  let use=rows;if(det<1)use=resample(rows,Math.round(nr*det));
+  const DP=H8.depth;
+  let use=rows;if(det<1)use=resample(rows,Math.round(nr*det));else if(DP)use=resample(rows,120);
+  /* depth pictures: brightness becomes reach. The scale is fitted row by row against the outlines, where the reach is
+     known: the front picture against the profiles' outline (brow, nose, lips, chin), each profile against the front */
+  let reshape=null;
+  if(DP){
+    const dec=b=>{const r=atob(b),u=new Uint8Array(r.length);for(let i=0;i<r.length;i++)u[i]=r.charCodeAt(i);return u;};
+    const g={},n=DP.n,K=n/H8.n;for(const k of ['front','right','left'])if(DP[k])g[k]=dec(DP[k]);
+    const at=(k,u,v)=>{const G_=g[k];if(!G_)return 0;const x=clamp(u*K-.5,0,n-1.001),y=clamp(v*K-.5,0,n-1.001),ix=x|0,iy=y|0,fx=x-ix,fy=y-iy;
+      return (G_[iy*n+ix]*(1-fx)+G_[iy*n+ix+1]*fx)*(1-fy)+(G_[(iy+1)*n+ix]*(1-fx)+G_[(iy+1)*n+ix+1]*fx)*fy;};
+    const fit=P=>{let sx=0,sy=0,sxx=0,sxy=0;for(const [x,y] of P){sx+=x;sy+=y;sxx+=x*x;sxy+=x*y;}const m_=P.length,d=m_*sxx-sx*sx;
+      let a_=d?(m_*sxy-sx*sy)/d:0;if(!(a_>0))a_=1;return {a:a_,b:(sy-a_*sx)/m_};};
+    const V=H8.views,a0=V[0].a,a2=V[2].a,a6=V[6].a,raw=H8.rows,top=H8.top,ch=H8.chin,PF=[],PR=[],PL=[];
+    for(const r of raw){const y=r[0];if(y>ch)continue;const t=(y-top)/(ch-top);
+      let df=0,dr=0,dl=0;for(let u=a0-14;u<=a0+14;u+=2)df=Math.max(df,at('front',u,y));
+      for(let u=0;u<H8.n;u+=4){dr=Math.max(dr,at('right',u,y));dl=Math.max(dl,at('left',u,y));}
+      if(t>.35&&df>24)PF.push([df,r[1]]);if(t>.15&&dr>24)PR.push([dr,r[7]]);if(t>.15&&dl>24)PL.push([dl,r[3]]);}
+    const fF=fit(PF),fR=fit(PR),fL=fit(PL);A.depthFit={fF,fR,fL};
+    /* only the front picture's depth is used, and only for the face (below the headband): the profiles' brightness
+       turned out not to follow distance closely enough, and the hair keeps its outline shape and cards */
+    reshape=(p,nn)=>{const q=p.slice(),v=ch-(p[1]-A.chinL)/s8,t=(v-top)/(ch-top);
+      const wF=smoothstep(.35,.75,nn[0])*smoothstep(.38,.46,t);
+      if(wF>0&&g.front){const D=at('front',a0-p[2]/s8,v);if(D>40){const xf=(fF.a*D+fF.b)*s8;q[0]+=clamp((xf-p[0])*.55,-.011,.011)*wF;}}
+      return q;};
+  }
   /* shape from the four straight views (front, both profiles, back): a rounded box between their limits */
   const rad=(r,th)=>{const cx=Math.cos(th),cz=-Math.sin(th);return sell(cx,cz,cx>=0?r[1]:r[5],cz<0?r[3]:r[7],2.2);};
   void DIR;
   const ys=use.map(r=>A.chinL+(H8.chin-r[0])*s8);
+  const mp0=ARTMP.slice();ARTMP[0]=.08;
   gbHull(G,P_HEAD,ys,(i,cx,cz)=>{const th=Math.atan2(-cz,cx),r=use[i],ib=Math.round(i*(nr-1)/Math.max(1,use.length-1));
-    const fb=ib>nr*.3?bump[ib]*Math.exp(-(th*th)/.05):0;return (rad(r,(th+TAU)%TAU)+fb)*s8;},{seg:96,ol:.7,A,amp:.003});
+    const fb=ib>nr*.3?bump[ib]*Math.exp(-(th*th)/.05):0;return (rad(r,(th+TAU)%TAU)+fb)*s8;},{seg:DP?120:96,ol:DP?.45:.7,A,amp:DP?0:.003,reshape});ARTMP[0]=mp0[0];
   A.hr8=rows[Math.round(nr*.3)][3]*s8/1.06;
+  /* where the headband knot sits on this head: at the back, at headband height */
+  {const ik=Math.round(nr*.4),yk=rows[ik][0];G.knotL=[-rows[ik][5]*s8*.92,A.chinL+(H8.chin-yk)*s8,0];}
+  /* spiky hair: two crossed cards through the head, one painted from the front and back pictures, one from the
+     profiles; only the hair outline shows (the rest is cut away), so the spikes stand out of the head from any side */
+  if((ARTFX[def.id]||{}).cards){
+    let wmax=0,dmax=0;for(const r of rows){wmax=Math.max(wmax,r[3],r[7]);dmax=Math.max(dmax,r[1],r[5]);}
+    const yT=A.chinL+(H8.chin-H8.top)*s8*1.03,yB=A.chinL+(H8.chin-(H8.top+(H8.chin-H8.top)*.42))*s8,W=wmax*s8*1.3,D=dmax*s8*1.3,WH=[1,1,1];
+    G.cardTri=G.cardTri||{};G.cutRanges=G.cutRanges||[];const from=G.p.length/3;
+    const quad=(P,view)=>{const nn=P.map(p=>v3n([p[0],p[1]-A.chinL*0,p[2]]));
+      for(const t of [[0,1,2],[0,2,3]]){G.cardTri[G.p.length/9]=view;gbTri(G,P_HEAD,t.map(k=>P[k]),t.map(k=>nn[k]),WH,0,0,[.06,0]);}};
+    /* front card (faces +x and -x) */
+    quad([[0,yB,W],[0,yB,-W],[0,yT,-W],[0,yT,W]],0);quad([[0,yB,-W],[0,yB,W],[0,yT,W],[0,yT,-W]],4);
+    /* profile card (faces +z = his right, and -z = his left) */
+    quad([[-D,yB,0],[D,yB,0],[D,yT,0],[-D,yT,0]],6);quad([[D,yB,0],[-D,yB,0],[-D,yT,0],[D,yT,0]],2);
+    G.cutRanges.push([from,G.p.length/3]);}
 }
 /* ---------- the paint: two texture positions and a blend weight for every vertex ---------- */
 function h8uv(A,k,p){const H8=A.m.head8,V=H8.views[k],ph=V.phi*D2R,ix=V.a+(p[0]*-Math.sin(ph)+p[2]*-Math.cos(ph))/A.s8,iy=H8.chin-(p[1]-A.chinL)/A.s8;
@@ -213,6 +254,9 @@ function artUV(def,G,A){
   for(let i=0;i<n;i++){
     /* a head painted from eight views: each triangle picks the two views either side of the way it faces, and each of its
        corners blends between those two, so neighbouring triangles always meet with the same colours */
+    if(G.cardTri&&G.cardTri[i/3|0]!=null&&i%3===0){const v=G.cardTri[i/3|0];
+      for(let k=0;k<3;k++){const j=i+k,a0=h8uv(A,v,[G.p[j*3],G.p[j*3+1],G.p[j*3+2]]);uv[j*2]=a0[0];uv[j*2+1]=a0[1];uv2[j*2]=a0[0];uv2[j*2+1]=a0[1];wb[j]=0;}
+      i+=2;continue;}
     if(A.m.head8&&G.part[i]===P_HEAD&&i%3===0){
       let sx=0,sz=0;for(let k=0;k<3;k++){sx+=G.n[(i+k)*3];sz+=G.n[(i+k)*3+2];}
       /* the front picture paints the face out to about 50 degrees (past that it only shows the ear edge-on), the

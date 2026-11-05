@@ -15,5 +15,6 @@ window.__vf3={ARC,AU,APP,ROSTER,KEY,TOUCH,PT,PROJ,FXL,CAM,CD,QS,get FIGHT(){retu
     SUN.color.set('#fff4ea');HEMI.color.set('#cfd6ea');HEMI.groundColor.set('#3a3640');SCENE.fog=null;SHU.uRim.value.setRGB(.5,.55,.65);SCENE.background=new THREE.Color('#55555f');},
   shot(c){const k=FIGHT.f[0].def.body.h;CAMO=[c[0],c[1]*k,c[2],c[3],c[4]*k,c[5]];for(let i=0;i<3;i++){prepare3D(1/60,1);STAGEG.visible=false;FIGHT.f[1].hidden=true;drawUI();render3D();}},
   pose(id,k){POSEPICK[id]=k;for(const key in ALTS0)delete ALTS0[key];},
+  fit(id){const d=ROSTER[id];fighterGeo(d);const A=artFit(d);return {fit:A.depthFit,s8:A.s8,chinL:A.chinL,v:A.m.head8.views.map(v=>v.a)};},
   tris(){const o={};for(const k in GEOS)o[k]=GEOS[k].tris;return o;}
 };

@@ -20,7 +20,7 @@ A = 2048; Q = 1024
 # optional: eight head views per fighter (front, 3/4 left, left profile, back 3/4 left, back, back 3/4 right, right
 # profile, 3/4 right), in FACES/<id>/*.png sorted by name. They replace the face sheet for the head.
 FACES = os.environ.get('VF_FACES')
-HEAD8 = {'kai': dict(chin=.69, bot=.71, untail=True), 'magnus': dict(chin=.69, bot=.77, untail=False)}
+HEAD8 = {'kai': dict(chin=.69, bot=.71, untail=True, cards=True), 'magnus': dict(chin=.69, bot=.77, untail=False)}
 
 
 def head8(fid):
@@ -318,8 +318,31 @@ def main():
         import base64
         meta['disp'] = base64.b64encode(g.tobytes()).decode()
         if H8: meta['head8'] = H8[2]
+        DEP = os.environ.get('VF_DEPTH')
+        if H8 and DEP and os.path.isdir(os.path.join(DEP, fid)):
+            # depth pictures (white = near) drawn on exactly the same framing as the front and profile views: they give
+            # the shape inside the outline (eyes, nose, lips, ears, hair spikes). Stored as 320 x 320 grids.
+            import base64
+            dd = {}
+            for k in ('front', 'right', 'left'):
+                f = os.path.join(DEP, fid, k + '.png')
+                if not os.path.exists(f): continue
+                g = np.asarray(Image.open(f).convert('L')).astype(np.float32)
+                g = cv2.GaussianBlur(cv2.resize(g, (320, 320), interpolation=cv2.INTER_AREA), (0, 0), 4.0)
+                dd[k] = base64.b64encode(np.clip(g, 0, 255).astype(np.uint8).tobytes()).decode()
+            dd['n'] = 320; meta['head8']['depth'] = dd
         META[fid] = meta
-        Image.fromarray(np.dstack([atlas, alpha]), 'RGBA').save(os.path.join(OUT, fid + '.webp'), quality=84, alpha_quality=35, method=6)
+        if H8 and HEAD8[fid].get('cards'):
+            # the head pictures' alpha holds the hair's outline instead of relief: the hair cards cut their spikes out of it
+            for k, im in enumerate(H8[0]):
+                cx, cy = (k % 4) * 512, Q + (k // 4) * 512
+                hsv = cv2.cvtColor(im, cv2.COLOR_RGB2HSV); m0 = H8[1][k]
+                hair = m0 & (hsv[..., 2] < 95) & ~((hsv[..., 0] >= 4) & (hsv[..., 0] <= 24) & (hsv[..., 1] > 70) & (hsv[..., 2] > 70))
+                yy = np.mgrid[0:hair.shape[0], 0:hair.shape[1]][0]; hair &= yy < HEAD8[fid]['chin'] * hair.shape[0]
+                hair = cv2.morphologyEx(hair.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+                # hair 255, the rest 64 (never 0: WebP may throw away colours under fully clear pixels)
+                alpha[cy:cy + 512, cx:cx + 512] = np.clip(64 + cv2.resize(hair.astype(np.float32) * 191, (512, 512), interpolation=cv2.INTER_AREA), 0, 255).astype(np.uint8)
+        Image.fromarray(np.dstack([atlas, alpha]), 'RGBA').save(os.path.join(OUT, fid + '.webp'), quality=84, alpha_quality=70 if (H8 and HEAD8[fid].get('cards')) else 35, method=6, exact=True)
         if DBG:
             d = atlas.copy()
             for side, key in (('front', 'front'), ('back', 'back')):
