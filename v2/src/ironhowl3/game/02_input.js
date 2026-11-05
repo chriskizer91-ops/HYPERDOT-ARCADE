@@ -15,13 +15,14 @@ addEventListener('mousemove',e=>{if(MOUSE.locked){MOUSE.dx+=e.movementX||0;MOUSE
 document.addEventListener('pointerlockchange',()=>{MOUSE.locked=document.pointerLockElement===cv;if(!MOUSE.locked&&G.mode==='play'&&!G.paused&&!touchy)setPause(true);});
 function lockMouse(){if(touchy||EMBED&&!document.hasFocus())return;try{const p=cv.requestPointerLock();if(p&&p.catch)p.catch(()=>{});}catch(e){}}
 const STICK_R=58;
-function touchStart(e){
+function touchStart(e){let field=false;
   for(const t of e.changedTouches){
-    if(t.target.closest&&t.target.closest('button'))continue;
+    if(t.target.closest&&t.target.closest('button'))continue;field=true;
     if(t.clientX<innerWidth*.45&&TS.id<0){TS.id=t.identifier;TS.ox=t.clientX;TS.oy=t.clientY;TS.ax=TS.ay=0;HUD.stick(true,TS.ox,TS.oy,0,0);}
     else if(TS.look<0){TS.look=t.identifier;TS.lx=t.clientX;TS.ly=t.clientY;}
   }
-  if(G.mode==='play')e.preventDefault();
+  /* only block the browser's tap handling for touches on the game itself: blocking it on buttons stopped VIEW, pause and the menu from working */
+  if(G.mode==='play'&&field)e.preventDefault();
 }
 function touchMove(e){
   for(const t of e.changedTouches){

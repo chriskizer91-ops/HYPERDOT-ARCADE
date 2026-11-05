@@ -51,13 +51,14 @@ addEventListener('mousemove',e=>{if(MOUSE.locked){MOUSE.dx+=e.movementX||0;MOUSE
 document.addEventListener('pointerlockchange',()=>{MOUSE.locked=document.pointerLockElement===cv;if(!MOUSE.locked&&G.mode==='play'&&!G.paused&&!touchy)setPause(true);});
 function lockMouse(){if(touchy||EMBED&&!document.hasFocus())return;try{const p=cv.requestPointerLock();if(p&&p.catch)p.catch(()=>{});}catch(e){}}
 const STICK_R=58;
-function touchStart(e){
+function touchStart(e){let field=false;
   for(const t of e.changedTouches){
-    if(t.target.closest&&t.target.closest('button'))continue;
+    if(t.target.closest&&t.target.closest('button'))continue;field=true;
     if(t.clientX<innerWidth*.45&&TS.id<0){TS.id=t.identifier;TS.ox=t.clientX;TS.oy=t.clientY;TS.ax=TS.ay=0;HUD.stick(true,TS.ox,TS.oy,0,0);}
     else if(TS.look<0){TS.look=t.identifier;TS.lx=t.clientX;TS.ly=t.clientY;}
   }
-  if(G.mode==='play')e.preventDefault();
+  /* only block the browser's tap handling for touches on the game itself: blocking it on buttons stopped VIEW, pause and the menu from working */
+  if(G.mode==='play'&&field)e.preventDefault();
 }
 function touchMove(e){
   for(const t of e.changedTouches){
@@ -2033,7 +2034,7 @@ const HUD={_c:{},
   fuel(p){const el=$('fuel');if(!el)return;if(el.children.length!==p.cells){el.innerHTML='';for(let i=0;i<p.cells;i++){const c=document.createElement('i');c.appendChild(document.createElement('b'));el.appendChild(c);}}
     for(let i=0;i<p.cells;i++){const f=Math.round(clamp(p.fuel-i,0,1)*50)/50,c=el.children[i];if(c._f!==f){c._f=f;c.firstChild.style.width=(f*100)+'%';c.className=f>=1?'full':'';}}},
   flashFuel(){const el=$('fuel');el.classList.remove('no');void el.offsetWidth;el.classList.add('no');},
-  view(v){$('bview').textContent=v==='close'?'CLOSE':'FAR';},
+  view(v){$('bview').textContent=v==='close'?'CAM NEAR':'CAM FAR';},   /* it said CLOSE, which read like a close button */
   hint(t,sec){const h=$('hint');h.textContent=t;h.style.opacity=t?1:0;clearTimeout(HUD._ht);if(t&&sec)HUD._ht=setTimeout(()=>h.style.opacity=0,sec*1000);},
   msg(t,sec){const h=$('msg');h.textContent=t;h.style.opacity=1;clearTimeout(HUD._mt);HUD._mt=setTimeout(()=>h.style.opacity=0,(sec||1.2)*1000);},
   banner(t){const h=$('banner');h.textContent=t;h.classList.remove('go');void h.offsetWidth;h.classList.add('go');},
@@ -2065,7 +2066,7 @@ const HUD={_c:{},
         wp.style.display='block';wp.style.transform='translate('+sx.toFixed(0)+'px,'+sy.toFixed(0)+'px)';this.set('wpd','text',Math.round(Math.hypot(p.x-P.x,p.z-P.z))+' m');this.set('wp','cls',off?'off':'');}
       else wp.style.display='none';}else if(wp.style.display!=='none')wp.style.display='none';
   },
-  menu(){const m=$('menu');$('mview').textContent='VIEW: '+(SET.view==='close'?'CLOSE':'FAR');
+  menu(){const m=$('menu');$('mview').textContent='CAMERA: '+(SET.view==='close'?'NEAR':'FAR');
     $('mqual').textContent='QUALITY: '+(SET.quality==='auto'?'AUTO ('+QL.toUpperCase()+')':SET.quality.toUpperCase());
     $('msound').textContent='SOUND: '+(SET.sound?'ON':'OFF');$('msens').textContent='LOOK SPEED: '+SET.sens.toFixed(1)+'x';$('msens').style.display=touchy?'':'none';
     $('mexit').style.display=EMBED?'':'none';m.style.display=G.paused?'flex':'none';},
