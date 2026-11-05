@@ -146,6 +146,7 @@ function stageSetup(i,demo){
   genCave(ST);ventSetup();EN.length=0;BOMBS.length=0;LIGHTS.length=0;BOSS.on=false;BOSS.dead=false;heartReset();crReset(true);
   S.wt=0;S.wi=0;S.q=[];S.warn=[];S.stats=newStats();S.combo=0;S.comboT=0;S.msgs.length=0;S.big=null;S.pops.length=0;S.clearT=0;
   Object.assign(SU,{uTint:ST.tint,uBackA:ST.backA,uBackB:ST.backB,uCryst:ST.cryst,uIce:ST.ice,uMagma:ST.magma!=null?ST.magma:clamp((ST.amb+10)/28,.08,1)});
+  Object.assign(SU,STAGE_ART[i]||STAGE_ART[0]);
   lavaCentroid();
 }
 function APP_attract(){S.mode='title';S.t=0;S.paused=false;S.how=-1;S.menuI=0;S.over=false;$('pauseBtn').textContent='Pause';titleSetup();setTrack('title');}

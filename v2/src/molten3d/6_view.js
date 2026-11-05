@@ -68,6 +68,7 @@ const TITLE={cells:[],bottom:[],pool:[],t:0,poolY:160};
 function titleSetup(){
   ST=STAGES[0];AMB_T=16;clearGrid();PROT.fill(0);EN.length=0;BOMBS.length=0;LIGHTS.length=0;BOSS.on=false;HEART.cells=[];HEART.edge=[];heartReset();HEART.ign=1;crReset(true);CR.x=FURN_X;
   Object.assign(SU,{uTint:[.55,.42,.36],uBackA:[.032,.024,.022],uBackB:[.082,.06,.05],uCryst:[1.1,.6,.22],uIce:[.55,.78,.95],uMagma:1});
+  Object.assign(SU,STAGE_ART[0],{back:'back0'});
   for(let i=0;i<N;i++)M[i]=ROCK;
   for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){const dx=(x-160)/154,dy=(y-96)/86,n=(fbm(x*.06,y*.06,5)-.5)*.35;if(dx*dx+dy*dy<1+n||y<GAL)M[y*W+x]=AIR;}
   for(let x=2;x<W-2;x++){M[RAILY*W+x]=RAIL;M[(RAILY+1)*W+x]=RAIL;}
@@ -347,9 +348,9 @@ addEventListener('resize',resize);
 if(!gl||GLERR){$('err').style.display='grid';if(GLERR)$('err').textContent='MOLTEN could not build its light shaders on this graphics card. '+GLERR.slice(0,300);}
 if(AU.muted)$('snd').textContent='Sound off';
 {const q=(location.search.match(/[?&]q=(low|med|high)/)||[])[1];if(q){LQ=HDR?['low','med','high'].indexOf(q):0;QUAL.auto=false;}}
-if(gl&&!GLERR){$('resv').textContent=QL[LQ];buildLightTargets();buildMeshes();buildParticles();resize();APP_attract();
+if(gl&&!GLERR){$('resv').textContent=QL[LQ];buildLightTargets();buildMeshes();buildParticles();loadArt();resize();APP_attract();
   ARC.post('ready',{title:CAB.title,w:W,h:H,tickets:CAB.tickets});
   window.__mo={AWAKE,ACT,get HEATN(){return HEATN;},simMove,simHeat,stepParticles,enemyStep,stampState,drawSprites,TITLE,S,CR,HEART,EN,BOSS,STAGES,KEY,LATCH,PTR,TS,PERF,RT,M,T,EV,get PN(){return PN;},get ST(){return ST;},get LQ(){return LQ;},tick,render,autopilot,setLight,startStage,startDemo,titleSetup,stageSetup,spawnEnemy,explode,
-    CAM,FX,CS,get DOTS(){return DOTS;},setDots,camStep,projHUD,unprojPlane,get QUAL(){return QUAL;},
+    CAM,FX,CS,get ARTOK(){return ARTOK;},setArt(v){ARTOK=v;},BACK,get GLERR(){return GLERR;},get DOTS(){return DOTS;},setDots,camStep,projHUD,unprojPlane,get QUAL(){return QUAL;},
     ff(sec,skipRender){for(let i=0;i<sec*60;i++)tick(1/60);endInputFrame();},start:APP_start,attract:APP_attract,count(m){let n=0;for(let i=0;i<N;i++)if(M[i]===m)n++;return n;}};
   requestAnimationFrame(frame);}

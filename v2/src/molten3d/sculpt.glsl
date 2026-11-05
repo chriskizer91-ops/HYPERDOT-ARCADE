@@ -1,4 +1,5 @@
 ${GLSL_MATS}
+${GLSL_ART}
 /* SCULPT — V3's cavern, sphere-traced through one smooth distance field built from 2D fields.
      rock      a 2D outline extruded toward the camera to a front that bulges out deeper in the rock;
                the open cave behind recedes into a bowl; both carry 3D noise for crags
@@ -16,6 +17,7 @@ uniform vec4 uPL[8];uniform vec4 uPC[8];uniform int uNL;
 uniform vec4 uHeart;uniform vec4 uHeartFx;
 uniform float uTime;uniform float uAmb;uniform vec3 uTint;uniform vec3 uBackA;uniform vec3 uBackB;uniform vec3 uCryst;uniform vec3 uIce;
 uniform float uMagma;uniform int uQ;
+uniform sampler2D uBack;uniform float uBackOk;uniform float uBackAsp;uniform float uBackGain;uniform vec3 uRockL;uniform float uCold;
 in vec2 vT;out vec4 o;
 const vec2 GS=vec2(320.,180.);const float ZP=8.;
 vec2 suv(vec2 p){vec2 q=p-.5,i=floor(q),f=fract(q);f=f*f*(3.-2.*f);return (i+f+.5)/GS;}
@@ -59,6 +61,14 @@ vec3 voro(vec2 x,float anim){vec2 n=floor(x),f=fract(x);float d1=8.,d2=8.;vec2 i
   for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){vec2 g=vec2(i,j),q=vec2(h21(n+g),h21(n+g+19.7));q=.5+.45*sin(anim+6.2831*q);vec2 r=g+q-f;float d=dot(r,r);if(d<d1){d2=d1;d1=d;id=n+g;}else if(d<d2)d2=d;}
   return vec3(sqrt(d2)-sqrt(d1),h21(id),h21(id+3.1));}
 vec2 faceUV(vec3 p,vec3 n){vec3 a=abs(n);return a.z>max(a.x,a.y)?p.xy:a.y>a.x?vec2(p.x,p.z*1.3):vec2(p.z*1.3,p.y);}
+/* the painted far view: a picture at the end of the cave, placed by the ray's direction (it is far
+   enough away that only turning the camera moves it), a little soft, as a distant thing is */
+vec3 backdrop(vec3 D){
+  float ax=atan(D.x,-D.z),ay=atan(D.y,length(D.xz));
+  const float SY=.64;vec2 uv=vec2(ax/(SY*uBackAsp)+.5,(ay-.3)/SY+.5);
+  vec3 c=textureLod(uBack,clamp(uv,vec2(.001),vec2(.999)),1.).rgb;
+  return c*smoothstep(-.06,.04,uv.y)*smoothstep(1.06,.96,uv.y);
+}
 void lights(vec3 P,vec3 N,vec3 V,float shin,bool sh,out vec3 dif,out vec3 spc){
   dif=vec3(0);spc=vec3(0);
   for(int i=0;i<8;i++){if(i>=uNL)break;vec3 d=uPL[i].xyz-P;float dd=dot(d,d),dl=sqrt(dd);vec3 l=d/dl;float att=1./(1.+dd/(uPL[i].w*uPL[i].w));
@@ -86,7 +96,9 @@ void main(){
     p=O+D*t;float d=map(p,m,w);
     if(!wet&&w<.04){
       /* into the water: a glint off the surface, then the ray bends and carries on underwater */
-      wet=true;tWet=t;vec3 nw=nrmW(p);float fr=.03+.75*pow(1.-max(dot(nw,-D),0.),5.);
+      wet=true;tWet=t;vec3 nw=nrmW(p);
+      if(uArt>.5&&nw.y<-.4){float sc=1./34.;vec2 u=vec2(p.x,p.z*1.6)*sc;vec3 r1=artN(u+vec2(uTime*.013,uTime*.009),T_RIPPLE,1.),r2=artN(u*1.7-vec2(uTime*.011,-uTime*.016),T_RIPPLE,1.5);
+        nw=normalize(nw+vec3(r1.x+r2.x,0.,r1.y+r2.y)*.35);}float fr=.03+.75*pow(1.-max(dot(nw,-D),0.),5.);
       vec3 Lw=L2(p.xy);vec3 dif,spc;lights(p,nw,-D,120.,false,dif,spc);
       Acc+=Tr*(fr*(Lw*.7+uAmb*uTint*2.5+.02)+spc*.9);Tr*=1.-fr;
       O=p+D*.05;D=refract(D,nw,.75);if(D.z>-.02)D=normalize(vec3(D.xy,-.05));t=0.;continue;}
@@ -127,19 +139,42 @@ void main(){
       ivec2 c=clamp(ivec2(floor(P.xy-N.xy*.5)),ivec2(0),ivec2(319,179));
       vec4 s=texelFetch(uState,c,0);int mm;float T;cellOf(s,mm,T);float aux=s.b;
       if(P.x<0.||P.y<0.||P.x>320.||P.y>180.){mm=BED;T=0.;aux=.5;}
-      lights(P,N,V,14.,true,dif,spc);
+      /* the painted rock: two of the stage's stones in broad patches, rubble or snow gathered on the ledges,
+         the far cave in columns of basalt; brightness kept to the stage's own, colour leaning to its palette */
+      vec3 Nb=N,ta=vec3(0);float th=.5;
+      if(uArt>.5&&mm!=CRYST){
+        float lt=lum(uBackB)*2.9;vec3 tn=mix(vec3(1),uBackB/max(lum(uBackB),1e-3),.42);
+        if(m==1){float sc=1./62.,lod=artLod(P,N,V,sc);vec4 a=tri(P,N,T_COLUMNS,sc,lod,1.1,Nb);ta=a.rgb/artMean(T_COLUMNS)*lt*tn;th=a.a;}
+        else if(mm==BED){float sc=1./58.,lod=artLod(P,N,V,sc);vec4 a=tri(P,N,uRockL.x,sc,lod,1.3,Nb);ta=a.rgb/artMean(uRockL.x)*lt*tn*.8;th=a.a;}
+        else{
+          float sc=1./54.,lod=artLod(P,N,V,sc);
+          float kB=smoothstep(.42,.6,n3(P*.019+vec3(5.,1.,0.)));
+          vec3 n1=N,n2=N;vec4 a=vec4(0);
+          if(kB<.99){vec4 q=tri(P,N,uRockL.x,sc,lod,1.35,n1);a+=vec4(q.rgb/artMean(uRockL.x),q.a)*(1.-kB);}
+          if(kB>.01){vec4 q=tri(P,N,uRockL.y,sc*1.15,lod+.2,1.35,n2);a+=vec4(q.rgb/artMean(uRockL.y),q.a)*kB;}
+          Nb=normalize(mix(n1,n2,kB));ta=a.rgb*lt*tn;th=a.a;
+          float kT=smoothstep(.3,.8,-N.y)*smoothstep(.35,.55,n3(P*.09+2.)+th*.3);
+          if(kT>.01){vec3 n3_=N;float scT=1./36.;vec4 q=tri(P,N,uRockL.z,scT,artLod(P,N,V,scT),1.,n3_);
+            vec3 ct=uRockL.z==T_SNOW?q.rgb*.95:q.rgb/artMean(uRockL.z)*lt*tn*1.15;
+            ta=mix(ta,ct,kT);Nb=normalize(mix(Nb,n3_,kT));th=mix(th,q.a,kT);}
+          if(uCold>0.){float kf=uCold*smoothstep(.45,.62,n3(P*.04+8.)+(-N.y)*.25+th*.2);ta=mix(ta,ta*vec3(.75,.9,1.2)+vec3(.04,.06,.09)*uCold,kf*.6);}
+        }
+      }
+      lights(P,Nb,V,14.,true,dif,spc);
       if(mm==CRYST&&m==0){
         /* lantern crystals: cut gems lit from inside */
-        vec3 vc=voro(faceUV(P,N)*1.6,0.);vec3 fn=normalize(N+(vec3(vc.y,vc.z,.5)-.5)*.8);
+        vec3 vc=voro(faceUV(P,N)*1.6,0.);vec3 fn=normalize(N+(vec3(vc.y,vc.z,.5)-.5)*.8);float cg=.6+.6*vc.y;
+        if(uArt>.5){float sc=1./22.;vec4 a=tri(P,N,T_CRYSTAL,sc,artLod(P,N,V,sc),1.4,fn);cg=.35+a.r*1.9;}
         float fres=pow(1.-max(dot(fn,V),0.),3.);
-        col=uCryst*(.5+.35*sin(uTime*1.7+aux*40.))*(.6+.6*vc.y)+uCryst*L*.5+fres*uCryst*.8+step(.985,h21(floor(P.xy*2.)+floor(uTime*4.)))*uCryst*1.5;
+        col=uCryst*(.5+.35*sin(uTime*1.7+aux*40.))*cg+uCryst*L*.5+fres*uCryst*.8+step(.985,h21(floor(P.xy*2.)+floor(uTime*4.)))*uCryst*1.5;
       }else{
         /* volcanic basalt: strata, grain and colour drift; magma veins glow where the rock is hot */
         float strata=.5+.5*sin(P.y*.36+n3(P*.05)*6.+P.z*.04);
         vec3 al=mix(uBackB*2.2,uBackB*3.6+vec3(.03,.02,.012),strata*.6+n3(P*.21+9.)*.3)*(.74+.5*n3(P*.42+3.));
         if(m==1)al=mix(al,uBackA*2.4+uBackB*.8,.35);
         if(mm==BED)al=al*.8+uBackA*.5;
-        col=al*((L+amb)*1.05+dif*reach*.85)+spc*reach*al*.6+rimc*.8;
+        if(uArt>.5){al=ta;amb+=vec3(.022,.032,.055)*(max(dot(Nb,fillD),0.)-max(dot(N,fillD),0.))*ao*smoothstep(-34.,-8.,P.z)*smoothstep(18.,9.,P.z);}
+        col=al*((L+amb)*1.05+dif*reach*.85)+spc*reach*al*(.3+th*.9)+rimc*.8;
         float heat=lum(sp)*1.1+uMagma*.22*smoothstep(-10.,-45.,P.z)+clamp((T-350.)/600.,0.,1.);
         float vein=1.-smoothstep(.0,.028,abs(n3(P*.105+vec3(0.,0.,7.))-.5));vein*=smoothstep(.5,.66,n3(P*.045+5.));
         float pulse=.75+.25*sin(uTime*1.1+P.x*.07+P.y*.05);
@@ -161,18 +196,35 @@ void main(){
         float seam=1.-smoothstep(.02,.16,vc.x);
         float crust=clamp((1520.-T)/380.,0.,1.)*.9+.1*top;
         vec3 hot=bb(T+70.)*1.3,cool=bb(max(T-360.-vc.y*240.,560.))*.55+vec3(.05,.02,.015)*L;
+        if(uArt>.5){
+          /* the painted crust: dark plates riding on the flow, the glow coming through where they part */
+          float sc=1./26.;vec2 fl=vec2(uTime*.05,-uTime*(top>.5?.03:.12))*3.;vec3 nn=N;
+          vec4 a=pla((fu+fl)*sc+vc.yz*.02,N,T_CRUST,artLod(P,N,V,sc),1.,nn);
+          float sm=smoothstep(.03,.32,a.r-a.b*.8);
+          seam=max(seam*.35,sm);
+          cool=bb(max(T-380.-(1.-a.a)*260.,560.))*.5+a.rgb*.25*(L+amb*2.)+vec3(.03,.012,.01)*L;N=nn;}
         col=mix(hot,cool,crust*(1.-seam))+bb(T+120.)*seam*.6;
         lights(P,N,V,70.,false,dif,spc);col+=spc*.22;
       }else if(mm==IRON||mm==SLAG||mm==RAIL||mm==HOUSE){
-        lights(P,N,V,mm==RAIL?80.:55.,true,dif,spc);
         vec3 al;float sk=.65;
         if(mm==IRON){al=vec3(.15,.15,.17)*(.85+.3*aux)*temper(T);}
         else if(mm==SLAG){al=vec3(.04,.035,.05)*(.8+.5*aux)+vec3(.05,.02,.08)*n3(P*.6);sk=1.;}
         else if(mm==RAIL){al=vec3(.22,.21,.23)*(abs(P.z)>1.7?.7:1.);if(fract(P.x/8.)<.1)al*=1.6;sk=.9;}
         else{al=vec3(.1,.085,.085)*(.85+.3*aux);}
+        float crackA=-1.;
+        if(uArt>.5){
+          /* painted metal: cast iron with its crazed skin, glassy slag, the riveted rail, brick for the houses */
+          vec3 nn=N;
+          if(mm==IRON){float sc=1./24.,lod=artLod(P,N,V,sc);vec4 a=pla(fu*sc,N,T_IRON,lod,1.,nn);vec3 n2=N;vec4 c2=pla(fu*sc*1.3+.37,N,T_CRAZE,lod+.38,1.,n2);
+            al=a.rgb/artMean(T_IRON)*.15*(.85+.3*aux)*temper(T);crackA=1.-smoothstep(.22,.45,c2.a);nn=normalize(nn+n2-N);}
+          else if(mm==SLAG){float sc=1./22.;vec4 a=pla(fu*sc,N,T_OBSID,artLod(P,N,V,sc),1.2,nn);al=a.rgb/artMean(T_OBSID)*.045*(.8+.5*aux)+vec3(.03,.012,.05)*a.a;}
+          else if(mm==RAIL){float sc=1./16.;vec4 a=pla(vec2(P.x,abs(N.z)>.5?P.y:P.z)*sc,N,T_PLATE,artLod(P,N,V,sc),1.,nn);al=a.rgb/artMean(T_PLATE)*.2*(abs(P.z)>1.7?.75:1.);}
+          else{float sc=1./12.;vec4 a=pla(fu*sc,N,T_BRICK,artLod(P,N,V,sc),1.,nn);al=a.rgb/artMean(T_BRICK)*.1*(.85+.3*aux);}
+          N=nn;}
+        lights(P,N,V,mm==RAIL?80.:55.,true,dif,spc);
         if(mm==IRON||mm==SLAG){
           /* cast iron cooling: the skin crazes; the cracks stay hot after the plates have dulled */
-          vec3 vc=voro(fu*.55,0.);float crack=1.-smoothstep(.02,.12,vc.x);
+          vec3 vc=voro(fu*.55,0.);float crack=crackA>=0.?max(crackA,(1.-smoothstep(.02,.12,vc.x))*.3):1.-smoothstep(.02,.12,vc.x);
           float glow=T>1050.?.75+.25*crack:smoothstep(480.,1000.,T)*(.12+.88*crack);
           em*=glow*(.8+.3*n3(P*.5));}
         float fres=pow(1.-max(dot(N,V),0.),4.);
@@ -180,20 +232,26 @@ void main(){
         if(mm==HOUSE){vec4 sq=texelFetch(uSpr,c,0);int ac=int(sq.a*255.+.5);if(sq.a>0.)col+=ac==255?pow(sq.rgb,vec3(2.2))*L*.5:pow(sq.rgb,vec3(2.2))*float(ac)/254.*6.*(N.z>.5?1.:.7);}
       }else if(mm==ICE){
         /* clear ice: faceted, it reflects the cave and lets the lava light through */
-        vec3 vc=voro(fu*.7,0.);vec3 fn=normalize(N+(vec3(vc.y,vc.z,.5)-.5)*.5);
+        vec3 vc=voro(fu*.7,0.);vec3 fn=normalize(N+(vec3(vc.y,vc.z,.5)-.5)*.5);vec3 itn=vec3(1);
+        if(uArt>.5){float sc=1./30.;vec4 a=pla(fu*sc,N,T_ICE,artLod(P,N,V,sc),1.,fn);fn=normalize(fn+(vec3(vc.y,vc.z,.5)-.5)*.25);itn=a.rgb/artMean(T_ICE)*.9;}
         lights(P,fn,V,110.,false,dif,spc);
         float fres=.05+.95*pow(1.-max(dot(fn,V),0.),4.);
-        vec3 thru=uIce*(L2(P.xy-fn.xy*2.5)*1.1+amb*2.+.015);
+        vec3 thru=uIce*itn*(L2(P.xy-fn.xy*2.5)*1.1+amb*2.+.015);
         col=mix(thru,(L+amb*2.5)*.8+.02,fres*.6)+spc*reach*1.2+step(.99,h21(floor(P.xy*2.5)+floor(P.z)+floor(uTime*3.)))*L*2.;
       }else if(mm==SNOW){
-        lights(P,N,V,20.,false,dif,spc);
-        col=vec3(.82,.88,.98)*((L+amb)*.95+dif*reach*.8+.012)*(.88+.24*aux)*(top>.5?1.1:.85)+step(.992,h21(floor(P.xy*3.)+floor(uTime*3.)))*(L+.05)*1.5;
-      }else{lights(P,N,V,12.,false,dif,spc);col=uBackB*3.*((L+amb)+dif*reach*.8)+em;}
+        vec3 sal=vec3(.82,.88,.98);vec3 nn=N;
+        if(uArt>.5){float sc=1./28.;vec4 a=pla(fu*sc,N,T_SNOW,artLod(P,N,V,sc),1.,nn);sal=a.rgb*1.35;}
+        lights(P,nn,V,20.,false,dif,spc);
+        col=sal*((L+amb)*.95+dif*reach*.8+.012)*(.88+.24*aux)*(top>.5?1.1:.85)+step(.992,h21(floor(P.xy*3.)+floor(uTime*3.)))*(L+.05)*1.5;
+      }else{vec3 al=uBackB*3.;vec3 nn=N;
+        if(uArt>.5&&mm==RUBBLE){float sc=1./20.;vec4 a=pla(fu*sc,N,T_RUBBLE,artLod(P,N,V,sc),1.,nn);al=a.rgb/artMean(T_RUBBLE)*lum(uBackB)*3.*mix(vec3(1),uBackB/max(lum(uBackB),1e-3),.4);}
+        lights(P,nn,V,12.,false,dif,spc);col=al*((L+amb)+dif*reach*.8)+em;}
     }else{
       /* the Rime: living crystal. Their pixel-art colours tint the ice; eyes and cores glow */
       ivec2 c=cellIn(P,N,3);vec4 sq=texelFetch(uVox,c,0);int ac=int(sq.a*255.+.5);
       vec4 sm=texture(uVox,(P.xy-N.xy*.4)/GS);vec3 cc=pow(ac==255&&sm.a>.5?sm.rgb/sm.a:sq.rgb,vec3(2.2));   /* the pixel art, filtered: tint, not speckle */
       vec3 vc=voro(faceUV(P,N)*.42+vec2(P.z*.13),0.);vec3 fn=normalize(N+(vec3(vc.y,vc.z,.5)-.5)*1.1);       /* cut into broad crystal facets */
+      if(uArt>.5){float sc=1./18.;vec3 nn=N;vec4 a=tri(P,N,T_RIME,sc,artLod(P,N,V,sc),1.2,nn);fn=normalize(nn+(vec3(vc.y,vc.z,.5)-.5)*.6);vc.y=mix(vc.y,clamp(a.a*1.4-.2,0.,1.),.7);}
       lights(P,fn,V,90.,true,dif,spc);
       float fres=.06+.94*pow(1.-max(dot(fn,V),0.),3.);
       vec3 thru=cc*(L2(P.xy-fn.xy*2.)*1.4+amb*2.2+.03)*(.75+.5*vc.y);
@@ -202,6 +260,10 @@ void main(){
       col+=step(.985,h21(floor(P.xy*2.)+floor(uTime*5.)+vc.y*9.))*(L+.08)*1.4*float(ac==255);
     }
   }else{col=vec3(.004,.003,.003);}
+  /* the far view: where the cave runs deepest it opens onto the stage's painted backdrop */
+  float bk=m==-2?1.:m==1?smoothstep(-12.,-34.,P.z):0.;
+  bk*=uBackOk;
+  if(bk>0.&&uArt>.5){vec3 B=backdrop(D);B=mix(vec3(lum(B)),B,.85)*.34*uBackGain+uAmb*uTint*.05;col=mix(col,B,bk);far*=1.-bk;}
   col=Acc+Tr*col;
   /* the channel's air: light shafts in the haze (the 2D light already knows what casts shadows),
      steam billowing, and how much the hot air shimmers */

@@ -1,4 +1,5 @@
 ${GLSL_MATS}
+${GLSL_ART}
 /* MARCH — one ray per pixel through the extruded grid.
    Every cell is a column standing on the play plane. Along z (toward the camera) a cell can hold:
      terrain   solid from far behind up to its front depth zT (rock juts out; open cave recedes)
@@ -12,6 +13,7 @@ uniform mat4 uInvVP;uniform mat4 uVP;uniform vec3 uEye;
 uniform vec4 uPL[8];uniform vec4 uPC[8];uniform int uNL;
 uniform vec4 uHeart;uniform vec4 uHeartFx;
 uniform float uTime;uniform float uAmb;uniform vec3 uTint;uniform vec3 uBackA;uniform vec3 uBackB;uniform vec3 uCryst;uniform vec3 uIce;uniform float uSteamQ;
+uniform sampler2D uBack;uniform float uBackOk;uniform float uBackAsp;uniform float uBackGain;uniform vec3 uRockL;uniform float uCold;
 in vec2 vT;out vec4 o;
 const float ZP=8.;
 vec4 cellAt(ivec2 c){
@@ -48,6 +50,25 @@ void pointLights(vec3 P,vec3 N,vec3 V,float shin,out vec3 dif,out vec3 spc){
     float nl=max(dot(N,l),0.);dif+=uPC[i].rgb*nl*att;spc+=uPC[i].rgb*pow(max(dot(N,normalize(l+V)),0.),shin)*att*nl;}
 }
 float lum(vec3 c){return dot(c,vec3(.3,.55,.15));}
+/* the painted far view (see SCULPT) */
+vec3 backdrop(vec3 D){
+  float ax=atan(D.x,-D.z),ay=atan(D.y,length(D.xz));
+  const float SY=.64;vec2 uv=vec2(ax/(SY*uBackAsp)+.5,(ay-.3)/SY+.5);
+  vec3 c=textureLod(uBack,clamp(uv,vec2(.001),vec2(.999)),1.).rgb;
+  return c*smoothstep(-.06,.04,uv.y)*smoothstep(1.06,.96,uv.y);
+}
+vec2 fUV(vec3 p,vec3 n){vec3 a=abs(n);return a.z>max(a.x,a.y)?p.xy:a.y>a.x?vec2(p.x,p.z*1.3):vec2(p.z*1.3,p.y);}
+/* the painted rock, one projection (the face's own) */
+vec3 artRock(vec3 P,vec3 N,vec3 V,inout vec3 Nb,out float th){
+  float lt=lum(uBackB)*2.9;vec3 tn=mix(vec3(1),uBackB/max(lum(uBackB),1e-3),.42);
+  vec2 u=fUV(P,N);float sc=1./54.,lod=artLod(P,N,V,sc);
+  float kB=smoothstep(.42,.6,vn(P.xy*.019+vec2(5.,1.)+P.z*.01));
+  float L=kB<.5?uRockL.x:uRockL.y;vec4 a=pla(u*(kB<.5?sc:sc*1.15),N,L,lod,1.35,Nb);
+  vec3 c=a.rgb/artMean(L)*lt*tn;th=a.a;
+  float kT=smoothstep(.3,.8,-N.y)*smoothstep(.35,.55,vn(P.xy*.09+2.)+th*.3);
+  if(kT>.01){vec3 n3_=N;vec4 q=pla(u/36.,N,uRockL.z,artLod(P,N,V,1./36.),1.,n3_);vec3 ct=uRockL.z==T_SNOW?q.rgb*.95:q.rgb/artMean(uRockL.z)*lt*tn*1.15;c=mix(c,ct,kT);Nb=normalize(mix(Nb,n3_,kT));}
+  if(uCold>0.){float kf=uCold*smoothstep(.45,.62,vn(P.xy*.04+8.)+(-N.y)*.25+th*.2);c=mix(c,c*vec3(.75,.9,1.2)+vec3(.04,.06,.09)*uCold,kf*.6);}
+  return c;}
 void main(){
   vec2 ndc=vT*2.-1.;
   vec4 a=uInvVP*vec4(ndc,-1.,1.),b=uInvVP*vec4(ndc,1.,1.);
@@ -155,17 +176,20 @@ void main(){
     if(kd==2){
       /* a voxel sprite: lit pixel art (the Rime) or self-lit (wisps, eyes, the King's heart) */
       vec4 sp=texelFetch(uVox,cH,0);int ac=int(sp.a*255.+.5);vec3 cc=pow(sp.rgb,vec3(2.2));
+      if(uArt>.5&&ac==255){float sc=1./18.;vec4 a=pla(fUV(P,Nf)*sc,Nf,T_RIME,artLod(P,Nf,V,sc),1.2,Nf);cc*=.55+a.rgb/artMean(T_RIME)*.55;}
       pointLights(P,Nf,V,30.,dif,spc);
       float side=Nf.z>.5?1.:.78;
       col=ac==255?cc*((L+amb)*1.15*side+dif*reach*.9+.03)+spc*reach*.5+cc*.012:cc*float(ac)/254.*6.;
     }else if(kd==0&&!(m==ROCK||m==BED||m==CRYST)){
       /* the cave receding behind the play channel */
-      pointLights(P,Nf,V,8.,dif,spc);
       vec3 al=backwall(P.xy+vec2(P.z*.6,P.z*.21));
+      if(uArt>.5){float sc=1./62.;vec4 a=pla(fUV(P,Nf)*sc,Nf,T_COLUMNS,artLod(P,Nf,V,sc),1.1,Nf);al=a.rgb/artMean(T_COLUMNS)*lum(uBackB)*2.6*mix(vec3(1),uBackB/max(lum(uBackB),1e-3),.42);}
+      pointLights(P,Nf,V,8.,dif,spc);
       col=al*((L*.62+amb*1.4)*(.75+.35*max(Nf.z,0.))+dif*reach*.5)*ao;
     }else if(kd==0){
-      pointLights(P,Nf,V,10.,dif,spc);
       vec3 al=m==BED?uBackA*1.3+rockAlb(P.xy,aux)*.35:rockAlb(P.xy+vec2(0.,P.z*.3),aux);
+      if(uArt>.5&&m!=CRYST){float th;al=artRock(P,Nf,V,Nf,th)*(m==BED?.75:1.);}
+      pointLights(P,Nf,V,10.,dif,spc);
       col=al*((L+amb)*(Nf.z>.5?.9:1.05)+dif*reach*.8)+spc*reach*.05;
       if(m==CRYST){vec3 e=uCryst*(.55+.25*sin(uTime*1.7+aux*40.))*(Nf.z>.5?1.:.45);col=uCryst*L*.4+e+step(.97,h21(floor(P.xy)+floor(uTime*4.)))*uCryst*.8;}
       vec3 em=bb(T);col+=em;
@@ -178,6 +202,8 @@ void main(){
         for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){vec2 gq=vec2(i,j),oq=vec2(h21(qi+gq),h21(qi+gq+17.3));oq=.5+.45*sin(uTime*.6+6.2831*oq);float d=length(gq+oq-qf);if(d<d1){d2=d1;d1=d;}else if(d<d2)d2=d;}
         float seam=1.-smoothstep(.0,.22,d2-d1);
         col=vec3(.07,.025,.015)*L+em*(top>.5?.62:1.)*(.72+.55*seam);
+        if(uArt>.5){float sc=1./26.;vec4 a=pla(pq*sc+vec2(uTime*.11,-uTime*(front>.5?.25:.07))*sc*2.,Nf,T_CRUST,artLod(P,Nf,V,sc),1.,Nf);float sm=smoothstep(.03,.32,a.r-a.b*.8);
+          col=a.rgb*.2*L+em*(top>.5?.62:1.)*mix(.32,1.25,max(sm,seam*.3))*mix(1.,.8,clamp((1520.-T)/380.,0.,1.));}
         pointLights(P,Nf,V,60.,dif,spc);col+=spc*.25;
       }else if(m==IRON||m==SLAG||m==RAIL||m==HOUSE){
         vec3 al;float shin=50.,sk=.6;
@@ -185,26 +211,39 @@ void main(){
         else if(m==SLAG){al=vec3(.045,.04,.055)*(.8+.5*aux)+vec3(.05,.02,.08)*vn(P.xy*.6);sk=.9;}
         else if(m==RAIL){al=vec3(.2,.19,.21)*(abs(P.z)>1.7?.7:1.);if(fract(P.x/8.)<.13)al*=1.6;shin=70.;}
         else{al=vec3(.11,.09,.09)*(.85+.3*aux);if(fract(P.x*.5+P.y*.5)<.25&&aux>.7)al*=1.9;}
-        if(m==IRON||m==SLAG)em*=.62+.7*vn(P.xy*.55+P.z*.3+aux*3.)*(T>700.?1.:.4)+.15*step(.8,vn(P.xy*.21+uTime*.05));
+        if(uArt>.5){vec2 fu=fUV(P,Nf);
+          if(m==IRON){float sc=1./24.,lod=artLod(P,Nf,V,sc);vec4 a=pla(fu*sc,Nf,T_IRON,lod,1.,Nf);float cr=1.-smoothstep(.22,.45,artA(fu*sc*1.3+.37,T_CRAZE,lod+.38).a);
+            al=a.rgb/artMean(T_IRON)*.17*(.82+.36*aux)*temper(T);em*=T>1050.?.75+.25*cr:smoothstep(480.,1000.,T)*(.12+.88*cr);}
+          else if(m==SLAG){float sc=1./22.;vec4 a=pla(fu*sc,Nf,T_OBSID,artLod(P,Nf,V,sc),1.2,Nf);al=a.rgb/artMean(T_OBSID)*.045*(.8+.5*aux)+vec3(.03,.012,.05)*a.a;em*=.4+.6*a.a;}
+          else if(m==RAIL){float sc=1./16.;vec4 a=pla(vec2(P.x,Nf.z>.5?P.y:P.z)*sc,Nf,T_PLATE,artLod(P,Nf,V,sc),1.,Nf);al=a.rgb/artMean(T_PLATE)*.2*(abs(P.z)>1.7?.75:1.);}
+          else{float sc=1./12.;vec4 a=pla(fu*sc,Nf,T_BRICK,artLod(P,Nf,V,sc),1.,Nf);al=a.rgb/artMean(T_BRICK)*.11*(.85+.3*aux);}}
+        else if(m==IRON||m==SLAG)em*=.62+.7*vn(P.xy*.55+P.z*.3+aux*3.)*(T>700.?1.:.4)+.15*step(.8,vn(P.xy*.21+uTime*.05));
         pointLights(P,Nf,V,shin,dif,spc);
         float fres=pow(1.-max(dot(Nf,V),0.),4.);
         col=al*((L+amb)*1.05+dif*reach)+spc*reach*sk*(m==SLAG?vec3(.55,.45,.75):vec3(.6,.6,.65))+fres*(L+amb)*.12+em;
         if(m==HOUSE){vec4 sp=texelFetch(uSpr,cH,0);int ac=int(sp.a*255.+.5);if(sp.a>0.)col+=ac==255?pow(sp.rgb,vec3(2.2))*L*.5:pow(sp.rgb,vec3(2.2))*float(ac)/254.*6.*(front>.5?1.:.7);}
       }else if(m==ICE){
+        vec3 itn=vec3(1);if(uArt>.5){float sc=1./30.;vec4 a=pla(fUV(P,Nf)*sc,Nf,T_ICE,artLod(P,Nf,V,sc),1.,Nf);itn=a.rgb/artMean(T_ICE)*.9;}
         pointLights(P,Nf,V,80.,dif,spc);
         float tw=step(.985,h21(floor(P.xy*1.7)+floor(P.z*2.)+floor(uTime*2.5+aux*7.)));
-        col=uIce*((L+amb)*.85+dif*reach*.7+.012)*(.85+.3*aux)+L*(front>.5?.1:.35)+tw*L*1.8+vec3(.01,.025,.04)+spc*reach*.8;
+        col=uIce*itn*((L+amb)*.85+dif*reach*.7+.012)*(.85+.3*aux)+L*(front>.5?.1:.35)+tw*L*1.8+vec3(.01,.025,.04)+spc*reach*.8;
       }else if(m==SNOW){
+        vec3 sal=vec3(.82,.88,.98);if(uArt>.5){float sc=1./28.;vec4 a=pla(fUV(P,Nf)*sc,Nf,T_SNOW,artLod(P,Nf,V,sc),1.,Nf);sal=a.rgb*1.35;}
         pointLights(P,Nf,V,20.,dif,spc);
-        col=vec3(.82,.88,.98)*((L+amb)*.95+dif*reach*.8+.012)*(.88+.24*aux)*(top>.5?1.1:.85)+step(.99,h21(floor(P.xy*2.)+floor(uTime*3.)))*L*1.2;
+        col=sal*((L+amb)*.95+dif*reach*.8+.012)*(.88+.24*aux)*(top>.5?1.1:.85)+step(.99,h21(floor(P.xy*2.)+floor(uTime*3.)))*L*1.2;
       }else if(m==RUBBLE){
-        pointLights(P,Nf,V,10.,dif,spc);col=rockAlb(P.xy,aux)*1.15*((L+amb)+dif*reach*.8)+em;
+        vec3 al=rockAlb(P.xy,aux)*1.15;if(uArt>.5){float sc=1./20.;vec4 a=pla(fUV(P,Nf)*sc,Nf,T_RUBBLE,artLod(P,Nf,V,sc),1.,Nf);al=a.rgb/artMean(T_RUBBLE)*lum(uBackB)*3.*mix(vec3(1),uBackB/max(lum(uBackB),1e-3),.4);}
+        pointLights(P,Nf,V,10.,dif,spc);col=al*((L+amb)+dif*reach*.8)+em;
       }else if(m==EMBER){col=em*1.2;}
       else col=em+rockAlb(P.xy,aux)*L;
     }
   }else{
     col=backwall(P.xy)*L2(P.xy)*.1;
   }
+  /* the far view where the cave runs deepest */
+  if(uArt>.5&&uBackOk>0.){float bk=(kd<0?1.:(kd==0&&P.z<-ZP-2.)?smoothstep(-12.,-34.,P.z):0.)*uBackOk;
+    if(bk>0.){vec4 s2=texelFetch(uState,clamp(cH,ivec2(0),ivec2(319,179)),0);int m2=int(s2.r*255.+.5)&127;if(kd==0&&(m2==ROCK||m2==BED||m2==CRYST))bk=0.;
+      vec3 B=backdrop(D);B=mix(vec3(lum(B)),B,.85)*.34*uBackGain+uAmb*uTint*.05;col=mix(col,B,bk);}}
   col=Acc+Tr*col;
   vec4 cl=uVP*vec4(P.x,-P.y,P.z,1.);
   gl_FragDepth=clamp(cl.z/cl.w*.5+.5,0.,1.);

@@ -13,6 +13,11 @@ for name in sorted(glob.glob('*.glsl')):
     tag='/*@@'+os.path.splitext(name)[0].upper()+'@@*/'
     assert tag in code,tag
     code=code.replace(tag,src)
+# the art: every prepared picture in art/, as data the page can decode itself
+import base64,json
+art={os.path.splitext(os.path.basename(f))[0]:'data:image/webp;base64,'+base64.b64encode(open(f,'rb').read()).decode() for f in sorted(glob.glob('art/*.webp'))}
+assert '/*@@ART@@*/{}' in code
+code=code.replace('/*@@ART@@*/{}',json.dumps(art,separators=(',',':')))
 out=shell.replace('/*@@CODE@@*/',code)
 pub=re.sub(r"  window\.__mo=\{.*?\};\n","",out,flags=re.S)
 pub=pub.replace("    if(window.__auto)Object.assign(ctl,autopilot());\n","")
@@ -21,4 +26,4 @@ dst=os.path.join('..','..','games','molten3d.html')
 open(dst,'w').write(pub)
 if '--dev' in sys.argv:
     open(sys.argv[sys.argv.index('--dev')+1],'w').write(out)
-print('built',dst,len(pub),'bytes')
+print('built',dst,len(pub),'bytes',len(art),'pictures')

@@ -40,6 +40,29 @@ float h21(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(
 float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h21(i),h21(i+vec2(1,0)),f.x),mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x),f.y);}
 void cellOf(vec4 s,out int m,out float T){m=int(s.r*255.+.5)&127;T=s.g*2040.-40.;}
 `;
+/* the painted surfaces (2b_art.js loads them): one layer each in two texture arrays, colour with a
+   height in alpha, and the bumps worked out from that height. Sampled at a level of detail set by how far
+   away the surface is, so a ray that lands next to a different material never picks a wrong blur. */
+const GLSL_ART=`precision highp sampler2DArray;
+uniform sampler2DArray uAlb;uniform sampler2DArray uNrm;uniform float uArt;uniform float uPixA;uniform vec3 uEyeW;
+const float T_BASALT=0.,T_STRATA=1.,T_COLUMNS=2.,T_FROST=3.,T_RUBBLE=4.,T_CRYSTAL=5.,T_IRON=6.,T_CRAZE=7.,T_CRUST=8.,T_OBSID=9.,T_PLATE=10.,T_BRICK=11.,T_HAMMER=12.,T_ICE=13.,T_RIME=14.,T_SNOW=15.,T_RIPPLE=16.;
+float artLod(vec3 P,vec3 N,vec3 V,float sc){float ft=length(P-uEyeW)*uPixA/max(abs(dot(N,V)),.3);return max(log2(ft*sc*512.),0.);}
+vec4 artA(vec2 uv,float L,float lod){return textureLod(uAlb,vec3(uv,L),lod);}
+vec3 artN(vec2 uv,float L,float lod){vec2 r=textureLod(uNrm,vec3(uv,L),lod).rg*2.-1.;return vec3(r,sqrt(max(1.-dot(r,r),0.)));}
+float artMean(float L){return max(dot(textureLod(uAlb,vec3(.5,.5,L),9.).rgb,vec3(.3,.55,.15)),.004);}
+/* three projections blended by the facing (whiteout blend for the bumps) */
+vec4 tri(vec3 P,vec3 N,float L,float sc,float lod,float bump,inout vec3 Nb){
+  vec3 w=pow(abs(N),vec3(4.));w/=w.x+w.y+w.z;vec4 a=vec4(0);vec3 nb=vec3(0);
+  if(w.x>.03){vec2 u=P.zy*sc;a+=artA(u,L,lod)*w.x;vec3 t=artN(u,L,lod);t.xy*=bump;nb+=vec3(t.xy+N.zy,abs(t.z)*N.x).zyx*w.x;}
+  if(w.y>.03){vec2 u=P.xz*sc;a+=artA(u,L,lod)*w.y;vec3 t=artN(u,L,lod);t.xy*=bump;nb+=vec3(t.xy+N.xz,abs(t.z)*N.y).xzy*w.y;}
+  if(w.z>.03){vec2 u=P.xy*sc;a+=artA(u,L,lod)*w.z;vec3 t=artN(u,L,lod);t.xy*=bump;nb+=vec3(t.xy+N.xy,abs(t.z)*N.z)*w.z;}
+  float ws=(w.x>.03?w.x:0.)+(w.y>.03?w.y:0.)+(w.z>.03?w.z:0.);
+  Nb=normalize(nb);return a/ws;}
+/* one projection: the face's own plane */
+vec4 pla(vec2 uv,vec3 N,float L,float lod,float bump,inout vec3 Nb){vec4 a=artA(uv,L,lod);vec3 t=artN(uv,L,lod);
+  vec3 b=abs(N.z)>max(abs(N.x),abs(N.y))?vec3(1,0,0):vec3(0,0,1),tg=normalize(cross(cross(N,b),N)),bt=cross(N,tg);
+  Nb=normalize(N*t.z+(tg*t.x+bt*t.y)*bump);return a;}
+`;
 /* MAT: emission and opacity. Every opaque cell glows with the blackbody colour of its own temperature. */
 const FS_MAT=`${GLSL_MATS}
 uniform sampler2D uState;uniform sampler2D uSpr;uniform float uTime;uniform vec3 uCryst;out vec4 o;
@@ -382,7 +405,7 @@ function bindT(unit,t,loc){gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.
 function draw(p,dst,setup){gl.bindFramebuffer(gl.FRAMEBUFFER,dst?dst.f:null);gl.viewport(0,0,dst?dst.w:VW,dst?dst.h:VH);gl.useProgram(p.p);if(setup)setup(p.u);gl.bindVertexArray(VAO);gl.drawArrays(gl.TRIANGLES,0,3);}
 function pass(p,src,dst,setup){draw(p,dst,u=>{bindT(0,src.t,u.uTex);if(setup)setup(u);});}
 /* per-stage colours staged by the game */
-const SU={uMagma:.8,uTime:0,uAmb:.095,uTint:[.5,.45,.6],uBackA:[.05,.045,.06],uBackB:[.11,.09,.1],uCryst:[.2,.6,1],uIce:[.55,.8,.95],uFlashC:[1,.9,.8]};
+const SU={rockL:[0,1,4],cold:0,back:'back0',uMagma:.8,uTime:0,uAmb:.095,uTint:[.5,.45,.6],uBackA:[.05,.045,.06],uBackB:[.11,.09,.1],uCryst:[.2,.6,1],uIce:[.55,.8,.95],uFlashC:[1,.9,.8]};
 let LIGHTT=null,LDIRT=null,LSZ=[W,H];
 /* the 2D passes: light, then the cells' 3D shape */
 function renderGrid(){
@@ -621,6 +644,7 @@ function present(){
     const H_=HEART,Tc=(880+H_.heat*6.6+H_.beat*110+H_.pulse*160)*H_.ign+AMB_T*(1-H_.ign);
     gl.uniform4f(u.uHeart,HX+.5,COREY()+.5,CORER+.25,Tc);gl.uniform4f(u.uHeartFx,H_.frost,H_.ign,H_.beat,H_.cells.length?1:0);
     for(const k of ['uBackA','uBackB','uCryst','uIce'])if(u[k])gl.uniform3fv(u[k],SU[k]);if(u.uSteamQ)gl.uniform1f(u.uSteamQ,LQ);
+    backdropFor(SU.back);setArtU(u);
     gl.bindVertexArray(VAO);gl.drawArrays(gl.TRIANGLES,0,3);}
   gl.depthFunc(gl.LEQUAL);
   /* meshes */

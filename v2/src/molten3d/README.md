@@ -7,7 +7,10 @@ The sequel to Molten, and the 3D version for the V2 arcade. The original stays a
 ```
 python3 v2/src/molten3d/build.py             # writes v2/games/molten3d.html
 python3 v2/src/molten3d/build.py --dev OUT   # also writes OUT, a test build with the window.__mo hooks
+python3 v2/src/molten3d/prep_art.py SRC      # remakes art/ from the original generated images in SRC
 ```
+
+The game is still one file: `build.py` packs every picture in `art/` into it.
 
 ## What's what
 
@@ -15,6 +18,7 @@ python3 v2/src/molten3d/build.py --dev OUT   # also writes OUT, a test build wit
 - `4c_sequel.js` is Part II: skaters, spitters and their frost bolts, bulwarks and their ice roofs, the Caldera's lava vents, three new stages after the Hoar King (the Caldera, the Obsidian Deep, the Winter Throne), the Rime Queen, and the Anvil, where you keep one of three upgrades after each stage.
 - `sculpt.glsl` is the renderer on MED and HIGH. Four jump floods measure how far every cell is from the edge of the rock, the matter (iron, lava, ice), the Rime and the water. A smooth 3D distance field built from those is sphere-traced, which gives rounded rock with crags and magma veins, cast iron that crazes as it cools, lava with a drifting crust, crystal Rime, see-through water, soft shadows from the heart and the lava (HIGH), and light shafts in the steam. A far magma chamber sits behind the cave.
 - `2_gl.js` and `march.glsl` are the first 3D renderer, now the LOW setting. The original's 2D light (radiance cascades) still lights everything. A jump flood gives every cell a depth: rock juts toward you, and open cave recedes behind the play channel. One ray per pixel then walks the grid cell by cell. The crucible, its trolley and the furnace are meshes, and flying matter is drawn as streaks in 3D.
+- `art/` holds the painted surfaces (17 tiles: rock, metal, ice, snow, water) and one backdrop per stage, made from generated images by `prep_art.py` (flattened, made to repeat without a seam, shrunk, saved as WebP). `2b_art.js` decodes them, works out the bumps from each tile's shading, and puts them on the GPU; both renderers paint the cave with them (each stage picks its own stones in `STAGE_ART`), and the deepest part of the cave opens onto the stage's backdrop. Until the art is ready the cave is drawn the old way.
 - `6_view.js` holds the sprites, the LED-dot HUD (anything tied to a place in the cave is projected there), the camera and the frame loop.
 
 ## Cabinet
