@@ -24,6 +24,13 @@ SPEC = {
  30:('sky',2048,''),31:('sky',2048,''),32:('strip',2172,''),33:('strip',2172,''),34:('tex',512,'xy'),
  35:('add',512,''),36:('add',512,''),37:('add',512,''),38:('add',512,''),39:('add',512,''),40:('alpha_white',512,''),41:('alpha_white',512,''),
  42:('add',1024,''),43:('add',512,''),44:('add',1024,''),45:('add',1024,''),46:('face',1024,''),
+ # set 2 (Nov 2026). ref = modelling guide, kept as a master only
+ 47:('ref',0,''),48:('ref',0,''),49:('ref',0,''),50:('ref',0,''),51:('ref',0,''),52:('ref',0,''),
+ 53:('tex',1024,'y'),54:('tex',1024,'xy'),55:('tex',1024,'xy'),56:('tex',1024,'xy'),57:('tex',1024,''),58:('tex',1024,'y'),59:('add',1024,''),
+ 60:('tex',1024,''),61:('tex',1024,''),62:('tex',1024,''),63:('tex',1024,''),64:('tex',1024,'y'),65:('tex',1024,''),66:('tex',1024,'y'),67:('tex',1024,''),
+ 68:('alpha_black',512,''),69:('sky',2048,''),70:('strip',2048,''),71:('face',1024,''),72:('face',1024,''),73:('tex',1024,'y'),74:('alpha_black',1024,''),
+ 75:('tex',1024,'x'),76:('face',1024,''),77:('face',1024,''),78:('face',1024,''),79:('tex',1024,''),80:('sky',2048,''),
+ 81:('tex',1024,''),82:('tex',1024,''),83:('tex',1024,''),84:('tex',1024,''),85:('row',256,''),86:('alpha_white_col',512,''),
 }
 
 def seamless(a, axes):
@@ -50,9 +57,11 @@ def main(src):
         try: num = int(base[:2])
         except ValueError: continue
         name = base[:-4]
+        if num not in SPEC: continue
         kind, size, fix = SPEC[num]
         im = Image.open(f).convert('RGB')
         save(im, os.path.join(MASTERS, name + '.webp'), q=92)
+        if kind == 'ref': continue
         out = os.path.join(GAME, name + '.webp')
         if kind in ('tex', 'face'):
             a = np.asarray(im)
@@ -81,6 +90,27 @@ def main(src):
             alpha = np.clip((245 - l) / 200, 0, 1)
             col = np.clip(a * .55, 0, 255)
             r = Image.fromarray(np.dstack([col, alpha * 255]).astype(np.uint8), 'RGBA'); r.thumbnail((size, size), Image.LANCZOS); save(r, out, q=86)
+        elif kind == 'alpha_white_col':   # coloured cut-out on white (keeps its colour)
+            a = np.asarray(im).astype(np.float32); l = a.min(axis=2)
+            alpha = np.clip((242 - l) / 60, 0, 1)
+            r = Image.fromarray(np.dstack([a, alpha * 255]).astype(np.uint8), 'RGBA'); r.thumbnail((size, size), Image.LANCZOS); save(r, out, q=86)
+        elif kind == 'row':   # a row of icons on black: split at the dark gaps
+            a = np.asarray(im).astype(np.float32); m = a.max(axis=2); colon = m.max(axis=0) > 40
+            runs = []; i = 0
+            while i < len(colon):
+                if colon[i]:
+                    j = i
+                    while j < len(colon) and colon[j]: j += 1
+                    if j - i > 20: runs.append((i, j))
+                    i = j
+                else: i += 1
+            for k, (x0, x1) in enumerate(runs):
+                c = a[:, x0:x1]; mm = c.max(axis=2); ys = np.where(mm.max(axis=1) > 40)[0]; c = c[ys.min():ys.max() + 1]; mm = c.max(axis=2)
+                al = np.clip((mm - 8) / 50, 0, 1); col = np.clip(c / np.maximum(al[..., None], 1e-3), 0, 255)
+                r = Image.fromarray(np.dstack([col, al * 255]).astype(np.uint8), 'RGBA'); r.thumbnail((size, size), Image.LANCZOS)
+                pth = os.path.join(GAME, f'{name}-{k + 1}.webp'); save(r, pth, q=88); total += os.path.getsize(pth)
+            print(name, 'icons', len(runs))
+            continue
         elif kind == 'grid4':
             a = np.asarray(im).astype(np.float32); H, W = a.shape[:2]
             for i, (cy, cx) in enumerate([(0, 0), (0, 1), (1, 0), (1, 1)]):
