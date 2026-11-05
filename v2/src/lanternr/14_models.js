@@ -114,9 +114,10 @@ function actorMeshes2(){
   mb.tube([.0,0,.92],[-.1,0,1.62],.12,.01,6,COL.plain,pl);
   for(let k=0;k<10;k++){const a=(k/9-.5)*3.6+Math.PI,h=vnoise(k*1.7,3.1,4),f=.6+.4*Math.abs(Math.cos((k/9-.5)*Math.PI));mb.tube([Math.cos(a)*.48-.15,Math.sin(a)*.6,.84],[Math.cos(a)*.74-.3,Math.sin(a)*.98,1.22+.3*h*f],.1,.01,6,COL.plain,pl);}
   /* the arms: each curls up out of the water and out, and its tip curls back */
-  for(let j=0;j<11;j++){const a=j/11*TAU+.3;if(Math.cos(a)>.7)continue;const z0=-.7+.55*(j%3)/2,tw=(j%2?1:-1)*.6,cd=j%2?1:-1,pts=[],rs=[];
-    for(let i=0;i<=14;i++){const t=i/14,cu=Math.max(0,(t-.6)/.4),r=1.15+t*1.5-cu*cu*.35,ang=a+tw*t*t+Math.sin(t*4+j)*.1+cd*cu*cu*1.6,z=z0+t*1.25+Math.sin(t*3.1+j)*.12-cu*cu*cu*.45;
-      pts.push([Math.cos(ang)*r,Math.sin(ang)*r*1.08,z]);rs.push(.2*(1-t)+.012);}
+  for(let j=0;j<11;j++){const a=j/11*TAU+.3;if(Math.cos(a)>.7)continue;const z0=-.75+.3*(j%3)/2,pm=2.1+.7*vnoise(j*2.3,1.7,5),sc=.8+.3*vnoise(j*1.1,4.2,6),tw=(j%2?1:-1)*.35,pts=[],rs=[];
+    /* out of the side, up, and over: the tip curls back in, as on the sheet */
+    for(let i=0;i<=14;i++){const t=i/14,ps=t*pm,r=1.05+1.45*sc*Math.sin(ps)*(1-.3*t),z=z0+1.05*sc*(1-Math.cos(ps)),ang=a+tw*t*t+Math.sin(t*5+j)*.06;
+      pts.push([Math.cos(ang)*r,Math.sin(ang)*r*1.08,z]);rs.push(.19*(1-t)+.012);}
     mb.chain(pts,rs,6,COL.plain,pl);}
   AM2.boss=mb.build();
 }
