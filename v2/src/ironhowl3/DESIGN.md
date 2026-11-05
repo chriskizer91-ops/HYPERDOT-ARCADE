@@ -184,13 +184,13 @@ Each session ends with something playable at the same link, so progress can be s
 | 3 ✅ | Combat core: new Blender mech, gun tiers I–IV, heat and vent, shields, missiles, Skitter, Gunner and Hound, pickups, path-finding | A woods sandbox fight |
 | 4 ✅ | Places: field (sun, cloud shadows, farm), docks (container stacks, cranes, water, neon, sunset), woods polish (forest floor, boulders, trail), mech rebuilt from your turnaround | One test map of each kind |
 | 5 ✅ | Missions: objectives, fight zones, checkpoints, briefing and results screens, radio lines, missions 1–4 (arenas also grew 1.6×) | Play the first four missions |
-| 6 | Hangar and saves, scrap, missions 5–8, the Thresher | Two thirds of the campaign |
+| 6 ✅ | Hangar and saves, scrap, missions 5–8, the Thresher (also: spawner pods, the Lancer, rain, Rook's truck) | Two thirds of the campaign |
 | 7 | Missions 9–12, the Stag, the Maw, FORGE, difficulty tuning | The whole campaign |
 | 8 | Polish: sound, radio lines, phone performance pass, attract demo, cabinet contract, Endless | Ready for the cabinet |
 
 Putting it on its cabinet stays a separate step, done only when you say so.
 
-**To continue (here or in a new chat), say:** "Continue Ironhowl 3, session 6 (hangar, missions 5–8)." The build log `v2/src/ironhowl3/NOTES.md` in the repo says what is built, how to test it and what comes next.
+**To continue (here or in a new chat), say:** "Continue Ironhowl 3, session 7 (missions 9–12 and the bosses)." The build log `v2/src/ironhowl3/NOTES.md` in the repo says what is built, how to test it and what comes next.
 
 ## 12. Still open (you can change any of this)
 

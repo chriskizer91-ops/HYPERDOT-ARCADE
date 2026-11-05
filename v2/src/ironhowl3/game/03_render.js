@@ -107,7 +107,8 @@ function horizonRing(texName,height,lift,tint,copies){
   const m=new THREE.MeshBasicMaterial({map:t,transparent:true,side:THREE.BackSide,depthWrite:false,fog:false,color:new THREE.Color(...(tint||[1,1,1]))});
   RING=new THREE.Mesh(g,m);RING.renderOrder=-9;RING.frustumCulled=false;RING.userData.lift=lift;S.add(RING);}
 /* each map sets its own light, sky and fog */
-function applyLook(L){
+let LOOKNOW=null;
+function applyLook(L){LOOKNOW=L;if(L.fogFar){S.fog.far=Math.min(S.fog.far,L.fogFar);S.fog.near=S.fog.far*.22;}
   SUN.set(...L.sun).normalize();KEY.color.set(L.sunCol);KEY.intensity=L.sunK;HEMI.color.set(L.sky);HEMI.groundColor.set(L.ground);HEMI.intensity=L.hemiK;
   SKYU.uZen.value.set(L.zen);SKYU.uHor.value.set(L.hor);S.fog.color.set(L.fog);U.uCloudAmt.value=L.clouds;R.toneMappingExposure=L.exp||1.18;
   if(L.pano){SKYU.tPano.value=tex(L.pano);SKYU.uPano.value=1;SKYU.uPanoK.value=L.panoK||1;}

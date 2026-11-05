@@ -1,8 +1,8 @@
 /* ===================== FORGE machines, path-finding, waves, pickups, damage and score ===================== */
 const EDEF={
-  skitter:{hp:30,r:1.3,cy:1.25,speed:9.5,score:50,drop:.12,file:'skitter',sc:1.4},
-  hound:{hp:95,r:1.7,cy:1.95,speed:8.2,score:150,drop:.4,file:'hound',sc:1.15},
-  gunner:{hp:230,r:1.4,cy:2.7,speed:4.6,score:400,drop:1,file:'gunner',sc:1.05}};
+  skitter:{hp:30,r:1.3,cy:1.25,speed:9.5,score:50,drop:.12,file:'skitter',sc:1.4,scrap:5},
+  hound:{hp:95,r:1.7,cy:1.95,speed:8.2,score:150,drop:.4,file:'hound',sc:1.15,scrap:15},
+  gunner:{hp:230,r:1.4,cy:2.7,speed:4.6,score:400,drop:1,file:'gunner',sc:1.05,scrap:35}};
 const EN=[],EMAT={},ETPL={};
 let ENEMY_READY=false;
 function loadEnemies(){
@@ -76,13 +76,13 @@ function startWave(){
 }
 /* ---- damage ---- */
 function hurtEnemy(e,dmg,x,y,z){if(e.dead)return;e.hp-=dmg;e.flash=1;if(e.hp<=0)killEnemy(e);}
-function killEnemy(e){e.dead=true;S.remove(e.o);e.mat.dispose();
+function killEnemy(e){e.dead=true;S.remove(e.o);if(e.beam)S.remove(e.beam);e.mat.dispose();
   boom(e.x,e.y+e.d.cy,e.z,e.id==='skitter'?.7:e.id==='hound'?1.1:1.5);
   const now=G.t;G.combo=now-G.lastKill<3?G.combo+1:1;G.lastKill=now;const mult=Math.min(3,1+.25*(G.combo-1));
-  addScore(Math.round(e.d.score*mult*(G.hpK||1)));G.kills++;
+  addScore(Math.round(e.d.score*mult*(G.hpK||1)));G.kills++;addScrap(e.d.scrap||10);
   if(Math.random()<e.d.drop)dropPickup(e.x,e.z,e.id==='gunner'&&Math.random()<.55?'chip':null);
 }
-function hurtPlayer(dmg,fx,fz){if(P.dead||G.mode!=='play'&&G.mode!=='demo')return;P.regenT=3;
+function hurtPlayer(dmg,fx,fz){if(P.dead||G.mode!=='play'&&G.mode!=='demo')return;P.regenT=P.regenDelay||3;
   const s=Math.min(P.shield,dmg);P.shield-=s;dmg-=s;if(s>0){sShield();HUD.hit(fx,fz,'s');}
   if(dmg>0){P.hull-=dmg;sHurt();HUD.hit(fx,fz,'h');CAMS.shake=Math.max(CAMS.shake,.3+dmg*.02);}
   if(P.hull<=0){P.hull=0;playerDown();}}
@@ -105,7 +105,7 @@ function updPickups(dt){for(let i=PK.length-1;i>=0;i--){const p=PK[i];p.t+=dt;p.
   if(p.t>p.life){S.remove(p.g);PK.splice(i,1);}}}
 function collect(k){sPickup();
   if(k==='chip'){GUN.tier=Math.min(4,GUN.tier+1);HUD.msg('GUN TIER '+['','I','II','III','IV'][GUN.tier],1.6);}
-  else if(k==='repair'){P.hull=Math.min(P.hullMax,P.hull+35);HUD.msg('REPAIR +35',1.2);}
+  else if(k==='repair'){P.hull=Math.min(P.hullMax,P.hull+UP.repair);HUD.msg('REPAIR +'+UP.repair,1.2);}
   else if(k==='shield'){P.shield=P.shieldMax;HUD.msg('SHIELD FULL',1.2);}
   else if(k==='missile'){MSL.ammo=Math.min(MSL.max,MSL.ammo+6);HUD.msg('MISSILES +6',1.2);}
   else {P.fuel=P.cells;HUD.msg('JET FUEL FULL',1.2);}
@@ -119,7 +119,10 @@ function updEnemies(dt){
     if(e.spawnT>0){e.spawnT-=dt;if(e.spawnT<=0){e.o.visible=true;dustPuff(e.x,e.z,8,e.d.r*.8);}continue;}
     e.t+=dt;e.cd-=dt;e.flash=Math.max(0,e.flash-dt*7);e.mat.emissive.setRGB(e.flash*1.4,e.flash*.5,e.flash*.3);
     const dx=P.x-e.x,dz=P.z-e.z,dist=Math.hypot(dx,dz)||1,face=Math.atan2(-dx,-dz);let mvx=0,mvz=0,sp=e.d.speed,want=face;
-    if(e.id==='skitter'){
+    const tg=truckGoal(e,dist);
+    if(tg){mvx=tg[0];mvz=tg[1];sp=tg[2];if(sp)want=Math.atan2(-mvx,-mvz);}
+    else if(e.id==='lancer'){const r=lancerBrain(e,dt,dist,dx,dz);mvx=r[0];mvz=r[1];sp=r[2];want=face;}
+    else if(e.id==='skitter'){
       if(dist>2.8){const nd=navDir(e.x,e.z);mvx=nd[0];mvz=nd[1];want=Math.atan2(-mvx,-mvz);
         const s=Math.sin(e.t*3+e.phase)*.5;mvx+=-nd[1]*s;mvz+=nd[0]*s;}
       else if(e.cd<=0&&!P.dead){e.cd=1;hurtPlayer(4,e.x,e.z);sZap();sparks(lerp(e.x,P.x,.6),e.y+1.2,lerp(e.z,P.z,.6),6,[.6,.85,1]);}
@@ -159,8 +162,9 @@ function poseEnemy(e,dt,sp){
   else if(e.id==='hound'){const run=Math.min(1,sp/6),aim=e.st==='aim'?1:0;e.body.position.y=1.75-aim*.35+Math.sin(ph*2)*.08*run;e.body.rotation.x=aim*.12;
     e.legs.forEach((L,i)=>{const o=i<2?0:Math.PI*.9,s=Math.sin(ph*2+o+(i%2)*.4);L.up.rotation.x=s*.65*run-aim*.3;L.kn.rotation.x=(i<2?-.35:.35)+Math.cos(ph*2+o)*.4*run;});
     EMAT.ered.color.setRGB(1,.14,.06).multiplyScalar(3.4);}
-  else{const run=Math.min(1,sp/4);e.gp+=dt*sp/1.6;e.hips.position.y=1.9-Math.abs(Math.sin(e.gp*TAU))*.07*run;e.torso.position.y=e.hips.position.y;
+  else{const ln=e.id==='lancer',HY=ln?3.0:1.9,run=Math.min(1,sp/4);e.gp+=dt*sp/(ln?2.2:1.6);e.hips.position.y=HY-Math.abs(Math.sin(e.gp*TAU))*.07*run;e.torso.position.y=e.hips.position.y;
     e.legs.forEach(L=>{let u=(e.gp+(L.sd>0?.5:0))%1;let tz=0,lift=0;const S_=1.2*run;if(u<.5)tz=lerp(-S_/2,S_/2,u/.5);else{const s=(u-.5)/.5;tz=lerp(S_/2,-S_/2,s);lift=Math.sin(Math.PI*s)*.35*run;}
-      legIK(L,-(1.85-.25-lift),tz,0,1,1,false);   /* gunner knees bend forward */});
-    e.armR.rotation.x=e.armL.rotation.x=Math.atan2(P.y+2.6-(e.y+2.85),Math.hypot(P.x-e.x,P.z-e.z))*.9;}
+      if(ln)legIK(L,-(2.95-.2-lift),tz*1.4,0,1.55,1.55,true);   /* the Lancer's knees bend backward */
+      else legIK(L,-(1.85-.25-lift),tz,0,1,1,false);   /* gunner knees bend forward */});
+    e.armR.rotation.x=e.armL.rotation.x=Math.atan2(P.y+(ln?3.2:2.6)-(e.y+(ln?3.55:2.85)),Math.hypot(P.x-e.x,P.z-e.z))*.9;}
 }

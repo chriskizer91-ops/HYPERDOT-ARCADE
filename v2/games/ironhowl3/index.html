@@ -62,6 +62,7 @@ button:active{background:#ffb34733}
 #maps{display:flex;gap:8px;margin-top:6px}#maps button{padding:9px 14px;color:#ffffffaa;border-color:#ffffff33}#maps button.sel{color:#ffb347;border-color:#ffb347;background:#ffb34722}
 #down{background:#000a;z-index:4;cursor:pointer}#down .logo{color:#ff6a4a}
 #obj{font-size:11px;color:#ffd76a;margin-top:3px;text-shadow:0 1px 3px #000;max-width:70vw}
+@media (max-width:640px){#obj{position:absolute;left:50%;transform:translateX(-50%);top:40px;white-space:nowrap;margin:0}#hint{top:calc(max(10px,env(safe-area-inset-top)) + 64px)}#radio{top:calc(max(10px,env(safe-area-inset-top)) + 92px)}}
 #radio{position:fixed;left:50%;top:calc(max(10px,env(safe-area-inset-top)) + 86px);transform:translateX(-50%);max-width:min(560px,80vw);padding:7px 12px;border-radius:8px;background:#000a;font-size:12px;line-height:1.35;color:#eee;opacity:0;transition:opacity .4s;pointer-events:none;letter-spacing:.04em;text-align:left}
 #radio b{margin-right:6px}#radio b.rk{color:#ffb347}#radio b.fg{color:#ff4a3a}
 #wp{display:none;position:fixed;left:0;top:0;margin:-14px 0 0 -14px;pointer-events:none;text-align:center;width:28px}
@@ -69,10 +70,14 @@ button:active{background:#ffb34733}
 #wp span{display:block;margin-top:4px;font-size:10px;color:#cfffff;text-shadow:0 1px 2px #000;white-space:nowrap;margin-left:-20px;width:68px}
 #tbrief{max-width:min(520px,86vw);color:#ffffffd0;font-size:12px;line-height:1.6;letter-spacing:.05em}#tbrief .objs{margin-top:8px;color:#ffd76a;font-size:11px}
 #bmis{padding:11px 22px;font-size:14px}#bmenu{padding:7px 14px;font-size:11px}
-#mlist{background:#000c;z-index:6}#mlist .cards{display:flex;flex-direction:column;gap:8px;width:min(360px,86vw)}
+#mlist{background:#07090cf4;z-index:6}#mlist .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;width:min(540px,90vw);max-height:68vh;overflow:auto}
 .mcard{display:flex;flex-direction:column;gap:4px;align-items:flex-start;padding:12px 14px;text-align:left}.mcard b{color:#ffb347;font-size:14px}.mcard span{color:#ffffffa0;font-size:11px}.mcard.lock{opacity:.4}
 #results{background:#000c;z-index:6}#results .logo.bad{color:#ff6a4a}#rstats{display:flex;flex-direction:column;gap:6px;width:min(320px,80vw)}#rstats div{display:flex;justify-content:space-between;font-size:13px;color:#ffffffb0}#rstats b{color:#fff}
 #results .rb{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px}#results .rb button{padding:11px 16px}
+#hangar{background:#07090cf6;z-index:7;gap:10px}#hscrap{color:#ffd76a;font-size:15px}#hrows{display:flex;flex-direction:column;gap:7px;width:min(460px,92vw);max-height:62vh;overflow:auto}
+.hrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid #ffffff1c;border-radius:9px;background:#ffffff08}
+.hn{display:flex;flex-direction:column;gap:3px;text-align:left}.hn b{color:#ffb347;font-size:13px}.pips{color:#ffd76a;font-size:11px;letter-spacing:.2em}.fx{color:#ffffffa0;font-size:10px}
+.hrow button{white-space:nowrap;padding:8px 10px;font-size:11px}.hrow button[disabled]{opacity:.35}.trow{display:flex;gap:8px}
 #dev{position:fixed;left:12px;top:40px;font:11px monospace;color:#7f7;pointer-events:none;text-shadow:0 0 3px #000}
 </style></head><body>
 <canvas id="gl"></canvas>
@@ -86,10 +91,11 @@ button:active{background:#ffb34733}
 <div id="dev"></div>
 <div id="menu" class="ov"><div class="sub">PAUSED</div><button id="mresume">RESUME</button><button id="mview"></button><button id="mqual"></button><button id="msound"></button><button id="msens"></button><button id="mexit">EXIT</button></div>
 <div id="down" class="ov"><div class="logo">HOWLER DOWN</div><div class="sub" id="dscore"></div><div class="go" id="dgo">TAP TO GO AGAIN</div></div>
-<div id="results" class="ov"><div class="logo" id="rtitle">MISSION COMPLETE</div><div id="rstats"></div><div class="rb"><button id="rnext">NEXT MISSION</button><button id="rretry">PLAY AGAIN</button><button id="rmenu">MENU</button></div></div>
+<div id="results" class="ov"><div class="logo" id="rtitle">MISSION COMPLETE</div><div id="rstats"></div><div class="rb"><button id="rnext">NEXT MISSION</button><button id="rhang">HANGAR</button><button id="rretry">PLAY AGAIN</button><button id="rmenu">MENU</button></div></div>
+<div id="hangar" class="ov"><div class="sub">HANGAR</div><div id="hscrap"></div><div id="hrows"></div><button id="hback">DONE</button></div>
 <div id="mlist" class="ov"><div class="sub">MISSIONS</div><div class="cards"></div><button id="mlback">BACK</button></div>
 <div id="title" class="ov"><div class="logo">IRONHOWL 3</div><div class="sub" id="tsub">SANDBOX · PICK A PLACE</div><div id="tbrief"></div>
-  <button id="bmis">MISSIONS</button><div id="maps"><button data-map="woods">WOODS</button><button data-map="field">FIELD</button><button data-map="docks">DOCKS</button></div><button id="bmenu" style="display:none">MENU</button>
+  <div class="trow"><button id="bmis">MISSIONS</button><button id="bhang">HANGAR</button></div><div id="maps"><button data-map="woods">WOODS</button><button data-map="field">FIELD</button><button data-map="docks">DOCKS</button></div><button id="bmenu" style="display:none">MENU</button>
   <div class="go" id="tgo">CLICK OR TAP TO START</div>
   <div class="keys desk">WASD MOVE · MOUSE AIM · CLICK FIRE · RIGHT CLICK MISSILES · Q SALVO · R VENT · SPACE JET HOP · V CAMERA</div>
   <div class="keys tch">LEFT THUMB MOVES · RIGHT THUMB AIMS · HOLD FIRE AND DRAG IT TO AIM · PLAY SIDEWAYS</div></div>

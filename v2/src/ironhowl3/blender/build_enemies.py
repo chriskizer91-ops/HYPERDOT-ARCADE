@@ -1,4 +1,4 @@
-"""FORGE machines: skitter, hound, gunner. Run: <venv>/python build_enemies.py OUTDIR
+"""FORGE machines: skitter, hound, gunner, lancer. Run: <venv>/python build_enemies.py OUTDIR
 Dark metal with red eyes and FORGE's gear emblem. Materials: egrey egun edark esteel ered emblem.
 Joints the game moves: skitter body leg0..leg3 | hound body head legFL legFR legBL legBR (+ kneeXX) | gunner hips thigh_L/R knee_L/R ankle_L/R torso armL armR mzL mzR."""
 import sys, os, math
@@ -84,7 +84,53 @@ def gunner():
         t.rotation_euler.x = .35; k.rotation_euler.x = -.7; a.rotation_euler.x = .35
     bake_ao(.45, 16); return stats()
 
+def lancer():
+    """tall sniper walker with a rail gun; same joints as the gunner, knees bend backward"""
+    reset(); M = mats(); root = node('lancer'); hp = node('hips', (0, 0, 3.0), root)
+    box('pelvis', (.8, .6, .4), (0, 0, 0), hp, M['k'], .06)
+    legs = []
+    for sd in (-1, 1):
+        s = 'L' if sd < 0 else 'R'
+        t = node('thigh_' + s, (sd * .48, 0, -.05), hp)
+        box('th' + s, (.3, .36, 1.55), (0, 0, -.78), t, M['k'], .06, bot=(.7, .8))
+        box('thp' + s, (.07, .32, .9), (sd * .18, 0, -.6), t, M['g'], .02)
+        box('ths' + s, (.08, .05, .7), (sd * .19, .17, -.6), t, M['r'], .01)
+        k = node('knee_' + s, (0, 0, -1.55), t)
+        cyl('kj' + s, .17, .4, (0, 0, 0), k, M['d'], seg=12, axis='x')
+        box('sh' + s, (.24, .28, 1.55), (0, 0, -.78), k, M['g'], .05, bot=(.75, .75))
+        strut('pis' + s, (0, -.2, -.15), (0, -.12, -1.2), .05, k, M['s'], seg=6)
+        a = node('ankle_' + s, (0, 0, -1.55), k)
+        box('ft' + s, (.42, .95, .16), (0, .2, -.1), a, M['k'], .04)
+        for x in (-.12, .12): box('toe%s%s' % (s, x), (.1, .32, .12), (x, .78, -.12), a, M['d'], .02, top=(.6, .8))
+        box('heel' + s, (.16, .3, .12), (0, -.36, -.1), a, M['d'], .02)
+        legs.append((t, k, a))
+    to = node('torso', (0, 0, 3.0), root)
+    box('hull', (1.1, 1.3, .75), (0, 0, .5), to, M['g'], .1, top=(.85, .8))
+    box('pack', (.9, .6, .6), (0, -.85, .55), to, M['k'], .06)
+    slats('vents', 3, (.6, .04, .07), .14, (0, -1.16, .55), to, M['r'], axis='z')
+    box('head', (.66, .95, .32), (0, .45, 1.05), to, M['k'], .06, top=(.8, .75), shift=(0, .08))
+    box('visor', (.5, .06, .07), (0, .93, 1.07), to, M['r'], .015)
+    box('brow', (.72, .3, .08), (0, .7, 1.25), to, M['g'], .02)
+    strut('ant', (-.25, -.1, 1.2), (-.3, -.25, 2.1), .025, to, M['s'], seg=5)
+    decal('emb', .5, .5, (0, 0, 1, 1), (0, .66, .6), to, M['e'], (0, 0, math.pi))
+    ar = node('armR', (.72, .15, .55), to)
+    cyl('shR', .22, .34, (0, 0, 0), ar, M['d'], seg=12, axis='x')
+    box('rail', (.28, 3.4, .34), (.14, 1.4, -.12), ar, M['k'], .05)
+    box('railTop', (.2, 2.8, .1), (.14, 1.6, .1), ar, M['g'], .02)
+    box('railGlow', (.05, 2.8, .07), (.3, 1.5, -.08), ar, M['r'], .01)
+    box('scope', (.14, .6, .16), (.14, .5, .24), ar, M['d'], .02)
+    cyl('brR', .09, 1.3, (.14, 3.7, -.1), ar, M['s'], seg=10, axis='y'); cyl('mbR', .15, .3, (.14, 4.35, -.1), ar, M['d'], seg=10, axis='y')
+    node('mzR', (.14, 4.55, -.1), ar)
+    al = node('armL', (-.72, .15, .55), to)
+    cyl('shL', .2, .3, (0, 0, 0), al, M['d'], seg=12, axis='x')
+    box('pod', (.34, .7, .34), (0, .3, -.1), al, M['k'], .04)
+    box('podEye', (.2, .04, .1), (0, .66, -.06), al, M['r'], .01)
+    node('mzL', (0, .7, -.1), al)
+    for t, k, a in legs:
+        t.rotation_euler.x = -.45; k.rotation_euler.x = .9; a.rotation_euler.x = -.45
+    bake_ao(.5, 16); return stats()
+
 if __name__ == '__main__':
     out = sys.argv[-1]
-    for fn in (skitter, hound, gunner):
+    for fn in ([globals()[a] for a in sys.argv[1:-1] if a in globals()] or (skitter, hound, gunner, lancer)):
         t = fn(); p = os.path.join(out, fn.__name__ + '.glb'); export(p); print(fn.__name__, 'tris', t, 'KB', os.path.getsize(p) // 1024)

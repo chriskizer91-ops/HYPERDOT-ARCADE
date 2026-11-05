@@ -14,8 +14,8 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
   - Headless Chrome here takes about a second per drawn frame, so always move time with `ff()` and only wait for screenshots.
   - `__ih3.info()` returns calls, triangles, position, fuel and hops. `__ih3.VEGN.by` gives triangles per vegetation kind and level of detail.
 - Cabinet check: `python3 v2/src/ironhowl3/tools/embed_check.py`. It uses `tools/embed_check.html`, loads the game in an iframe and sends start, pause, resume, mute, unmute and attract.
-- Models: `blender/build_howler.py` (the player's mech) and `blender/build_enemies.py` (skitter, hound, gunner) build the GLBs in `games/ironhowl3/models/mech/`. They use the small kit in `blender/lib.py` (chamfered boxes, cylinders, struts, slats, hoses, decal quads, ambient-occlusion bake into vertex colours, glTF export).
-  - Blender's Python module: `python3.13 -m venv bvenv && bvenv/bin/pip install bpy==5.2.3`, then `bvenv/bin/python blender/build_howler.py <repo>/v2/games/ironhowl3/models/mech/howler07.glb` and `bvenv/bin/python blender/build_enemies.py <repo>/v2/games/ironhowl3/models/mech`.
+- Models: `blender/build_howler.py` (the player's mech) `blender/build_enemies.py` (skitter, hound, gunner, lancer) and `blender/build_set6.py` (truck, thresher) build the GLBs in `games/ironhowl3/models/mech/`. They use the small kit in `blender/lib.py` (chamfered boxes, cylinders, struts, slats, hoses, decal quads, ambient-occlusion bake into vertex colours, glTF export).
+  - Blender's Python module: `python3.13 -m venv bvenv && bvenv/bin/pip install bpy==5.2.3`, then `bvenv/bin/python blender/build_howler.py <repo>/v2/games/ironhowl3/models/mech/howler07.glb` and `bvenv/bin/python blender/build_enemies.py [names...] <repo>/v2/games/ironhowl3/models/mech` (give names such as `lancer` to rebuild only those; same for `build_set6.py truck`).
   - `blender/render_preview.py build_howler out.png` renders four quick views.
   - Empties are the joints. Their rotations are zeroed at export (the bake pose is only for the shading).
   - Material names are matched in the game (`MECH_MAT` in 05_mech, `EMAT` in 06c).
@@ -35,6 +35,9 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
 | 06b_weapons | Autocannon tiers I–IV, heat and overheat, VENT (dumps heat, shoves enemies), missiles (salvo of 2, homing), bolts, hit tests (`segSphere`, `treeAt`, ground), crosshair ray with aim assist (`rayAim`), sparks and explosions. |
 | 06c_enemies | Loads the three enemy GLBs, flow-field path-finding on a 2 m grid (`navBuild`/`navDir`), line-of-sight test, brains (skitter swarms and zaps, hound aims then charges, gunner keeps 24–42 m, strafes and fires bursts), waves spawned 55–80 m ahead with red beacons, damage, score with combo, pickups. |
 | 06_player | Hull 100 and shield 60 (back after 3 s, 22/s). Movement: walk 7.5 m/s, jet hop (vh 21 m/s, vy 9.5 m/s, hold to float, 2 fuel cells, 3.6 s per cell), tree collision, map edge, legs face the walking direction (backwards when walking back). |
+| 06d_missions | Mission list and looks (`NIGHT_DOCKS`, `DUSK_FIELD`, `RAIN_DOCKS`, `FOG_CREEK`, `HAZE_DRY`), steps, targets, checkpoints, radio, results. What a step builds is kept in `MS.built[step]`, so a repair does not rebuild (or bring back) what you already destroyed. |
+| 06e_hangar | Six upgrade tracks (`UPG`), costs 150/300/500/800/1200 scrap, `applyUpgrades()` (called at the start of a run and after a repair), the hangar screen. |
+| 06f_more | Session 6 pieces: spawner pods, the Lancer brain, rain, Rook's truck (`loadSet6`, `truckModel`, escort), the Thresher boss (`makeThresher`, `bossStep`, `bossIdle`, mortar warning discs). |
 | 07_fx | One particle system (smoke blends, glow adds, using premultiplied alpha). Sounds made on the fly: steps, jet, landing, no-fuel click, birds, wind. |
 | 08_camera | The two follow cameras (see below), portrait step-back, camera stays above the terrain, shake, FOV kick on hops. |
 | 09_hud | DOM HUD. Top left: shield, hull, jets, gun tier, missiles. Top middle: score and combo. Crosshair with heat bar, hit marker, messages, wave banner, damage arcs, edge arrows for unseen machines (60 m). Phone: FIRE (hold and drag to aim), JET, MSL, VENT. Pause menu. |
@@ -120,6 +123,7 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
   - Art processed (46 images → 49 files, 8.2 MB).
   - Forest pack stored with its catalog, three.js bundle built.
   - `DESIGN.md` written; `preview.html` is the first look.
+- **Session 6 (5 Nov 2026):** hangar and scrap, missions 5–8, spawner pods, the Lancer, rain, Rook's truck model and escort, the Thresher boss.
 - **Session 5 (5 Nov 2026):** arenas 1.6× bigger, mission system and missions 1–4.
 - **Session 4b (5 Nov 2026):** after his playtest: longer jet hops, aim down at your feet, the SALVO auto-aim burst. Q and E no longer turn (the arrows still do).
 - **Session 4 (5 Nov 2026):** image set 2 processed, Howler 07 rebuilt from his turnaround sheet, and the woods, field and docks maps with a map picker.
@@ -213,7 +217,64 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
 - Tested: mission 1 played through in fast-forward (all steps, a fall and checkpoint repair, the results screen); mission 3's guard step finishes after 60 s.
 - Not done yet: the Hornet and Tank enemies from the plan, a real model for Rook's truck (a box stand-in for now), a storm or rain effect for mission 4.
 
-## Next: session 6
+## Done in session 6 (hangar, missions 5–8, the Thresher)
+
+- **Scrap and hangar** (`06e_hangar.js`). Scrap only counts in missions: Skitter 5, Hound 15, Gunner 35, Lancer 40, each target 40, a win 150 + 25 per repair left. It is banked at the results screen (`SAVE.scrap`).
+  - Tracks, 5 levels each, cost 150 / 300 / 500 / 800 / 1200:
+    - GUN: start tier II, III, IV, then +15% and +30% damage.
+    - COOLING: less heat per shot, faster cooling, a shorter vent wait.
+    - SHIELD: 80 → 160, faster recharge.
+    - MISSILES: bigger salvo (3 → 8) and more ammo.
+    - JETS: 3 cells, faster refill, stomp landing, 4 cells, SALVO every 8 s.
+    - HULL: 120 → 200, bigger repairs.
+  - Save: `hd-ironhowl3-save` = {unlocked, best, scrap, upg:{id:level}}. HANGAR is on the title screen and the results screen.
+- **New pieces:**
+  - **Spawner pods:** targets with 320 HP that print 2 Skitters every 8.5 s, with no more than 16 machines alive at once.
+  - **Lancer** (`models/mech/lancer.glb`, from sheet 50):
+    - 170 HP. It stays 46–85 m away.
+    - It paints you with a red line for 1.6 s, and the line locks 0.3 s before the shot. The shot does 26 damage, but you dodge it by moving about 3 m, hopping, or breaking line of sight, which drains the charge.
+    - Tested: standing still takes 26, moving 5 m at the end takes 0.
+  - **Rain:** 3,000 thin crossed strips in two stacked layers that follow the camera.
+  - **Rook's truck** (`models/mech/truck.glb`, from sheet 52): 7.6k triangles, 6 spinning wheels and a crane. It is also used for missions 1 and 3; mission 3 uses a burnt version.
+  - **The Thresher** (`models/mech/thresher.glb`, from sheet 51):
+    - 13.8k triangles, about 16 m tall.
+    - Four red knees (420 HP each) are the weak points. Each knee lost lowers it; with all four gone it drops, the hatch opens and the core (1400 HP) shows.
+    - The blade drum hurts anything in front of it. Mortar volleys put red discs on the ground, and the shells land 1.7 s later. It adds Skitters every 14–20 s.
+    - The feet push you away, but you can walk under its belly.
+- **Missions:**
+  5. Container Maze: docks in rain (`RAIN_DOCKS`, fog at 150 m). Destroy 4 spawner pods, then reach the crane.
+  6. Creekbed: woods with willows and reeds (mix `creek`), fog at 105 m.
+     - Escort the truck along a 9-point route, about 290 m. The truck has 700 HP.
+     - The truck drives only while you are within 35 m and nothing is within 9 m of it.
+     - About half of each wave goes for the truck unless you are within 16 m of them.
+     - A repair puts you 10 m behind the truck and patches it to at least 50%.
+  7. Dust Devil: field in dry country (ground `61-dry-prairie-ground`, mesquite and dry grass, sun behind you). Find the Thresher, then bring it down.
+  8. Tanker Run: docks at sunset. Cut 3 mooring winches within 4:00, with Lancers and Skitters in the way. The timer shows on the objective line; out of time means the mission is lost.
+- **Fixes:**
+  - A repair used to rebuild the step's targets, which brought destroyed gate controls and masts back. They now stay destroyed.
+  - Hangar and mission list backgrounds are near-opaque, and the mission list scrolls.
+  - On phones the objective line sits on its own row under the top bar.
+- **Tested headless** (fast-forward):
+  - Hangar purchases and their effects: GUN 2 means start at tier III, SHIELD 1 gives shield 80, JETS 1 gives 3 cells.
+  - Mission 5: the pods print Skitters, and destroying them moves to the next step.
+  - Mission 6: the truck drives to the end and the mission completes (79 s with the waves cleared).
+  - Mission 7: knees → core → MISSION COMPLETE.
+  - Mission 8: the Lancer shot hits or is dodged, and running out of time fails the mission.
+  - Mission 2 repair: a destroyed console stays destroyed.
+  - Cabinet check passes.
+- **Numbers (High, headless):**
+  - Mission 5: about 210–340 draw calls with 12–16 machines.
+  - Mission 7 with the boss: about 190–280 calls and 290k triangles.
+  - Game logic per tick: 0.26 ms (mission 5) and 0.81 ms (mission 7).
+- **Not done:** Hornet, Tank, Mortar crawler and Bulwark (sheet 50) are still to come. There is no lightning or storm in mission 4 yet. The tanker does not visibly sail away.
+
+## Next: session 7
+
+- Missions 9–12: Burning Pines (woods at night, fire, the Stag), Storm Front (field, lightning, hold 3 points), Lockdown (docks crane yard at night, the Maw), Heart of the Forge (Foundry 4, FORGE).
+- Enemies from sheet 50: Hornet (flying), Tank, Mortar crawler, Bulwark (shield). Bosses from sheet 51: the Stag, the Maw, FORGE.
+- Difficulty tuning across all 12 missions.
+
+## (old) session 6 plan
 
 - Hangar between missions: scrap from wrecks, six upgrade tracks, saves.
 - Missions 5–8, and the Thresher boss.

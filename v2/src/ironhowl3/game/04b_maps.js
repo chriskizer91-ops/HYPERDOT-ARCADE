@@ -27,7 +27,7 @@ woods:{name:'WOODS',mix:'woods',spawn:{x:0,z:112,yaw:0},
   ground:{a:'81-forest-floor',ar:6,b:'82-mossy-ground-with-roots',br:7,c:'06-dirt-and-gravel',cr:4.6,
     w(x,z){return [smooth(.45,.62,fbm(x*.03+5,z*.03-2,3)),smooth(5.5,3,trailD(x,z))*.5];}},
   look:{sun:[-.42,.62,-.66],sunCol:0xfff0d6,sunK:3.1,sky:0xd6e4ff,ground:0x6a5a44,hemiK:1.55,zen:0x2a5fb4,hor:0xb3c8de,fog:0xb3c8de,clouds:.75},
-  layout(rnd,mixId){const mix=biome(mixId);
+  layout(rnd,mixId){const mix=mixId==='creek'?{tree:{tree_willow:2,tree_cottonwood:1.4,tree_spruce:2.2,tree_aspen:1.2},grass:{grass_reeds:1.4,grass_meadow:2,grass_dry:.4}}:biome(mixId);
     for(let gx=-WORLD+4;gx<WORLD-4;gx+=7.5)for(let gz=-WORLD+4;gz<WORLD-4;gz+=7.5){
       const x=gx+(rnd()-.5)*6.5,z=gz+(rnd()-.5)*6.5,e=Math.max(Math.abs(x),Math.abs(z)),td=trailD(x,z),cd=clearD(x,z);
       if(Math.hypot(x-SPAWN.x,z-SPAWN.z)<13||td<6.5||cd<0)continue;
@@ -48,14 +48,16 @@ field:{name:'FIELD',mix:'meadow',spawn:{x:0,z:115,yaw:0},
     w(x,z){let b=0,c=0;for(const r of MAPS.field.crops){const k=rectW(x,z,r,1.6);if(r[4]==='b')b=Math.max(b,k);else c=Math.max(c,k);}return [b,c];}},
   look:{sun:[-.35,.78,-.5],sunCol:0xfff4e2,sunK:3.3,sky:0xdbe9ff,ground:0x6f6a4a,hemiK:1.6,zen:0x2f6fd0,hor:0xc6daf0,fog:0xc4d6ea,clouds:.55,
     pano:'69-daytime-field-sky',ring:{tex:'70-distant-hills',h:70,lift:-10,tint:[.9,.95,1],copies:3},exp:1.12},
-  layout(rnd,mixId){const mix=biome('meadow'),cropAt=(x,z)=>MAPS.field.crops.some(r=>rectW(x,z,r,3)>0),farmD=(x,z)=>Math.hypot(x-67,z-54);
+  layout(rnd,mixId){const dry=mixId==='dry',HEDGE=dry?{tree_mesquite:3,tree_snag:.5}:{tree_oak:3,tree_cottonwood:1.5,tree_willow:.6},LONE=dry?{tree_mesquite:3,tree_snag:.6,tree_ponderosa:.5}:{tree_oak:3,tree_cottonwood:1.5,tree_aspen:.8},
+      FAR=dry?{tree_mesquite:2,tree_ponderosa:1.5,tree_snag:.6}:{tree_oak:2,tree_cottonwood:1,tree_ponderosa:1.5,tree_spruce:1},GRASS=dry?{grass_dry:3,grass_meadow:.3}:{grass_meadow:3,grass_dry:1.2},
+      mix=biome('meadow'),cropAt=(x,z)=>MAPS.field.crops.some(r=>rectW(x,z,r,3)>0),farmD=(x,z)=>Math.hypot(x-67,z-54);
     /* hedgerow trees along the crop edges and the far hills, a few loners in the meadow */
     for(const r of MAPS.field.crops)for(let t=0;t<1;t+=.06){const side=(t*4)|0,f=(t*4)%1,x=side===0?lerp(r[0],r[2],f):side===2?lerp(r[2],r[0],f):side===1?r[2]+2.5:r[0]-2.5,
-      z=side===0?r[1]-2.5:side===2?r[3]+2.5:side===1?lerp(r[1],r[3],f):lerp(r[3],r[1],f);if(rnd()<.55&&trailD(x,z)>7&&farmD(x,z)>18)plant(pickW({tree_oak:3,tree_cottonwood:1.5,tree_willow:.6},rnd),'tree',x,z,.8+rnd()*.35,rnd);}
+      z=side===0?r[1]-2.5:side===2?r[3]+2.5:side===1?lerp(r[1],r[3],f):lerp(r[3],r[1],f);if(rnd()<.55&&trailD(x,z)>7&&farmD(x,z)>18)plant(pickW(HEDGE,rnd),'tree',x,z,.8+rnd()*.35,rnd);}
     for(let i=0;i<1400;i++){const x=(rnd()-.5)*2*(WORLD-8),z=(rnd()-.5)*2*(WORLD-8),e=Math.max(Math.abs(x),Math.abs(z));
-      if(e<PLAY+4&&rnd()>.04)continue;if(trailD(x,z)<8||cropAt(x,z)||farmD(x,z)<22||Math.hypot(x-SPAWN.x,z-SPAWN.z)<14)continue;plant(pickW(e>PLAY?{tree_oak:2,tree_cottonwood:1,tree_ponderosa:1.5,tree_spruce:1}:{tree_oak:3,tree_cottonwood:1.5,tree_aspen:.8},rnd),'tree',x,z,.8+rnd()*.4,rnd);}
-    for(let i=0;i<22000;i++){const x=(rnd()-.5)*2*(PLAY+14),z=(rnd()-.5)*2*(PLAY+14);if(trailD(x,z)<3||cropAt(x,z)||farmD(x,z)<14)continue;plant(pickW({grass_meadow:3,grass_dry:1.2},rnd),'grass',x,z,.8+rnd()*.8,rnd);}
-    for(let i=0;i<260;i++){const x=(rnd()-.5)*2*PLAY,z=(rnd()-.5)*2*PLAY;if(trailD(x,z)<5||cropAt(x,z)||farmD(x,z)<16)continue;plant(rnd()<.6?'bush_sage':'bush_oleander','bush',x,z,.9+rnd()*.6,rnd);}
+      if(e<PLAY+4&&rnd()>.04)continue;if(trailD(x,z)<8||cropAt(x,z)||farmD(x,z)<22||Math.hypot(x-SPAWN.x,z-SPAWN.z)<14)continue;plant(pickW(e>PLAY?FAR:LONE,rnd),'tree',x,z,.8+rnd()*.4,rnd);}
+    for(let i=0;i<22000;i++){const x=(rnd()-.5)*2*(PLAY+14),z=(rnd()-.5)*2*(PLAY+14);if(trailD(x,z)<3||cropAt(x,z)||farmD(x,z)<14)continue;plant(pickW(GRASS,rnd),'grass',x,z,.8+rnd()*.8,rnd);}
+    for(let i=0;i<260;i++){const x=(rnd()-.5)*2*PLAY,z=(rnd()-.5)*2*PLAY;if(trailD(x,z)<5||cropAt(x,z)||farmD(x,z)<16)continue;plant(dry?(rnd()<.7?'bush_sage':'bush_pricklypear'):rnd()<.6?'bush_sage':'bush_oleander','bush',x,z,.9+rnd()*.6,rnd);}
     propsAlong(rnd,['prop_mailbox','prop_tires','prop_drum','prop_icechest'],5.8);},
   build(){const rnd=mulberry(91);ribbon(TRAIL,7.5,'62-farm-track',10);
     const F=MAPS.field.farm,y=hgt(F.x,F.z);

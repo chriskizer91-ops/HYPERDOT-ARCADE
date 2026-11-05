@@ -2,10 +2,10 @@
 let NIGHT_ON=false;
 const G={mode:'load',paused:false,t:0,fdt:1/60,birdT:6,perf:{t:0,n:0,s:0},demoI:1,demoHop:4,score:0,kills:0,combo:0,lastKill:-9,wave:0,hpK:1,breakT:3,downT:0};
 let M=null,CTLX=null;
-function setQuality(q){QL=q;QC=QUAL[q];DYN=1;resize();setShadow();S.fog.near=QC.fog*.22;S.fog.far=QC.fog;}
+function setQuality(q){QL=q;QC=QUAL[q];DYN=1;resize();setShadow();S.fog.far=Math.min(QC.fog,LOOKNOW&&LOOKNOW.fogFar||1e9);S.fog.near=S.fog.far*.22;}
 function cycleView(){SET.view=SET.view==='close'?'far':'close';store.set('view',SET.view);HUD.view(SET.view);}
 function setPause(b){G.paused=b;HUD.menu();setVolume();if(!b&&!touchy&&G.mode==='play')lockMouse();if(b)jetLoop(0);}
-function clearFight(){for(const e of EN)S.remove(e.o);EN.length=0;BOLTS.length=EBOLTS.length=MISS.length=BEACONS.length=0;for(const p of PK)S.remove(p.g);PK.length=0;}
+function clearFight(){for(const e of EN){S.remove(e.o);if(e.beam)S.remove(e.beam);}bossClearMarks();EN.length=0;BOLTS.length=EBOLTS.length=MISS.length=BEACONS.length=0;for(const p of PK)S.remove(p.g);PK.length=0;}
 function resetRun(){P=mkPlayer();CAMS.ready=false;clearFight();Object.assign(GUN,{tier:GUN.base,heat:0,over:false,cd:0,ventCd:0});MSL.ammo=12;SALVO.cd=0;SALVO.left=0;
   Object.assign(G,{score:0,kills:0,combo:0,lastKill:-9,wave:0,hpK:1,breakT:3});if(M)M.root.visible=true;$('down').style.display='none';}
 function playerDown(){if(P.dead)return;P.dead=true;P.thrust=0;boom(P.x,P.y+2.5,P.z,2);boom(P.x+1,P.y+3.5,P.z-1,1.2);if(M)M.root.visible=false;
@@ -14,7 +14,7 @@ function playerDown(){if(P.dead)return;P.dead=true;P.thrust=0;boom(P.x,P.y+2.5,P
   $('dgo').textContent='TAP TO GO AGAIN';const best=+store.get('best',0);if(G.score>best)store.set('best',G.score);
   $('dscore').textContent='SCORE '+G.score.toLocaleString('en-US')+'  ·  WAVE '+G.wave+'  ·  BEST '+Math.max(best,G.score).toLocaleString('en-US');
   ARC.over(G.score,Math.min(60,Math.floor(G.score/400)+G.wave));}
-function startPlay(){audioInit();resetRun();G.mode='play';G.paused=false;$('title').style.display='none';$('mlist').style.display='none';HUD.menu();ARC.begin();if(MISSION)startMission();
+function startPlay(){audioInit();resetRun();applyUpgrades();G.mode='play';G.paused=false;$('title').style.display='none';$('mlist').style.display='none';HUD.menu();ARC.begin();if(MISSION)startMission();
   if(!touchy){lockMouse();HUD.hint('WASD MOVE · MOUSE AIM · SPACE JET HOP · V CAMERA · ESC PAUSE',9);}else HUD.hint('LEFT THUMB MOVES · RIGHT THUMB AIMS · JET TO HOP',7);}
 function startDemo(){resetRun();G.mode='demo';G.paused=false;G.demoI=1;$('title').style.display='none';HUD.menu();}
 /* attract mode: walk the trail, hop now and then */
@@ -35,7 +35,7 @@ function jetFX(dt){if(P.thrust<.05)return;for(const J of M.jets){J.n.getWorldPos
   const k=P.thrust;if(Math.random()<k*dt*60)part({x:_np.x,y:_np.y-.4,z:_np.z,vx:(Math.random()-.5)*2,vy:-6-Math.random()*4,vz:(Math.random()-.5)*2,life:.25+Math.random()*.15,s0:.9,s1:.35,a:1.4*k,col:[1,.55,.22],glow:true,drag:2});
   if(Math.random()<k*dt*30)part({x:_np.x,y:_np.y-.6,z:_np.z,vx:(Math.random()-.5)*1.5,vy:-3-Math.random()*2,vz:(Math.random()-.5)*1.5,life:1.2+Math.random()*.8,s0:.8,s1:3.4,a:.3,col:SMOKE,drag:1.6,grav:-.6});}}
 function tick(dt){
-  G.t+=dt;U.uTime.value=G.t;if(MAPDEF.tick)MAPDEF.tick(dt);if(RING)RING.position.set(cam.position.x,cam.position.y+RING.userData.lift,cam.position.z);
+  G.t+=dt;U.uTime.value=G.t;if(MAPDEF.tick)MAPDEF.tick(dt);updRain(dt);if(RING)RING.position.set(cam.position.x,cam.position.y+RING.userData.lift,cam.position.z);
   /* the clouds drift; their shadows slide over the ground with them */
   U.uCloudOff.value.x+=dt*.0016;U.uCloudOff.value.y+=dt*.0007;
   const live=(G.mode==='play'||G.mode==='demo')&&!G.paused;
@@ -78,7 +78,8 @@ function boot(){
   buildGround();const before=new Set(S.children);MAPDEF.build();mergeStatic(before);M=buildMech();buildFX();buildWeapons();P=mkPlayer();
   const done=()=>{G.mode=G.mode==='load'?'title':G.mode;$('load').style.display='none';$('title').style.display=G.mode==='title'?'flex':'none';document.title='IRONHOWL 3';ARC.post('ready',{title:ARC.title});};
   let vegDone=false,texDone=false;LM.onLoad=()=>{texDone=true;if(vegDone)done();};
-  Promise.all([loadVeg(MAPDEF.mix),loadEnemies()]).then(()=>{navInit();navBuild();vegDone=true;if(texDone||LOADP>=1)done();});
+  if(LK.rain)buildRain();
+  Promise.all([loadVeg(MAPDEF.mix),loadEnemies().then(loadSet6)]).then(()=>{navInit();navBuild();vegDone=true;if(texDone||LOADP>=1)done();});
   requestAnimationFrame(frame);
 }
 $('title').addEventListener('click',()=>{if(G.mode==='title')startPlay();});
@@ -96,7 +97,7 @@ addEventListener('message',e=>{const m=e.data;if(!m||m.src!=='hyperdot-arcade')r
   else if(m.cmd==='mute'){ARC.muted=true;setVolume();}
   else if(m.cmd==='unmute'){ARC.muted=false;setVolume();}
 });
-if(DEV)window.__ih3={S,KEY,SKY,PFX,GUN,MSL,SALVO,MS,MISSION,TARGETS,hurtTarget,beginStep,finishMission,repairAtCheckpoint,EN,PK,AIM,startWave,spawnEnemy,dropPickup,hurtPlayer,rt(n=3){const t0=performance.now();for(let i=0;i<n;i++){R.render(S,cam);R.getContext().finish();}return +((performance.now()-t0)/n).toFixed(1);},G,get P(){return P;},get M(){return M;},VEG,get VEGN(){return VEGN;},R,cam,CAMS,SET,QUAL,setQuality,cycleView,startPlay,startDemo,setPause,
+if(DEV)window.__ih3={BOSS,MISSIONS,spawnGroup,makeTruck,get TRUCK_TPL(){return TRUCK_TPL;},SAVE,UPG,buyUpg,applyUpgrades,hangar,S,KEY,SKY,PFX,GUN,MSL,SALVO,MS,MISSION,TARGETS,hurtTarget,beginStep,finishMission,repairAtCheckpoint,EN,PK,AIM,startWave,spawnEnemy,dropPickup,hurtPlayer,rt(n=3){const t0=performance.now();for(let i=0;i<n;i++){R.render(S,cam);R.getContext().finish();}return +((performance.now()-t0)/n).toFixed(1);},G,get P(){return P;},get M(){return M;},VEG,get VEGN(){return VEGN;},R,cam,CAMS,SET,QUAL,setQuality,cycleView,startPlay,startDemo,setPause,
   ctl(o){CTLX=o;},showcase(o){CAMX=o;},
   /* run the game forward t seconds at 60 steps a second without drawing (for tests) */
   ff(t){const n=Math.round(t*60);for(let i=0;i<n;i++)tick(1/60);},
@@ -111,6 +112,7 @@ function setupTitle(){
   $('mlback').onclick=e=>{e.stopPropagation();$('mlist').style.display='none';};
   $('rnext').onclick=()=>{const q=new URLSearchParams(location.search);q.set('mission',MISSION.id+1);location.search=q.toString();};
   $('rretry').onclick=()=>location.reload();
+  $('bhang').onclick=e=>{e.stopPropagation();hangar();};$('rhang').onclick=e=>{e.stopPropagation();hangar();};$('hback').onclick=e=>{e.stopPropagation();$('hangar').style.display='none';};
   $('rmenu').onclick=()=>{const q=new URLSearchParams(location.search);q.delete('mission');location.search=q.toString();};
 }
 boot();
