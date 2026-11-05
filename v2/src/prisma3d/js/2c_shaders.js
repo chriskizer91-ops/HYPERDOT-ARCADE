@@ -25,9 +25,9 @@ vec3 hue(float h){return clamp(abs(fract(h+vec3(0.,2./3.,1./3.))*6.-3.)-1.,0.,1.
 const WORLD_VS=GLSL_CURVE+`
 layout(location=0) in vec3 aPos;layout(location=1) in vec3 aNrm;layout(location=2) in vec4 aCol;layout(location=3) in vec4 aExt;
 uniform mat4 uVP;uniform vec3 uEye;uniform int uSpace;uniform mat4 uModel;uniform vec4 uOff;uniform float uMirror;
-out vec3 vQ;out vec3 vN;out vec4 vCol;out vec4 vExt;out vec3 vRel;out vec3 vL;
+out vec3 vQ;out vec3 vN;out vec4 vCol;out vec4 vExt;out vec3 vRel;out vec3 vL;out vec3 vNL;
 void main(){
-  vec3 rel,n=aNrm;
+  vec3 rel,n=aNrm;vNL=aNrm;
   if(uSpace==0){vec3 p=vec3(aPos.x+uOff.x,aPos.y+uOff.y,aPos.z*uOff.w+uOff.z);rel=vec3(p.x+pX(p.z),p.y+pY(p.z),p.z)-uEye;}
   else{rel=(uModel*vec4(aPos,1.)).xyz;n=normalize(mat3(uModel)*aNrm);}
   vec3 w=rel+uEye;float ry=pY(w.z);
@@ -37,7 +37,10 @@ void main(){
   gl_Position=uVP*vec4(rel,1.);
 }`;
 const WORLD_FS=GLSL_HASH+`
-in vec3 vQ;in vec3 vN;in vec4 vCol;in vec4 vExt;in vec3 vRel;in vec3 vL;
+in vec3 vQ;in vec3 vN;in vec4 vCol;in vec4 vExt;in vec3 vRel;in vec3 vL;in vec3 vNL;
+uniform highp sampler2DArray uFac,uShop,uSurf,uAds;uniform sampler2D uSigns,uVT,uDec;uniform int uTex;
+uniform vec4 uSignR[40];uniform vec4 uSignC[40];uniform ivec2 uSignCat;uniform float uShopH,uShopL;
+uniform vec4 uPB,uPZ,uPRs,uPRb,uPRf;uniform int uPMode;uniform vec4 uDecZY,uDecR;uniform float uDecOn,uDecGlow,uGloss,uHue;
 uniform int uStage;uniform float uTime,uWet,uRain,uFogD,uMirror,uReflOn,uSpeed,uBolt;
 uniform vec3 uN1,uN2,uN3,uFogC,uSkyA,uSkyB,uEyeQ;
 uniform sampler2D uRefl;uniform vec2 uRes;
@@ -47,6 +50,9 @@ uniform vec3 uPaint;uniform vec4 uVeh;uniform vec4 uVeh2;
 out vec4 o;
 vec3 neon(float k){k=fract(k);return k<.34?uN1:k<.67?uN2:uN3;}
 vec3 neonI(int i){return i==0?uN1:i==1?uN2:uN3;}
+bool tx(int f){return (uTex&f)!=0;}
+vec3 lin(vec3 c){return c*c*(c*.2+.8);}            /* close to sRGB -> linear, cheap */
+vec3 hueRot(vec3 c,float a){const vec3 k=vec3(.57735);float ca=cos(a);return c*ca+cross(k,c)*sin(a)+k*dot(k,c)*(1.-ca);}
 /* the neon environment that glossy paint and glass reflect: sky, then a band of city light on the horizon */
 vec3 env(vec3 r){
   float y=r.y;vec3 c=mix(uSkyB,uSkyA,smoothstep(-.05,.5,y))*1.4;
@@ -77,7 +83,7 @@ vec3 lightsAt(vec3 q,vec3 n,vec3 vd,float shin,float ks){
     float P=uStage==1?26.:34.;int cell=int(floor(q.z/P));
     for(int sd=0;sd<2;sd++){float sx=sd==0?-1.:1.;
       for(int k=-1;k<=1;k++){int c=cell+k;float zc=(float(c)+.5)*P;int id=c*2+sd;float r=ih(uint(id*7+3));
-        vec3 nc=neonI(int(r*3.));vec3 v=vec3(sx*12.8,5.,zc)-q;float dd=dot(v,v);vec3 l=v*inversesqrt(dd);
+        vec3 nc=tx(16)?uSignC[uSignCat.x+min(uSignCat.y-1,int(r*float(uSignCat.y)))].rgb:neonI(int(r*3.));vec3 v=vec3(sx*12.8,5.,zc)-q;float dd=dot(v,v);vec3 l=v*inversesqrt(dd);
         float a=(.8+.6*ih(uint(id*13+5)))/(1.+dd*.045);
         L+=nc*1.7*a*max(dot(n,l),.0);gSpec+=nc*1.7*a*pow(max(dot(n,normalize(l+vd)),0.),shin)*ks;}}}
   /* the vehicles' own lights, the bike's underglow and the drones' searchlights */
@@ -103,7 +109,11 @@ void main(){
     float fl=vExt.y>0.?(.65+.35*step(.08,fract(uTime*vExt.y+vExt.z))):1.;emi=alb*vExt.x*fl;}
   else if(m==12){ /* paper lanterns */
     float rib=.75+.25*smoothstep(.0,.3,abs(fract(atan(n.x,n.z)*1.27)-.5));float cap=smoothstep(.75,.9,abs(n.y));
-    emi=alb*(1.6+.35*sin(uTime*2.3+vExt.x*17.))*rib*(1.-cap*.85);}
+    vec3 paper=tx(4)?lin(texture(uSurf,vec3(atan(n.x,n.z)*.3183+vExt.x*.17,.5-n.y*.48,5.)).rgb)*1.5:alb;
+    emi=paper*(1.6+.35*sin(uTime*2.3+vExt.x*17.))*(tx(4)?1.:rib)*(1.-cap*.85);}
+  else if(m==7&&tx(16)&&vExt.y>9.5){ /* a real sign, cut from Christopher's sheets */
+    vec4 r=uSignR[int(vExt.x+.5)];vec2 uv=r.xy+r.zw*vec2(vExt.z,1.-vExt.w);vec3 t=lin(texture(uSigns,uv).rgb);
+    float fl=.88+.12*step(.03,fract(uTime*.37+vExt.x*.13));alb=vec3(.01);emi=t*2.6*fl;}
   else if(m==7){ /* neon sign panels: tubes round the edge, glyph blocks inside, a sweep that runs through them */
     vec2 uv=vExt.zw;float seed=vExt.x;vec2 px=fwidth(uv);
     float edge=max(band(uv.x,.03,.07,px.x*1.5),band(uv.x,.93,.97,px.x*1.5))*band(uv.y,.03,.97,px.y)+max(band(uv.y,.03,.07,px.y*1.5),band(uv.y,.93,.97,px.y*1.5))*band(uv.x,.03,.97,px.x);
@@ -115,6 +125,14 @@ void main(){
     float flick=step(.04,fract(uTime*.7+seed*3.))*.4+.6;
     vec3 c2=neon(seed*3.+.33);
     emi=alb*edge*2.6+mix(alb,c2,.35)*on*blk*sweep*2.*flick+alb*.06;}
+  else if(m==8&&tx(8)){ /* the giant video screens: the six ads, slow push-in, a glitch at every cut */
+    vec2 uv=vExt.zw;float seed=vExt.x,t=uTime/7.+seed*.37;float k=floor(t),f=fract(t);float ad=mod(floor(seed)+k,6.);
+    float g=step(f,.035)+step(.985,f);float bnd=step(.5,h2(vec2(floor(uv.y*18.),floor(uTime*30.))));
+    uv.x+=g*bnd*(h2(vec2(uv.y,uTime))-.5)*.12;
+    vec2 zu=.5+(vec2(uv.x,1.-uv.y)-.5)*(1.-.07*f);
+    vec3 c=lin(texture(uAds,vec3(zu,ad)).rgb);c*=.88+.12*sin(uv.y*420.);c=mix(c,c.gbr,g*.6);
+    float frame=1.-band(uv.x,.008,.992,fwidth(uv.x))*band(uv.y,.014,.986,fwidth(uv.y));
+    emi=c*1.9*(1.-frame)+vec3(.05)*frame;alb=vec3(.02);}
   else if(m==8){ /* the giant video billboards: bold shapes, scan lines, colour cycling */
     vec2 uv=vExt.zw;float seed=vExt.x,t=uTime*.25+seed*7.;float k=floor(t);float f=fract(t);
     vec3 c1=neon(h2(vec2(k,seed))*3.),c2=neon(h2(vec2(k,seed+1.))*3.+.4);
@@ -139,6 +157,7 @@ void main(){
     else if(ty==7){c=alb*(.9+uVeh.z*1.2);}
     else c=alb*3.;
     emi=c*on;}
+  else if(m==14&&tx(4)){vec3 t=lin(texture(uSurf,vec3(q.xz/260.,4.)).rgb);emi=t*1.6;alb=vec3(.01);}
   else if(m==14){ /* the city far below the skyway: a grid of lit streets with traffic crawling along them */
     vec2 p=q.xz;vec2 gq=p/36.;vec2 cell=floor(gq),f=fract(gq);vec2 px=fwidth(gq);
     float st=max(band(f.x,.0,.06,px.x*2.),band(f.y,.0,.06,px.y*2.));
@@ -155,7 +174,7 @@ void main(){
     if(m==1){ /* the road: asphalt, lane paint, puddles, rain rings, and the mirror of the city */
       vec2 rq=q.xz;float ax=abs(q.x);
       float grain=vn2(rq*vec2(1.3,.9))*.5+vn2(rq*6.)*.3+vn2(rq*23.)*.2;
-      alb=vec3(.028,.028,.034)*(.65+.7*grain);
+      alb=tx(4)?lin(texture(uSurf,vec3(rq/6.,2.)).rgb)*.42:vec3(.028,.028,.034)*(.65+.7*grain);
       float wz=fwidth(q.z),wx=fwidth(q.x);
       float dash=band(fract(q.z/9.),0.,.45,wz/9.*1.5);
       float mk=band(ax,4.39,4.61,wx*1.5)*dash+band(ax,8.62,8.86,wx*1.5);
@@ -174,10 +193,26 @@ void main(){
     else if(m==2){ /* pavement and concrete: slabs, a little wet */
       vec2 sq=vec2(q.x,q.z);vec2 tl=fract(sq/vec2(1.5,1.5));vec2 px=fwidth(sq/1.5);
       float seam=1.-band(tl.x,.03,.97,px.x)*band(tl.y,.03,.97,px.y);
-      alb=vCol.rgb*(.8+.4*vn2(floor(sq/1.5)*3.1))*(1.-seam*.4);refl=uWet*.3;rough=.35;shin=30.;ks=.3*uWet;}
+      alb=vCol.rgb*(.8+.4*vn2(floor(sq/1.5)*3.1))*(1.-seam*.4);refl=uWet*.3;rough=.35;shin=30.;ks=.3*uWet;
+      if(tx(4)&&abs(n.y)>.5)alb=lin(texture(uSurf,vec3(sq/4.5,3.)).rgb)*vCol.rgb*4.2;}
     else if(m==3){ /* building fronts: rows of windows, lit at random, shops along the ground */
-      bool sideFace=abs(n.x)>.5;vec2 fc=sideFace?vec2(q.z,q.y):vec2(q.x,q.y);
+      /* facade coordinates that read left-to-right from wherever you see the wall */
+      bool sideFace=abs(n.x)>.5;vec2 fc=sideFace?vec2(n.x<0.?-q.z:q.z,q.y):vec2(n.z>0.?-q.x:q.x,q.y);
       if(abs(n.y)>.5){alb=vCol.rgb*.6;}
+      else if(tx(1)){
+        float seed=vExt.x;int layer=int(vExt.z+.5);
+        vec2 tsz=layer==0?vec2(14.,36.):layer==1?vec2(20.,20.):layer==2?vec2(14.,22.):vec2(9.,4.1);
+        bool shopRow=sideFace&&q.y<uShopH&&tx(2);
+        float gy=q.y-(sideFace&&tx(2)?uShopH:0.);
+        vec2 tuv=vec2(fc.x,gy)/tsz+vec2(seed*.37,seed*.11);vec2 tid=floor(tuv);
+        if(h2(tid+seed)>.5)tuv.x=tid.x+1.-fract(tuv.x);        /* mirror every other tile: the repeat stops showing */
+        vec3 t=lin(texture(uFac,vec3(tuv,float(layer))).rgb);
+        float lum=dot(t,vec3(.3,.6,.1)),glow=smoothstep(.07,.32,lum);
+        float dim=.55+.45*h2(vec2(floor(gy/3.4),tid.x+seed));
+        alb=t*(1.-glow)*.9;emi=t*glow*1.8*dim;refl=(1.-glow)*.18;rough=.2;
+        if(shopRow){vec2 su=vec2(fc.x/(uShopH*3.2)+seed*.21,1.-q.y/uShopH);vec3 st=lin(texture(uShop,vec3(su,uShopL)).rgb);
+          float sl=dot(st,vec3(.3,.6,.1)),sg=smoothstep(.05,.3,sl);alb=st*(1.-sg);emi=st*sg*1.7;refl=.35;rough=.05;}
+      }
       else{
         float seed=vExt.x,lp=vExt.y,fh=vExt.w,ww=vExt.z>1.5?1.6:2.5;
         vec2 g=fc/vec2(ww,fh);vec2 cell=floor(g),f=fract(g);vec2 px=fwidth(g);
@@ -205,6 +240,7 @@ void main(){
       float mul=max(band(fract(fc.x/1.8),0.,.05,px.x/1.8*2.),band(fract(fc.y/3.6),0.,.06,px.y/3.6*2.));
       float fl=floor(fc.y/3.6);float litf=step(.78,h2(vec2(fl,vExt.x)))*step(.3,h2(vec2(floor(fc.x/1.8),fl+vExt.x)));
       alb=mix(vec3(.01,.015,.03),vec3(.08),mul);emi=mix(vec3(.7,.85,1.),vec3(1.,.8,.55),h2(vec2(fl,3.)))*litf*(1.-mul)*.7;
+      if(tx(1)){vec3 t=lin(texture(uFac,vec3(fc/20.+vec2(vExt.x*.3,0.),1.)).rgb);float g2=smoothstep(.06,.25,dot(t,vec3(.3,.6,.1)));alb=t*(1.-g2);emi=t*g2*1.6;}
       refl=.85*(1.-mul);rough=.03;shin=90.;ks=.6;}
     else if(m==6){alb=vCol.rgb;refl=.25;rough=.25;shin=50.;ks=.7;}                 /* dark metal */
     else if(m==9){ /* vehicle paint: a deep clear coat over metal flake */
@@ -215,14 +251,35 @@ void main(){
       vec2 tc=vec2(q.z,atan(q.y-3.,q.x)*13.);vec2 px=fwidth(tc);vec2 f=fract(tc/vec2(2.,1.4));
       float seam=1.-band(f.x,.04,.96,px.x)*band(f.y,.05,.95,px.y);alb=vCol.rgb*(1.-seam*.55)*(.85+.3*h2(floor(tc/vec2(2.,1.4))));
       refl=.35*(1.-seam);rough=.12;shin=50.;ks=.5;
+      if(tx(4)){alb=lin(texture(uSurf,vec3(tc.x/5.,tc.y/5.,0.)).rgb)*.55;refl=.3;}
       float em=step(.97,fract(q.z/48.))*step(.5,fract(uTime*1.5))*band(q.y,1.1,1.9,fwidth(q.y));emi=vec3(1.,.08,.04)*em*3.;}
     else if(m==13){ /* ramps: chevrons and a glowing lip */
       float st=step(.5,fract(q.z*.5+abs(vL.x)*.5));alb=mix(vec3(.55,.42,.04),vec3(.03),st);
       emi=vec3(1.,.75,.1)*(1.-st)*.25;refl=.2;rough=.2;ks=.4;}
     else if(m==15){alb=vCol.rgb;rough=.6;ks=.1;shin=16.;}                            /* rubber, cloth */
+    else if(m==21){vec2 bu=abs(n.x)>.5?q.zy:abs(n.z)>.5?q.xy:q.xz;alb=tx(4)?lin(texture(uSurf,vec3(bu/4.,1.)).rgb)*vCol.rgb*5.:vCol.rgb;rough=.5;ks=.15;shin=20.;}
+    else if(m==20){
+      /* a vehicle carved from its design sheet: the side view painted on its sides, the back view on its back... */
+      vec3 nl=normalize(vNL),p=vL,w=pow(abs(nl),vec3(4.));
+      vec2 ts=vec2((p.z-uPZ.x)/(uPZ.y-uPZ.x),(uPB.w-p.y)/(uPB.w-uPB.z));
+      vec4 cs=texture(uVT,uPRs.xy+uPRs.zw*ts),c4;
+      if(uPMode==0){vec4 cb=texture(uVT,uPRb.xy+uPRb.zw*vec2((p.x+uPZ.z*.5)/uPZ.z,ts.y)),cf=texture(uVT,uPRf.xy+uPRf.zw*vec2((p.x+uPZ.w*.5)/uPZ.w,ts.y));
+        float wb=(nl.z<0.?w.z:0.)+w.y*.75,wf=nl.z>0.?w.z:0.,ws=w.x+w.y*.25;c4=(cs*ws+cb*wb+cf*wf)/(ws+wb+wf+1e-4);}
+      else if(uPMode==2){vec4 ct=texture(uVT,uPRb.xy+uPRb.zw*vec2((uPB.y-p.x)/(uPB.y-uPB.x),(p.z-uPZ.x)/(uPZ.y-uPZ.x)));float ws=w.x+w.z;c4=(cs*ws+ct*w.y)/(ws+w.y+1e-4);}
+      else{vec4 cm=texture(uVT,uPRs.xy+uPRs.zw*vec2(.42,ts.y));float wz=w.z/(w.x+w.z+w.y*.3+1e-4);c4=mix(cs,cm,clamp(wz*1.3,0.,1.));}   /* traffic: backs and fronts take the colours from the middle of the side */
+      alb=lin(c4.rgb);float em=c4.a;
+      if(uHue!=0.){float sat=max(alb.r,max(alb.g,alb.b))-min(alb.r,min(alb.g,alb.b));if(sat>.06&&em<.3)alb=max(hueRot(alb,uHue),0.);}
+      /* the livery / decal: placed in model space so its text reads the right way round on both sides */
+      if(uDecOn>.5&&w.x>.5){vec2 dt=vec2((nl.x<0.?uDecZY.y-p.z:p.z-uDecZY.x)/(uDecZY.y-uDecZY.x),(uDecZY.z-p.y)/(uDecZY.z-uDecZY.w));
+        if(dt.x>0.&&dt.x<1.&&dt.y>0.&&dt.y<1.){vec4 d=texture(uDec,uDecR.xy+uDecR.zw*dt);alb=mix(alb,lin(d.rgb),d.a);em=mix(em,uDecGlow,d.a);}}
+      float brake=(p.z<uPZ.x+.5&&alb.r>alb.g*2.)?uVeh.x*2.:0.;
+      emi=alb*em*(2.4+uVeh.z*2.2+brake);
+      refl=uGloss*(1.-em);rough=.08;shin=90.;ks=uGloss*.9;
+      alb*=1.-em*.6;
+    }
     else{alb=vCol.rgb;rough=vExt.x>0.?vExt.x:.5;ks=vExt.y;shin=40.;refl=vExt.y*.3;}
     vec3 L=lightsAt(q,nn,vd,shin,ks);
-    col=alb*(ambient(nn)+L)+gSpec;
+    col=alb*(ambient(nn)*(m==20?2.2:1.)+L+(m==20?vec3(.05):vec3(0.)))+gSpec;
     /* reflections: the road reads the mirrored city, everything glossy reads the neon environment */
     if(refl>0.){
       float fr=.04+.96*pow(1.-max(dot(vd,nn),0.),5.);
@@ -237,7 +294,7 @@ void main(){
       }else{
         R=env(reflect(-vd,nn));
         /* metallic paint tints what it reflects; the clear coat on top reflects it white at grazing angles */
-        vec3 tint=m==9?alb*2.2+vec3(fr*.8):vec3(mix(.06,1.,fr));
+        vec3 tint=m==9?alb*2.2+vec3(fr*.8):m==20?alb*1.6+vec3(fr*.7):vec3(mix(.06,1.,fr));
         col+=R*refl*tint*(1.-rough*.6);}
     }
   }
@@ -249,9 +306,32 @@ void main(){
 }`;
 const FS_VS=`out vec2 vT;void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));vT=p;gl_Position=vec4(p*2.0-1.0,0.0,1.0);}`;
 const SKY_FS=GLSL_HASH+`in vec2 vT;uniform mat3 uRot;uniform float uFov,uAsp,uMirror,uTime,uBolt;uniform int uStage;uniform vec3 uSkyA,uSkyB,uFogC,uN1,uN2,uN3;out vec4 o;
+uniform sampler2D uSky,uSkyl,uMoon;uniform int uTex;uniform float uOpen;
+float pp(float x){return 1.-abs(fract(x*.5)*2.-1.);}            /* ping-pong: the picture mirrors itself round the back */
+vec3 lin(vec3 c){return c*c*(c*.2+.8);}
 void main(){
   vec2 p=(vT*2.-1.)*vec2(uAsp,1.)*uFov*.5;vec3 rd=normalize(uRot*vec3(p,1.));if(uMirror>.5)rd.y=-rd.y;
   float y=rd.y;vec3 c=mix(uSkyB*1.2,uSkyA,smoothstep(-.02,.55,y));
+  float az=atan(rd.x,rd.z),el=asin(clamp(y,-1.,1.));
+  if((uTex&64)!=0){
+    /* Christopher's sky: half a turn of picture ahead of you, mirrored behind; top of the picture 62 degrees up */
+    float u=pp(.5+az/3.14159),v=1.-clamp(el/1.08,0.,1.);
+    c=lin(texture(uSky,vec2(u,v)).rgb)*1.15;if(el<0.)c*=exp(el*7.);
+    c+=vec3(.5,.55,.9)*uBolt*smoothstep(-.1,.6,y)*1.2;
+    /* far skylines: two layers at different sizes, so the city has depth */
+    if((uTex&128)!=0){
+      if(uStage==2){float lo=-.2,hi=.03;float vv=(el-lo)/(hi-lo);if(vv>0.&&vv<1.){vec4 sl=texture(uSkyl,vec2(pp(.5+az/3.14159),1.-vv));c=mix(c,lin(sl.rgb)*1.3,sl.a);}}
+      else{
+        float hi2=uStage==1?.07:.13;
+        float vv2=(el+.01)/(hi2*.62);if(vv2>0.&&vv2<1.){vec4 sl=texture(uSkyl,vec2(pp(.17+az/(3.14159*.55)),1.-vv2));c=mix(c,mix(lin(sl.rgb)*.55,uFogC*1.6,.35),sl.a*.9);}
+        float vv=(el+.012)/hi2;if(vv>0.&&vv<1.){vec4 sl=texture(uSkyl,vec2(pp(.5+az/(3.14159*.8)),1.-vv));c=mix(c,lin(sl.rgb)*1.1,sl.a);}
+      }
+    }
+    if(uStage==2&&(uTex&256)!=0){vec3 md=normalize(vec3(-.5,.3,.8));vec3 mr=normalize(cross(vec3(0,1,0),md)),mu=cross(md,mr);
+      vec2 mp=vec2(dot(rd,mr),dot(rd,mu))/.045;if(dot(rd,md)>0.&&abs(mp.x)<1.&&abs(mp.y)<1.){vec3 mt=lin(texture(uMoon,mp*vec2(.5,-.5)+.5).rgb);c=max(c,mt*2.2);}
+      c+=vec3(.5,.45,.65)*pow(max(dot(rd,md),0.),300.)*.5;}
+    o=vec4(c,1.);return;
+  }
   c+=uSkyB*.9*exp(-abs(y)*10.);
   /* the city's glow along the horizon, in the stage's own neon */
   float a=atan(rd.x,rd.z);c+=mix(uN1,uN2,.5+.5*sin(a*3.))*exp(-abs(y-.01)*28.)*.35;
@@ -313,7 +393,7 @@ void main(){
   float lum=dot(c,vec3(.2126,.7152,.0722));c=max(mix(vec3(lum),c,uSat),0.);
   c=pow(c,vec3(1./2.2));
   c=mix(c,c*c*(3.-2.*c),.25);                     /* a little more contrast: deep blacks, bright neon */
-  c*=1.-dot(d*vec2(uAsp,1.)*.7,d*vec2(uAsp,1.)*.7)*.5;
+  vec2 dv=(vT-.5)*vec2(uAsp,1.)*.7;c*=clamp(1.-dot(dv,dv)*.5,0.,1.);   /* vignette from the screen centre */
   c+=vec3(1.,.97,.92)*uFlash;
   /* the HUD, drawn as round LED dots: the nod to the original's matrix */
   if(uDotOn>.5){vec2 cell=vec2(vT.x,1.-vT.y)*uHudRes;vec2 id=floor(cell),f=fract(cell)-.5;vec2 huv=(id+.5)/uHudRes;

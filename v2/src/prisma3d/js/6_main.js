@@ -68,7 +68,7 @@ function tick(dt){
 let ACC=0,LAST=0;const PERF={ms:16.7,frames:0};
 function frame(ts){
   const ms=LAST?ts-LAST:16.7,dt=Math.min(.05,ms/1000);LAST=ts;
-  ACC+=dt;let n=0;while(ACC>=1/60&&n<4){tick(1/60);ACC-=1/60;n++;}if(n===4)ACC=0;
+  ACC+=window.__freeze?0:dt;let n=0;while(ACC>=1/60&&n<4){tick(1/60);ACC-=1/60;n++;}if(n===4)ACC=0;
   if(n>0)endInputFrame();
   if(!window.__noDraw)render(dt);musicTick(S.paused);ambUpdate();
   PERF.ms+=(Math.min(ms,100)-PERF.ms)*.05;PERF.frames++;
@@ -94,6 +94,6 @@ if(gl){try{glInit();}catch(e){GLERR=String(e);console.error(e);}}
 if(!gl||GLERR){$('err').style.display='grid';if(GLERR)$('err').textContent='PRISMA 3D could not set up its graphics on this device. '+GLERR.slice(0,300);}
 else{resize();APP_attract();
   ARC.post('ready',{title:CAB.title,w:W,h:H,tickets:CAB.tickets});
-  if(/[?&]test=1/.test(location.search))window.__pr={AU,S,BK,TG,TR,FEAT,DR,CAM,QS,QUALS,KEY,LATCH,PTR,TS,STK,CH,VIEW,PERF,GBX,AMB,audioInit,useNitro,tick,ff(sec){for(let i=0;i<sec*60;i++)tick(1/60);endInputFrame();},start:APP_start,attract:APP_attract,startStage,STAGES,get ST(){return ST;},render,autopilot,cam(f){CAMOV=f;},setQuality,setView,resize,
+  if(/[?&]test=1/.test(location.search))window.__pr={AU,S,BK,TG,TR,FEAT,DR,CAM,QS,QUALS,KEY,LATCH,PTR,TS,STK,CH,VIEW,PERF,GBX,AMB,TX,TXF,RT,gl,audioInit,useNitro,tick,ff(sec){for(let i=0;i<sec*60;i++)tick(1/60);endInputFrame();},start:APP_start,attract:APP_attract,startStage,STAGES,get ST(){return ST;},render,autopilot,cam(f){CAMOV=f;},setQuality,setView,resize,
     stats(){let tris=0,n=0;for(const c of CH.map.values()){tris+=(c.g.n+c.s.n)/3;n++;}let v=MODELS.bike.n+MODELS.van.n+MODELS.drone.n;for(const m of MODELS.car)v+=m.n;return {chunks:n,cityTris:Math.round(tris),vehicleTris:Math.round(v/3),RTW,RTH,CW,CH:CH_,q:qnow().name,msaa:!!RT.ms,refl:!!RT.rf,hdr:HDR,W,H,ri:rightInset(),pbHidden:$('pauseBtn').hidden,mode:S.mode,kmh:Math.round(BK.vs*3.6),gear:GBX.g,rpm:+GBX.rpm.toFixed(3)};}};
   requestAnimationFrame(frame);}

@@ -31,7 +31,7 @@ function glInit(){
   VAO0=gl.createVertexArray();
   HTEX=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,HTEX);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
-  buildModels();buildRain();
+  buildModels();buildRain();artInit();
 }
 function buildRain(){
   const n=1400,M=new MB(),rng=mulberry(77);
@@ -95,8 +95,14 @@ function worldUniforms(P,mirror){
   gl.uniform3fv(u.uPA,ST.PA);gl.uniform3fv(u.uPF,ST.PF);gl.uniform3fv(u.uPP,ST.PP);gl.uniform2fv(u.uYA,ST.YA);gl.uniform2fv(u.uYF,ST.YF);gl.uniform2fv(u.uYP,ST.YP);
   gl.uniformMatrix4fv(u.uVP,false,VPM);gl.uniform3fv(u.uEye,CAM.eye);gl.uniform1f(u.uMirror,mirror?1:0);
   gl.uniform1i(u.uStage,ST.id);gl.uniform1f(u.uTime,S.clock%600);gl.uniform1f(u.uWet,ST.wet);gl.uniform1f(u.uRain,ST.rain);gl.uniform1f(u.uFogD,ST.fogD*.75);
+  gl.uniform1i(u.uTex,TX.on);gl.uniform4fv(u.uSignR,SIGNR);gl.uniform4fv(u.uSignC,SIGNC);
+  {const L=SIGNCAT[bladeCat()]||[0];gl.uniform2i(u.uSignCat,L[0],L.length);}
+  gl.uniform1f(u.uShopH,ST.id===1?4.5:5.3);gl.uniform1f(u.uShopL,ST.id===1?1:0);
+  const T=(unit,target,t,name)=>{gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(target,t||null);gl.uniform1i(u[name],unit);};
+  T(1,gl.TEXTURE_2D_ARRAY,TX.fac,'uFac');T(2,gl.TEXTURE_2D_ARRAY,TX.shop,'uShop');T(3,gl.TEXTURE_2D_ARRAY,TX.surf,'uSurf');T(4,gl.TEXTURE_2D_ARRAY,TX.ads,'uAds');
+  T(5,gl.TEXTURE_2D,TX.signs,'uSigns');T(6,gl.TEXTURE_2D,null,'uVT');T(7,gl.TEXTURE_2D,null,'uDec');gl.activeTexture(gl.TEXTURE0);
   gl.uniform1f(u.uSpeed,clamp(BK.vs/100,0,1.4));gl.uniform1f(u.uBolt,BOLT);
-  gl.uniform3fv(u.uN1,ST.N1);gl.uniform3fv(u.uN2,ST.N2);gl.uniform3fv(u.uN3,ST.N3);gl.uniform3fv(u.uFogC,ST.fog);gl.uniform3fv(u.uSkyA,SU_SKYA);gl.uniform3fv(u.uSkyB,SU_SKYB);
+  gl.uniform3fv(u.uN1,ST.N1);gl.uniform3fv(u.uN2,ST.N2);gl.uniform3fv(u.uN3,ST.N3);gl.uniform3fv(u.uFogC,fogC());gl.uniform3fv(u.uSkyA,SU_SKYA);gl.uniform3fv(u.uSkyB,SU_SKYB);
   gl.uniform3fv(u.uEyeQ,trackOf(CAM.eye));
   gl.uniform4fv(u.uLP,ULP);gl.uniform4fv(u.uLC,ULC);gl.uniform4fv(u.uLD,ULD);gl.uniform1i(u.uNL,NL);gl.uniform4fv(u.uPad,UPAD);
   gl.uniform1f(u.uReflOn,RT.rf&&!mirror?1:0);gl.uniform2f(u.uRes,RTW,RTH);
@@ -104,6 +110,7 @@ function worldUniforms(P,mirror){
   gl.uniform4f(u.uOff,0,0,0,1);gl.uniform1i(u.uSpace,0);gl.uniform3f(u.uPaint,1,1,1);gl.uniform4f(u.uVeh,0,0,0,0);
 }
 let SU_SKYA=[0,0,0],SU_SKYB=[0,0,0];
+function fogC(){const f=ST.fog;if(!(TX.on&TXF.SKY))return f;const k=SKY_FOG[STAGE_SKY[ST.id]];return [f[0]*.4+k[0]*.6,f[1]*.4+k[1]*.6,f[2]*.4+k[2]*.6];}
 const MM=new Float32Array(16);
 /* a model matrix relative to the eye: yaw about up, lean about forward, pitch about right */
 function modelMat(s,u,h,yaw,lean,pitch,k){
@@ -116,24 +123,41 @@ function modelMat(s,u,h,yaw,lean,pitch,k){
 function drawMesh(M){if(!M||!M.n)return;gl.bindVertexArray(M.vao);gl.drawArrays(gl.TRIANGLES,0,M.n);}
 const CARPAINT=new WeakMap();let PAINTN=0;
 const BIKE_PAINT=[.05,.055,.08],VAN_PAINT=[.62,.38,.05];
+/* where the PRISMA decal sits on the bike's rear fairing: z from, z to, y top, y bottom (metres, the bike's own frame) */
+const BIKE_DECAL=[-1.62,-.55,.98,.8];
 function bikeLean(){return -BK.bank*1.15;}
 function bikePitch(){return BK.air?clamp(Math.atan2(BK.vh,Math.max(1,BK.vs))*.8,-.3,.35):0;}
+/* carved vehicles: tell the shader where each view of the design sheet sits */
+function projUniforms(u,d,mode,tex){
+  const b=d.b;gl.uniform4f(u.uPB,b[0],b[1],b[2],b[3]);gl.uniform4f(u.uPZ,b[4],b[5],d.w?d.w[0]:b[1]-b[0],d.w?d.w[1]:b[1]-b[0]);
+  gl.uniform4fv(u.uPRs,d.side);gl.uniform4fv(u.uPRb,d.back||d.top||d.side);gl.uniform4fv(u.uPRf,d.front||d.side);gl.uniform1i(u.uPMode,mode);
+  gl.activeTexture(gl.TEXTURE6);gl.bindTexture(gl.TEXTURE_2D,tex);gl.activeTexture(gl.TEXTURE0);gl.uniform1f(u.uDecOn,0);gl.uniform1f(u.uHue,0);
+}
+function decalUniforms(u,on,tex,zy,r,glow){gl.uniform1f(u.uDecOn,on?1:0);if(!on)return;gl.activeTexture(gl.TEXTURE7);gl.bindTexture(gl.TEXTURE_2D,tex);gl.activeTexture(gl.TEXTURE0);gl.uniform4fv(u.uDecZY,zy);gl.uniform4fv(u.uDecR,r);gl.uniform1f(u.uDecGlow,glow);}
+const CARHUE=[0,.9,2.1,3.3,4.4];
 function drawVehicles(P,mirror){
-  const u=P.u;gl.uniform1i(u.uSpace,1);const B=BK;
+  const u=P.u;gl.uniform1i(u.uSpace,1);const B=BK,carved=(TX.on&TXF.VEH)!==0;
   /* traffic */
   for(const c of TR.cars){const ds=c.s-CAM.s;if(ds<-14||ds>560)continue;
     let pi=CARPAINT.get(c);if(pi==null){pi=(PAINTN++*5+3)%PAINTS.length;if(c.type===4)pi=4;CARPAINT.set(c,pi);}
     gl.uniformMatrix4fv(u.uModel,false,modelMat(c.s,c.u,c.h+Math.sin(S.clock*3+c.s*.1)*.03,c.yaw,0,0));gl.uniform3fv(u.uPaint,PAINTS[pi]);
-    gl.uniform4f(u.uVeh,c.brake,c.blink,0,0);drawMesh(MODELS.car[c.type]);}
+    gl.uniform4f(u.uVeh,c.brake,c.blink,0,0);
+    if(carved){projUniforms(u,VEHDATA.cars[c.type],1,TX.veh.traffic);gl.uniform1f(u.uGloss,c.type===4?.5:.85);gl.uniform1f(u.uHue,c.type<2||c.type===3?CARHUE[pi%5]:0);drawVeh(TX.meshes.cars[c.type]);gl.uniform1f(u.uHue,0);drawMesh(MODELS.carLights[c.type]);}
+    else drawMesh(MODELS.car[c.type]);}
   /* the van */
   if(TG.on){const T=TG;gl.uniformMatrix4fv(u.uModel,false,modelMat(T.s,T.u,T.h+.05+Math.sin(S.clock*4)*.03,T.yaw,-T.bank,0));gl.uniform3fv(u.uPaint,VAN_PAINT);
-    gl.uniform4f(u.uVeh,T.brakeT>0?1:0,0,T.boostT>0?1:0,T.dmg/100);drawMesh(MODELS.van);}
+    gl.uniform4f(u.uVeh,T.brakeT>0?1:0,0,T.boostT>0?1:0,T.dmg/100);
+    if(carved&&(TX.on&TXF.DEC)){projUniforms(u,VEHDATA.van,0,TX.veh.van);gl.uniform1f(u.uGloss,.9);decalUniforms(u,true,TX.liv,[-2.95,1.45,2.55,1.05],[0,0,1,1],0);drawVeh(TX.meshes.van);gl.uniform1f(u.uDecOn,0);}
+    else drawMesh(MODELS.van);}
   /* drones */
-  for(const d of DR){if(!d.on)continue;const q=trackOf([d.x,d.y,d.z]);gl.uniformMatrix4fv(u.uModel,false,modelMat(q[2],q[0],q[1],TG.yaw||0,Math.sin(S.clock*1.3)*.08,-.12));gl.uniform4f(u.uVeh,0,0,0,0);drawMesh(MODELS.drone);}
+  for(const d of DR){if(!d.on)continue;const q=trackOf([d.x,d.y,d.z]);gl.uniformMatrix4fv(u.uModel,false,modelMat(q[2],q[0],q[1],TG.yaw||0,Math.sin(S.clock*1.3)*.08,-.12));gl.uniform4f(u.uVeh,0,0,0,0);
+    if(carved){projUniforms(u,VEHDATA.drone,2,TX.veh.drone);gl.uniform1f(u.uGloss,.4);drawVeh(TX.meshes.drone);}else drawMesh(MODELS.drone);}
   /* the bike (hidden in the helmet view, except in the mirror) */
   if(VIEW.mode===0||mirror||S.mode!=='play'&&S.mode!=='intro'){
-    gl.uniformMatrix4fv(u.uModel,false,modelMat(B.s,B.u,B.h+.05+Math.sin(S.clock*9)*.035,B.yaw,bikeLean(),bikePitch(),1.08));gl.uniform3fv(u.uPaint,BIKE_PAINT);
-    gl.uniform4f(u.uVeh,S.ctlBrake?1:0,0,B.nitroT>0?1:B.boostT>0?.5:0,0);drawMesh(MODELS.bike);}
+    gl.uniformMatrix4fv(u.uModel,false,modelMat(B.s,B.u,B.h+.05+Math.sin(S.clock*9)*.035,B.yaw,bikeLean(),bikePitch(),carved?1:1.08));gl.uniform3fv(u.uPaint,BIKE_PAINT);
+    gl.uniform4f(u.uVeh,S.ctlBrake?1:0,0,B.nitroT>0?1:B.boostT>0?.5:0,0);
+    if(carved){projUniforms(u,VEHDATA.bike,0,TX.veh.bike);gl.uniform1f(u.uGloss,.55);decalUniforms(u,(TX.on&TXF.DEC)!==0,TX.dec,BIKE_DECAL,[0,0,1,174/512],.35);drawVeh(TX.meshes.bike);gl.uniform1f(u.uDecOn,0);}
+    else drawMesh(MODELS.bike);}
   /* ramps */
   gl.uniform1i(u.uSpace,0);gl.uniform3f(u.uPaint,1,1,1);
   for(const f of FEAT.list){if(f.k!=='ramp')continue;if(f.z+f.len<CAM.s-6||f.z>CAM.s+520)continue;gl.uniform4f(u.uOff,f.u,groundAt(f.z,f.u),f.z,f.len);drawMesh(MODELS.ramp);}
@@ -147,7 +171,10 @@ function drawSky(mirror){
   gl.useProgram(P_SKY.p);const u=P_SKY.u;
   gl.uniformMatrix3fv(u.uRot,false,[CAM.r[0],CAM.r[1],CAM.r[2],CAM.u[0],CAM.u[1],CAM.u[2],CAM.f[0],CAM.f[1],CAM.f[2]]);
   gl.uniform1f(u.uFov,CAM.fov);gl.uniform1f(u.uAsp,RTW/RTH);gl.uniform1f(u.uMirror,mirror?1:0);gl.uniform1f(u.uTime,S.clock%600);gl.uniform1f(u.uBolt,BOLT);gl.uniform1i(u.uStage,ST.id);
-  gl.uniform3fv(u.uSkyA,SU_SKYA);gl.uniform3fv(u.uSkyB,SU_SKYB);gl.uniform3fv(u.uFogC,ST.fog);gl.uniform3fv(u.uN1,ST.N1);gl.uniform3fv(u.uN2,ST.N2);gl.uniform3fv(u.uN3,ST.N3);
+  gl.uniform3fv(u.uSkyA,SU_SKYA);gl.uniform3fv(u.uSkyB,SU_SKYB);gl.uniform3fv(u.uFogC,fogC());gl.uniform3fv(u.uN1,ST.N1);gl.uniform3fv(u.uN2,ST.N2);gl.uniform3fv(u.uN3,ST.N3);
+  gl.uniform1i(u.uTex,TX.on);
+  gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,TX.sky);gl.uniform1i(u.uSky,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,TX.skyl);gl.uniform1i(u.uSkyl,1);
+  gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,TX.moon);gl.uniform1i(u.uMoon,2);gl.activeTexture(gl.TEXTURE0);
   gl.depthMask(false);gl.disable(gl.DEPTH_TEST);gl.bindVertexArray(VAO0);gl.drawArrays(gl.TRIANGLES,0,3);gl.depthMask(true);gl.enable(gl.DEPTH_TEST);
 }
 /* ---------- the glowing extras: light ribbons, sparks, drone beams ---------- */
@@ -156,9 +183,9 @@ function ribPush(arr,p,t,maxT){arr.unshift([p[0],p[1],p[2],t]);while(arr.length>
 function localToWorld(M,x,y,z){const e=CAM.eye;return [M[0]*x+M[4]*y+M[8]*z+M[12]+e[0],M[1]*x+M[5]*y+M[9]*z+M[13]+e[1],M[2]*x+M[6]*y+M[10]*z+M[14]+e[2]];}
 function ribbonsUpdate(){
   const t=S.clock,B=BK,ni=B.nitroT>0?1:B.boostT>0?.5:0;
-  const M=modelMat(B.s,B.u,B.h+.05,B.yaw,bikeLean(),bikePitch(),1.08);
+  const M=modelMat(B.s,B.u,B.h+.05,B.yaw,bikeLean(),bikePitch(),(TX.on&TXF.VEH)?1:1.08);
   const life=.04+ni*.035;
-  ribPush(RIB.bike[0],localToWorld(M,-.47,.43,-1.22),t,life);ribPush(RIB.bike[1],localToWorld(M,.47,.43,-1.22),t,life);
+  const rx=(TX.on&TXF.VEH)?.56:.47,rz=(TX.on&TXF.VEH)?-1.2:-1.22;ribPush(RIB.bike[0],localToWorld(M,-rx,.43,rz),t,life);ribPush(RIB.bike[1],localToWorld(M,rx,.43,rz),t,life);
   if(TG.on){const T=TG,M2=modelMat(T.s,T.u,T.h+.05,T.yaw,-T.bank,0);const l2=.35;ribPush(RIB.van[0],localToWorld(M2,-.97,1.35,-3.2),t,l2);ribPush(RIB.van[1],localToWorld(M2,.97,1.35,-3.2),t,l2);}
   for(const c of TR.cars){const ds=c.s-B.s;if(ds<-6||ds>160)continue;let r=RIB.cars.get(c);if(!r){r=[[],[]];RIB.cars.set(c,r);}
     const L=c.L,hw=c.type===4?1.12:.95;const p0=W3(c.s-L,c.u-hw*.6,c.h+.82),p1=W3(c.s-L,c.u+hw*.6,c.h+.82);ribPush(r[0],p0,t,.18);ribPush(r[1],p1,t,.18);}
@@ -218,7 +245,7 @@ function render3d(dt){
   const B=BK,sp=clamp(B.vs/100,0,1.45),ni=B.nitroT>0?1:0;
   BOLT=S.bolt>0?(S.bolt>.85||(S.bolt>.45&&S.bolt<.6)?1:.35)*S.bolt:0;
   SU_SKYA=BOLT?ST.skyA.map((c,i)=>c+[.35,.38,.55][i]*BOLT):ST.skyA;SU_SKYB=BOLT?ST.skyB.map((c,i)=>c+[.25,.25,.4][i]*BOLT):ST.skyB;
-  cityUpdate(BK.s,CH.map.size<3?8:2);
+  artStage();cityUpdate(BK.s,CH.map.size<3?8:2);
   makeVP(VPM,.25,2400);
   gatherLights();
   if(!S.paused)ribbonsUpdate();buildFX();
@@ -239,19 +266,21 @@ function render3d(dt){
   fsPass(P_BR,RT.b2,u=>{bindT(0,RT.b1.t,u,'uTex');gl.uniform2f(u.uPx,1/RT.b1.w,1/RT.b1.h);gl.uniform1f(u.uThr,0);});
   fsPass(P_BL,RT.b2b,u=>{bindT(0,RT.b2.t,u,'uTex');gl.uniform2f(u.uDir,1.6/RT.b2.w,0);});fsPass(P_BL,RT.b2,u=>{bindT(0,RT.b2b.t,u,'uTex');gl.uniform2f(u.uDir,0,1.6/RT.b2.h);});
   /* 4 prism trails */
-  const vel=v3.norm([dpX(B.s)*B.vs+B.vu,dpY(B.s)*B.vs+(B.air?B.vh:0),Math.max(1,B.vs)]);const C=toUV(vel);
+  const vel=v3.norm([dpX(B.s)*B.vs+B.vu,dpY(B.s)*B.vs+(B.air?B.vh:0),Math.max(1,B.vs)]);
+  /* the speed effects follow the direction you're flying; if the camera looks elsewhere (orbit shots), they fade out */
+  const look=v3.dot(vel,CAM.f),fxk=clamp((look-.6)/.3,0,1);let C=fxk>0?toUV(vel):[.5,.5];C=[clamp(C[0],-.2,1.2),clamp(C[1],-.2,1.2)];
   let shift=[0,0];if(PREVF){const pu=toUV(PREVF);shift=[.5-pu[0],.5-pu[1]];if(Math.abs(shift[0])>.2||Math.abs(shift[1])>.2)shift=[0,0];}PREVF=CAM.f.slice();
   const k60=clamp(dt*60,0,3),live=S.paused?0:1;
   if(B.nitroT>0&&!FXS.lastNitro)FXS.burst=1;FXS.lastNitro=B.nitroT>0?1:0;FXS.burst=Math.max(0,FXS.burst-dt*1.6);
   if(FXS.clear){FXS.clear=0;for(const k of ['tr0','tr1']){gl.bindFramebuffer(gl.FRAMEBUFFER,RT[k].f);gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT);}}
   const A=FXS.trailFlip?RT.tr1:RT.tr0,Bt=FXS.trailFlip?RT.tr0:RT.tr1;FXS.trailFlip^=1;
-  const zoom=(.004+.011*sp*sp+ni*.012)*k60*live,decay=live?Math.pow(clamp(.7+.2*sp+ni*.06,0,.955),k60):1,disp=.22+ni*.9+(B.boostT>0?.25:0);
-  fsPass(P_TR,Bt,u=>{bindT(0,A.t,u,'uPrev');bindT(1,RT.b1.t,u,'uNew');gl.uniform2f(u.uC,C[0],C[1]);gl.uniform2f(u.uShift,shift[0]*live,shift[1]*live);gl.uniform1f(u.uZoom,zoom);gl.uniform1f(u.uDecay,decay);gl.uniform1f(u.uDisp,disp);gl.uniform1f(u.uGain,(.12+.42*sp+ni*.25)*live*(ST.id===3?.7:1));gl.uniform1f(u.uAsp,RTW/RTH);});
+  const zoom=(.004+.011*sp*sp+ni*.012)*k60*live*fxk,decay=live?Math.pow(clamp(.7+.2*sp+ni*.06,0,.955),k60):1,disp=.22+ni*.9+(B.boostT>0?.25:0);
+  fsPass(P_TR,Bt,u=>{bindT(0,A.t,u,'uPrev');bindT(1,RT.b1.t,u,'uNew');gl.uniform2f(u.uC,C[0],C[1]);gl.uniform2f(u.uShift,shift[0]*live,shift[1]*live);gl.uniform1f(u.uZoom,zoom);gl.uniform1f(u.uDecay,decay);gl.uniform1f(u.uDisp,disp);gl.uniform1f(u.uGain,(.12+.42*sp+ni*.25)*live*(ST.id===3?.7:1)*fxk);gl.uniform1f(u.uAsp,RTW/RTH);});
   /* 5 the final picture */
   gl.bindTexture(gl.TEXTURE_2D,HTEX);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,mc);
   const q=qnow();
   fsPass(P_CO,null,u=>{bindT(0,RT.sc.t,u,'uScene');bindT(1,RT.b1.t,u,'uB1');bindT(2,RT.b2.t,u,'uB2');bindT(3,Bt.t,u,'uTrail');bindT(4,HTEX,u,'uHud');
-    gl.uniform2f(u.uC,C[0],C[1]);const calm=reduce||S.paused||!(S.mode==='play'||S.mode==='title'||S.mode==='intro');gl.uniform1f(u.uBlur,calm?0:(.0055*sp*sp+ni*.011+(B.boostT>0?.004:0)));gl.uniform1f(u.uDisp,calm?0:(.0018*sp+ni*.0045));gl.uniform1f(u.uAsp,RTW/RTH);
+    gl.uniform2f(u.uC,C[0],C[1]);const calm=reduce||S.paused||!(S.mode==='play'||S.mode==='title'||S.mode==='intro');gl.uniform1f(u.uBlur,calm?0:(.0055*sp*sp+ni*.011+(B.boostT>0?.004:0))*fxk);gl.uniform1f(u.uDisp,calm?0:(.0018*sp+ni*.0045)*fxk);gl.uniform1f(u.uAsp,RTW/RTH);
     gl.uniform1f(u.uFlash,FLASH);gl.uniform1f(u.uSat,1.28);gl.uniform1f(u.uTrailK,reduce?0:.5);gl.uniform1f(u.uBurst,reduce||S.paused?0:FXS.burst);gl.uniform1f(u.uGlow,.75);gl.uniform1f(u.uTime,S.clock);
     gl.uniform2f(u.uHudRes,W,H);gl.uniform2f(u.uScr,CW,CH_);gl.uniform1f(u.uDotOn,1);gl.uniform1i(u.uTaps,q.taps);});
   gl.activeTexture(gl.TEXTURE0);

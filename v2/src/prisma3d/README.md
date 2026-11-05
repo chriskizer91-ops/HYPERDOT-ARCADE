@@ -8,7 +8,7 @@ The 3D version of Prisma, the night pursuit on a hover-bike. The original (`game
 python3 v2/src/prisma3d/build.py
 ```
 
-The build joins `shell.html` and `js/*.js` (in name order) into `v2/games/prisma3d.html`.
+The build joins `shell.html`, `js/*.js` (in name order) and the art in `art/` into `v2/games/prisma3d.html`. The file is about 8.4 MB; the art is most of it.
 
 ## What's in it
 
@@ -25,6 +25,9 @@ The build joins `shell.html` and `js/*.js` (in name order) into `v2/games/prisma
 | `js/4_game.js` | The original's game flow and scoring, plus the new superbike engine tuning. |
 | `js/5_view.js` | Cameras (chase and helmet) and the dot-matrix HUD. |
 | `js/6_main.js` | The frame loop, the pause menu and boot. |
+| `js/2g_art.js` | Loads Christopher's images onto the GPU, and builds the carved vehicles. The code-made look stays as the fallback until each picture is decoded. |
+| `art/` | The processed images (see `art/README.md`). |
+| `tools/` | The scripts that made `art/` from the original images. |
 
 ## How it works
 

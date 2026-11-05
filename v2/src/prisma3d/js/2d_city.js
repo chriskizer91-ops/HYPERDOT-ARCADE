@@ -63,7 +63,7 @@ function blockAt(Sd,G,cell,sd,C,stageSeed){
   const xs=(a,b)=>sd>0?[a,b]:[-b,-a];   /* road side -> far side, mirrored for the left */
   const wall=C.walls[(r(4)*C.walls.length)|0],seed=r(5)*100,lit=C.lit[0]+r(6)*(C.lit[1]-C.lit[0]),fh=3.1+r(7)*.6;
   const glass=Ht>60&&r(8)<C.glass;
-  const style=C.signs>1.5?2:(r(9)<.5?0:2);
+  const style=C.signs>1.5?(r(9)<.62?3:2):(r(9)<.55?0:2);
   const ext=[seed,lit,style,fh];
   if(glass){
     /* a glass tower on a lit podium */
@@ -77,7 +77,7 @@ function blockAt(Sd,G,cell,sd,C,stageSeed){
     const pod=12+r(10)*10;let [a,b]=xs(uF,uB);Sd.box(a,0,zA,b,pod,zB,wall,3,ext,63,8);
     [a,b]=xs(uF-.35,uF+.2);Sd.box(a,pod-.2,zA-.2,b,pod+.5,zB+.2,[.06,.06,.07],6,null,63,8);
     const set=2+r(11)*4;[a,b]=xs(uF+set,uB-1.5);const w2=[wall[0]*.9,wall[1]*.9,wall[2]*1.05];
-    Sd.box(a,pod,zA+set*.5,b,Ht,zB-set*.5,w2,3,[seed+7,lit*.9,style,fh],63,8);
+    Sd.box(a,pod,zA+set*.5,b,Ht,zB-set*.5,w2,3,[seed+7,lit*.9,r(19)<.5?0:style,fh],63,8);
     const rb=[uF+set+3,uF+set+3+(uB-uF-set)*.4];[a,b]=xs(rb[0],rb[1]);Sd.box(a,Ht,zc-3,b,Ht+3.5,zc+3,[.05,.05,.06],0,[.6,0,0,0],63,8);
     /* an aircraft light on the mast */
     const mu=sd*(uF+set+5);Sd.box(mu-.08,Ht+3.5,zc-.08,mu+.08,Ht+11,zc+.08,[.08,.08,.09],6,null,63,8);
@@ -87,16 +87,26 @@ function blockAt(Sd,G,cell,sd,C,stageSeed){
     [a,b]=xs(uF-.3,uF+.2);Sd.box(a,Ht-.1,zA-.2,b,Ht+.45,zB+.2,[.05,.05,.06],6,null,63,8);
   }
   /* signs: a band over the shops, a blade sign sticking out, and on some roofs a giant screen */
-  const sc=signCol(id);
-  const bw=(zB-zA)*.84;Sd.panel(sd*(uF-.12),3.75,zc,bw,.9,sd>0?'-x':'+x',sc,7,seed,0);
-  const sy=5.5+r(2)*5,sl=1.6+r(3)*2.5,bz=zc+(r(1)-.5)*(P-gap)*.6;
-  const bu0=sd*(uF-1.5),bu1=sd*uF;
-  Sd.panel((bu0+bu1)/2,sy,bz-.13,1.5,sl*2,'-z',sc,7,seed+1,1);Sd.panel((bu0+bu1)/2,sy,bz+.13,1.5,sl*2,'+z',sc,7,seed+1,1);
+  const sc=signCol(id),art=signsOn();
+  const shopH=C.lantern?4.5:5.3;
+  if(art){
+    /* shop signs over the shop fronts, one or two per building, cut from sheet 19 or 20 */
+    const n=(zB-zA)>18?2:1;for(let k=0;k<n;k++){const si=pickSign(C.lantern?'shop_market':'shop_downtown',R_(id*13+k,7)),asp=SIGNS.signs[si].asp,w=Math.min(7.2,(zB-zA)/n-1.5),h=w/asp;
+      const zz=n===1?zc:zA+(zB-zA)*(k+.5)/n;Sd.panel(sd*(uF-.1),shopH+.35+h/2,zz,w,h,sd>0?'-x':'+x',[1,1,1],7,si,10);}
+  }else{const bw=(zB-zA)*.84;Sd.panel(sd*(uF-.12),3.75,zc,bw,.9,sd>0?'-x':'+x',sc,7,seed,0);}
+  const bz=zc+(r(1)-.5)*(P-gap)*.6,bu0=sd*(uF-1.5),bu1=sd*uF;
+  let sy=5.5+r(2)*5,sl=1.6+r(3)*2.5;
+  if(art){
+    /* the blade sign: the same pick as the coloured light it throws (the shader hashes the block the same way) */
+    const si=pickSign(C.lantern?'blade_market':'blade_downtown',ihash(id*7+3)),asp=SIGNS.signs[si].asp,w=1.6;sl=w/asp/2;sy=Math.max(sy,shopH+2.2+sl);
+    Sd.panel((bu0+bu1)/2,sy,bz-.13,w,sl*2,'-z',[1,1,1],7,si,10);Sd.panel((bu0+bu1)/2,sy,bz+.13,w,sl*2,'+z',[1,1,1],7,si,10);
+  }else{Sd.panel((bu0+bu1)/2,sy,bz-.13,1.5,sl*2,'-z',sc,7,seed+1,1);Sd.panel((bu0+bu1)/2,sy,bz+.13,1.5,sl*2,'+z',sc,7,seed+1,1);}
   {const [a,b]=sd>0?[bu0,bu1]:[bu1,bu0];Sd.box(Math.min(a,b),sy-sl,bz-.12,Math.max(a,b),sy+sl,bz+.12,[.03,.03,.04],6,null,15,8);}
-  if(C.signs>1.5){const sy2=sy+sl+2.8,sl2=1.1+r(14),bz2=zc-(r(1)-.5)*(P-gap)*.5,c2=rgbN(((ihash(id*7+3)*3|0)+1)%3);
-    Sd.panel((bu0+bu1)/2,sy2,bz2-.13,1.3,sl2*2,'-z',c2,7,seed+2,1);Sd.panel((bu0+bu1)/2,sy2,bz2+.13,1.3,sl2*2,'+z',c2,7,seed+2,1);}
-  if(!glass&&Ht>30&&r(15)<C.board){const bh=8+r(16)*4,bwd=Math.min(zB-zA-2,15+r(17)*6),y0=(Ht>55?Ht+3.5:Ht)+1.2;
-    Sd.panel(sd*(uF+1.2),y0+bh/2,zc,bwd,bh,sd>0?'-x':'+x',[1,1,1],8,seed+3,0);
+  if(C.signs>1.5){const sy2=sy+sl+2.8,bz2=zc-(r(1)-.5)*(P-gap)*.5;
+    if(art){const si=pickSign('blade_market',R_(id,23)),w=1.4,h=w/SIGNS.signs[si].asp;Sd.panel((bu0+bu1)/2,sy2+h/2,bz2-.13,w,h,'-z',[1,1,1],7,si,10);Sd.panel((bu0+bu1)/2,sy2+h/2,bz2+.13,w,h,'+z',[1,1,1],7,si,10);}
+    else{const sl2=1.1+r(14),c2=rgbN(((ihash(id*7+3)*3|0)+1)%3);Sd.panel((bu0+bu1)/2,sy2,bz2-.13,1.3,sl2*2,'-z',c2,7,seed+2,1);Sd.panel((bu0+bu1)/2,sy2,bz2+.13,1.3,sl2*2,'+z',c2,7,seed+2,1);}}
+  if(!glass&&Ht>30&&r(15)<C.board){const bwd=Math.min(zB-zA-2,15+r(17)*6),bh=bwd*9/16,y0=(Ht>55?Ht+3.5:Ht)+1.2;
+    Sd.panel(sd*(uF+1.2),y0+bh/2,zc,bwd,bh,sd>0?'-x':'+x',[1,1,1],8,Math.floor(r(20)*6)+.5,0);
     Sd.box(sd*(uF+1.2)+(sd>0?.05:-.35),y0-1.2,zc-.15,sd*(uF+1.2)+(sd>0?.35:-.05),y0,zc+.15,[.06,.06,.07],6,null,63,8);}
   /* the market: striped awnings over the shop fronts */
   if(C.lantern){const ac=[[.55,.1,.12],[.6,.4,.08],[.15,.35,.5],[.4,.12,.4]][(r(18)*4)|0];
@@ -154,15 +164,15 @@ function skywayChunk(G,Sd,z0,z1){
   roadStrip(G,z0,z1,null,3);
   for(const sd of [-1,1]){
     const a=sd*9,b=sd*10.6;G.box(Math.min(a,b),0,z0,Math.max(a,b),.02,z1,[.12,.12,.14],2,null,4,3);
-    Sd.box(Math.min(sd*10.35,sd*10.85),0,z0,Math.max(sd*10.35,sd*10.85),1.15,z1,[.06,.06,.08],6,null,63,4);
+    Sd.box(Math.min(sd*10.35,sd*10.85),0,z0,Math.max(sd*10.35,sd*10.85),1.15,z1,[.22,.22,.26],21,null,63,4);
     Sd.box(Math.min(sd*10.33,sd*10.87),1.15,z0,Math.max(sd*10.33,sd*10.87),1.28,z1,rgbN(1),5,[3.2,0,0,0],63,4);
     Sd.box(Math.min(sd*10.36,sd*10.84),.25,z0,Math.max(sd*10.36,sd*10.84),.32,z1,rgbN(0),5,[1.6,0,0,0],63,4);
   }
-  Sd.box(-10.6,-2.6,z0,10.6,0,z1,[.07,.075,.09],2,null,1|2|8,8);
+  Sd.box(-10.6,-2.6,z0,10.6,0,z1,[.16,.16,.19],21,null,1|2|8,8);
   /* pillars down to the ground, and the ground itself, a grid of lit streets 78 m below */
   const PZ=64;for(let k=Math.ceil((z0-PZ/2)/PZ);(k+.5)*PZ<z1;k++){const z=(k+.5)*PZ;
-    Sd.box(-2.2,-78,z-2.2,2.2,-2.6,z+2.2,[.08,.09,.12],2,null,1|2|16|32,40);
-    Sd.box(-6,-4.6,z-1.8,6,-2.6,z+1.8,[.08,.09,.12],2,null,63,8);
+    Sd.box(-2.2,-78,z-2.2,2.2,-2.6,z+2.2,[.16,.17,.2],21,null,1|2|16|32,40);
+    Sd.box(-6,-4.6,z-1.8,6,-2.6,z+1.8,[.16,.17,.2],21,null,63,8);
     Sd.box(-2.25,-40,z-2.25,2.25,-39.6,z+2.25,rgbN(1),5,[2,0,0,0],63,8);}
   Sd.box(-600,-78.2,z0,600,-78,z1,[1,1,1],14,null,4,CHUNK);
   /* towers rising from the ground on a 150 m grid, away from the road */
@@ -180,6 +190,9 @@ function skywayChunk(G,Sd,z0,z1){
     }}
   /* gantries with signs every 520 m */
   const GTZ=520;for(let k=Math.ceil((z0-GTZ/2)/GTZ);(k+.5)*GTZ<z1;k++){const z=(k+.5)*GTZ;
+    if(signsOn()){const si=pickSign('gantry',ihash(k*5+1)),w=13,h=w/SIGNS.signs[si].asp;
+      for(const sd of [-1,1])Sd.box(Math.min(sd*6.2,sd*6.6),0,z-.2,Math.max(sd*6.2,sd*6.6),6.2,z+.2,[.07,.07,.09],6,null,63,8);
+      Sd.panel(0,6+h/2,z-.25,w,h,'-z',[1,1,1],7,si,10);Sd.box(-w/2,6,z-.22,w/2,6+h,z+.2,[.03,.03,.04],6,null,1|2|4|8,8);continue;}
     for(const sd of [-1,1])Sd.box(Math.min(sd*9.6,sd*10.2),0,z-.3,Math.max(sd*9.6,sd*10.2),9,z+.3,[.07,.07,.09],6,null,63,8);
     Sd.box(-10.2,8.3,z-.3,10.2,9,z+.3,[.07,.07,.09],6,null,63,8);
     Sd.panel(0,7.1,z-.36,11,1.9,'-z',rgbN(0),7,k*3.3,0);
@@ -205,12 +218,16 @@ function tunnelChunk(G,Sd,z0,z1,C){
   const RZ=16;for(let k=Math.ceil(z0/RZ);k*RZ<z1;k++){const z=k*RZ;if(tubeOpen(z))continue;
     for(let i=1;i<TUBE.length-2;i++){const p=TUBE[i],q=TUBE[i+1],s=.985;
       Sd.quad([p[0]*s,p[1]*s+.05,z-.18],[q[0]*s,q[1]*s+.05,z-.18],[q[0]*s,q[1]*s+.05,z+.18],[p[0]*s,p[1]*s+.05,z+.18],rgbN(0),5,[3.4,0,0,0]);}}
+  /* signs on the tunnel walls, alternating sides, cut from sheet 22 */
+  if(signsOn()){const SZ=96;for(let k=Math.ceil(z0/SZ);k*SZ<z1;k++){const z=k*SZ+30;if(tubeOpen(z)||z>=z1)continue;const sd=k%2?1:-1,si=pickSign('tunnel',ihash(k*11+4)),w=3.8,h=w/SIGNS.signs[si].asp;
+    Sd.panel(sd*12.75,4.6,z,w,h,sd>0?'-x':'+x',[1,1,1],7,si,10);}}
   /* portals where the tube opens and closes */
   for(let k=Math.floor(z0/700);k*700<z1+700;k++){for(const zp of [k*700+574,k*700+700]){if(zp<z0||zp>=z1)continue;
     for(let i=0;i<TUBE.length-1;i++){const p=TUBE[i],q=TUBE[i+1];const o=1.1;
-      Sd.quad([p[0],p[1],zp-.6],[q[0],q[1],zp-.6],[q[0]*o,q[1]*o,zp-.6],[p[0]*o,p[1]*o,zp-.6],[.09,.09,.1],2);
-      Sd.quad([p[0]*o,p[1]*o,zp+.6],[q[0]*o,q[1]*o,zp+.6],[q[0],q[1],zp+.6],[p[0],p[1],zp+.6],[.09,.09,.1],2);
+      Sd.quad([p[0],p[1],zp-.6],[q[0],q[1],zp-.6],[q[0]*o,q[1]*o,zp-.6],[p[0]*o,p[1]*o,zp-.6],[.2,.2,.23],21);
+      Sd.quad([p[0]*o,p[1]*o,zp+.6],[q[0]*o,q[1]*o,zp+.6],[q[0],q[1],zp+.6],[p[0],p[1],zp+.6],[.2,.2,.23],21);
       Sd.quad([p[0]*.995,p[1]*.995,zp-.65],[q[0]*.995,q[1]*.995,zp-.65],[q[0]*.995,q[1]*.995,zp+.65],[p[0]*.995,p[1]*.995,zp+.65],rgbN(2),5,[2.6,0,0,0]);}}}
+  if(signsOn())for(let k=Math.floor(z0/700);k*700<z1+700;k++){const zp=k*700+700-.8;if(zp<z0||zp>=z1)continue;const si=(SIGNCAT.tunnel||[0])[0],w=8,h=w/SIGNS.signs[si].asp;Sd.panel(0,12.2,zp-.1,w,h,'-z',[1,1,1],7,si,10);}
   /* the open stretches are city */
   let any=false;for(let z=z0;z<z1-1e-6;z+=st)if(tubeOpen(z+st/2)){pavements(G,z,Math.min(z1,z+st),C.pave);any=true;}
   if(any)streetChunk(new MB(),Sd,z0,z1,C,tubeOpen);

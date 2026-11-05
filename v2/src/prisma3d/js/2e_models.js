@@ -135,7 +135,17 @@ function buildRamp(){
   for(const sd of [-1,1])M.quad([sd*2.21,.02,0],[sd*2.21,.02,0],[sd*2.21,1.52,1],[sd*2.21,1.42,1],[.4,.9,1],5,[3,0,0,0]);
   return M.upload();
 }
+/* lights for the carved traffic: they still brake and signal, so these stay as code-made strips on the carved bodies */
+function buildCarLights(type){
+  const M=new MB(),d=VEHDATA.cars[type],b=d.b,hw=b[1],z0=b[4],z1=b[5],H=b[3]-b[2];
+  const yt=type===4?b[2]+H*.32:b[2]+H*.52,yh=type===4?b[2]+H*.3:b[2]+H*.42;
+  M.box(-hw*.7,yt-.05,z0-.04,hw*.7,yt+.04,z0+.06,[1,.1,.1],10,MAT_LIGHT(1),63,2);
+  M.box(-hw*.82,yt-.05,z0-.04,-hw*.7,yt+.04,z0+.07,[1,.6,.1],10,MAT_LIGHT(2),63,2);M.box(hw*.7,yt-.05,z0-.04,hw*.82,yt+.04,z0+.07,[1,.6,.1],10,MAT_LIGHT(3),63,2);
+  M.box(-hw*.62,yh-.04,z1-.06,hw*.62,yh+.03,z1+.03,[1,1,1],10,MAT_LIGHT(0),63,2);
+  return M.upload();
+}
 const MODELS={};
-function buildModels(){MODELS.bike=buildBike();MODELS.van=buildVan();MODELS.drone=buildDrone();MODELS.ramp=buildRamp();MODELS.car=[0,1,2,3,4].map(buildCar);}
+function buildModels(){MODELS.bike=buildBike();MODELS.van=buildVan();MODELS.drone=buildDrone();MODELS.ramp=buildRamp();MODELS.car=[0,1,2,3,4].map(buildCar);
+  if(typeof VEHDATA!=='undefined')MODELS.carLights=[0,1,2,3,4].map(buildCarLights);}
 /* saturated paint for the traffic: candy red, electric blue, pearl, emerald, black, violet, orange, lemon */
 const PAINTS=[[.72,.02,.05],[.02,.14,.85],[.78,.79,.84],[.02,.5,.22],[.012,.012,.016],[.32,.03,.58],[.9,.28,.02],[.85,.68,.02]];
