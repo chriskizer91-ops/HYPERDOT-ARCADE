@@ -38,7 +38,7 @@ Howler 07 stands about **4.5 m tall** — taller than a truck, about a third the
 Two follow cameras, both behind the mech's neck, never above the field like the top-down game.
 
 - **Close follow** — just behind and slightly above the head, over the shoulder. You see the back of the head and the gun barrels. Feels like first person. Best for aiming and for the woods.
-- **Far follow (3/4)** — lifted about one mech height higher (eye about 9 m off the ground) and further back (about 11 m), still looking forward over the mech's neck. You see more of the ground around you. Best for the fields and big fights.
+- **Far follow (3/4)** — lifted about one mech height higher (eye about 9.6 m off the ground) and further back (about 13 m), still looking forward over the mech's neck. You see more of the ground around you. Best for the fields and big fights.
 
 Switch with **V** (laptop), a small camera button (phone), or in the pause menu. The game remembers your choice.
 
