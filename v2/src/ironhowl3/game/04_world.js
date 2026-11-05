@@ -24,7 +24,7 @@ function buildGround(){
 /* --- vegetation: one InstancedMesh per model part; near and far versions swap by distance; trees between the camera and the mech dither out --- */
 const VEG={list:[],byId:{},cat:null,ready:false,cols:new Map(),grassCell:12};
 function colKey(x,z){return ((Math.floor(x/10)+200)*1000)+(Math.floor(z/10)+200);}
-function addCol(x,z,r){const k=colKey(x,z);if(!VEG.cols.has(k))VEG.cols.set(k,[]);VEG.cols.get(k).push({x,z,r});}
+function addCol(x,z,r,h){const k=colKey(x,z);if(!VEG.cols.has(k))VEG.cols.set(k,[]);VEG.cols.get(k).push({x,z,r,h:h||9});}
 /* push a circle (x,z,rad) out of tree trunks; returns [x,z,hit] */
 function collide(x,z,rad){let hit=false;
   for(let i=-1;i<=1;i++)for(let j=-1;j<=1;j++){const a=VEG.cols.get(colKey(x+i*10,z+j*10));if(!a)continue;
@@ -36,7 +36,7 @@ function plant(id,kind,x,z,s,rnd){
   const m=new THREE.Matrix4().compose(V3(x,y,z),new THREE.Quaternion().setFromAxisAngle(V3(0,1,0),r),V3(s,s,s));
   const cr=Math.max(c.size_m[0],c.size_m[2])*.5*s;
   a.inst.push({x,y,z,s,m,cr,h:c.size_m[1]*s,f:0});
-  if(c.collider&&kind==='tree')addCol(x,z,c.collider.r*s+.1);
+  if(c.collider&&kind==='tree')addCol(x,z,c.collider.r*s+.1,c.size_m[1]*s);
 }
 function layoutWoods(mixId){
   const mix=VEG.cat._biomes.find(b=>b.id===mixId)||VEG.cat._biomes[0],rnd=mulberry(4242);
@@ -110,8 +110,8 @@ function updVeg(dt,mx,my,mz){
       if(!far||d<nearD)sn.push(i);else sf.push(i);}
     /* fade near trees that stand between the camera and the mech, or right against the lens */
     if(isT){for(const i of sn){const s=a.inst[i],dx=s.x-cx,dz=s.z-cz;let tgt=0;const t=(dx*segx+dz*segz)/segL2;
-        if(t>-.05&&t<1.08){const px=dx-segx*t,pz=dz-segz*t,dp=Math.sqrt(px*px+pz*pz);if(dp<s.cr*.7+1.4)tgt=.82;}
-        if(dx*dx+dz*dz<s.cr*s.cr*.4)tgt=Math.max(tgt,.9);
+        if(t>-.05&&t<1.08){const px=dx-segx*t,pz=dz-segz*t,dp=Math.sqrt(px*px+pz*pz);if(dp<s.cr*.7+1.4)tgt=.86;}
+        if(dx*dx+dz*dz<s.cr*s.cr*.4)tgt=1;
         s.f+=(tgt-s.f)*damp(tgt>s.f?10:4,dt);}}
     for(const lod of ['near','far']){const L=lod==='near'?sn:sf;
       for(const p of a.parts[lod]){const arr=p.im.instanceMatrix.array,fa=p.fade.array;

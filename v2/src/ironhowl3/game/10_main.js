@@ -1,12 +1,19 @@
 /* ===================== game flow ===================== */
-const G={mode:'load',paused:false,t:0,fdt:1/60,birdT:6,perf:{t:0,n:0,s:0},demoI:1,demoHop:4};
+const G={mode:'load',paused:false,t:0,fdt:1/60,birdT:6,perf:{t:0,n:0,s:0},demoI:1,demoHop:4,score:0,kills:0,combo:0,lastKill:-9,wave:0,hpK:1,breakT:3,downT:0};
 let M=null,CTLX=null;
 function setQuality(q){QL=q;QC=QUAL[q];DYN=1;resize();setShadow();S.fog.near=QC.fog*.22;S.fog.far=QC.fog;}
 function cycleView(){SET.view=SET.view==='close'?'far':'close';store.set('view',SET.view);HUD.view(SET.view);}
 function setPause(b){G.paused=b;HUD.menu();setVolume();if(!b&&!touchy&&G.mode==='play')lockMouse();if(b)jetLoop(0);}
-function startPlay(){audioInit();G.mode='play';G.paused=false;P=mkPlayer();CAMS.ready=false;$('title').style.display='none';HUD.menu();ARC.begin();
+function clearFight(){for(const e of EN)S.remove(e.o);EN.length=0;BOLTS.length=EBOLTS.length=MISS.length=BEACONS.length=0;for(const p of PK)S.remove(p.g);PK.length=0;}
+function resetRun(){P=mkPlayer();CAMS.ready=false;clearFight();Object.assign(GUN,{tier:GUN.base,heat:0,over:false,cd:0,ventCd:0});MSL.ammo=12;
+  Object.assign(G,{score:0,kills:0,combo:0,lastKill:-9,wave:0,hpK:1,breakT:3});if(M)M.root.visible=true;$('down').style.display='none';}
+function playerDown(){if(P.dead)return;P.dead=true;P.thrust=0;boom(P.x,P.y+2.5,P.z,2);boom(P.x+1,P.y+3.5,P.z-1,1.2);if(M)M.root.visible=false;
+  G.mode='down';G.downT=2.4;const best=+store.get('best',0);if(G.score>best)store.set('best',G.score);
+  $('dscore').textContent='SCORE '+G.score.toLocaleString('en-US')+'  ·  WAVE '+G.wave+'  ·  BEST '+Math.max(best,G.score).toLocaleString('en-US');
+  ARC.over(G.score,Math.min(60,Math.floor(G.score/400)+G.wave));}
+function startPlay(){audioInit();resetRun();G.mode='play';G.paused=false;$('title').style.display='none';HUD.menu();ARC.begin();
   if(!touchy){lockMouse();HUD.hint('WASD MOVE · MOUSE AIM · SPACE JET HOP · V CAMERA · ESC PAUSE',9);}else HUD.hint('LEFT THUMB MOVES · RIGHT THUMB AIMS · JET TO HOP',7);}
-function startDemo(){G.mode='demo';G.paused=false;P=mkPlayer();CAMS.ready=false;G.demoI=1;$('title').style.display='none';HUD.menu();}
+function startDemo(){resetRun();G.mode='demo';G.paused=false;G.demoI=1;$('title').style.display='none';HUD.menu();}
 /* attract mode: walk the trail, hop now and then */
 function demoCtl(dt){const c={mx:0,my:0,turn:0,pitch:0,jet:false,jetHit:false};const t=TRAIL[G.demoI];if(!t)return c;
   const dx=t[0]-P.x,dz=t[1]-P.z;if(Math.hypot(dx,dz)<7){G.demoI++;if(G.demoI>=TRAIL.length){G.demoI=1;P=mkPlayer();CAMS.ready=false;}}
@@ -33,12 +40,16 @@ function tick(dt){
     let c=G.mode==='demo'?demoCtl(dt):readCtl(dt);
     if(CTLX){Object.assign(c,CTLX);CTLX.jetHit=false;CTLX.view=false;if(CTLX.turnOnce){c.turn=CTLX.turnOnce;CTLX.turnOnce=0;}}
     if(c.view)cycleView();if(c.pause&&G.mode==='play')setPause(true);
-    updPlayer(c,dt);handleEvents();
-  }else if(G.mode==='play'){const c=readCtl(dt);if(c.pause||c.view&&false)setPause(false);}
+    rayAim();updPlayer(c,dt);if(G.mode==='play')updGun(c,dt);handleEvents();
+  }else if(G.mode==='play'){const c=readCtl(dt);if(c.pause)setPause(false);}
   else readCtl(dt);
+  const fight=(G.mode==='play'&&!G.paused)||G.mode==='down';
+  if(fight){updShots(dt);updEnemies(dt);updPickups(dt);}
+  if(G.mode==='down'){G.downT-=dt;if(G.downT<=0&&$('down').style.display!=='flex'){$('down').style.display='flex';}
+    if(Math.random()<dt*20)part({x:P.x+(Math.random()-.5)*2,y:P.y+1+Math.random()*2,z:P.z+(Math.random()-.5)*2,vx:0,vy:2.5,vz:0,life:2.4,s0:1.2,s1:5,a:.4,col:[.2,.2,.21],drag:.6,grav:-.5});}
   if(M){const ev=poseMech(M,{x:P.x,z:P.z,gy:P.y,legYaw:P.legYaw,aimYaw:P.yaw,spd:live?P.spd:0,air:P.air,vy:P.vy,land:P.land,thrust:P.thrust,pitch:P.pitch},live?dt:0);
     for(const e of ev){const k=clamp(Math.abs(P.spd)/WALK,.35,1);sStep(k);if(e.x!==undefined)dustPuff(e.x,e.z,3,.55);if(SET.view==='close')CAMS.shake=Math.max(CAMS.shake,.16*k);}}
-  const view=G.mode==='title'||G.mode==='demo'?'far':SET.view;
+  const view=G.mode==='title'||G.mode==='demo'||G.mode==='down'?'far':SET.view;
   updCam(live||G.mode!=='play'?dt:0,P,view);
   placeSun(P.x-Math.sin(P.yaw)*12,P.z-Math.cos(P.yaw)*12);
   U.uSunXZ.value.set(SUN.x/SUN.y,SUN.z/SUN.y);
@@ -46,7 +57,7 @@ function tick(dt){
   updVeg(dt,P.x,3,P.z);
   jetLoop(live?P.thrust:0);
   if(live){G.birdT-=dt;if(G.birdT<0){sBird();G.birdT=4+Math.random()*8;}}
-  HUD.fuel(P);
+  HUD.fuel(P);HUD.frame();
 }
 /* auto quality: if frames are slow, lower the render scale, then the quality level */
 function autoQ(dt){if(SET.quality!=='auto'||G.mode!=='play'||G.paused)return;const pf=G.perf;pf.t+=dt;pf.n++;
@@ -60,10 +71,10 @@ function frame(now){
 }
 function boot(){
   setupHud();setQuality(QL);U.tCloud.value=tex('34-fog',{srgb:false});
-  buildGround();M=buildMech();buildFX();P=mkPlayer();
+  buildGround();M=buildMech();buildFX();buildWeapons();P=mkPlayer();
   const done=()=>{G.mode=G.mode==='load'?'title':G.mode;$('load').style.display='none';$('title').style.display=G.mode==='title'?'flex':'none';document.title='IRONHOWL 3';ARC.post('ready',{title:ARC.title});};
   let vegDone=false,texDone=false;LM.onLoad=()=>{texDone=true;if(vegDone)done();};
-  loadVeg('woods').then(()=>{vegDone=true;if(texDone||LOADP>=1)done();});
+  Promise.all([loadVeg('woods'),loadEnemies()]).then(()=>{navInit();navBuild();vegDone=true;if(texDone||LOADP>=1)done();});
   requestAnimationFrame(frame);
 }
 $('title').addEventListener('click',()=>{if(G.mode==='title')startPlay();});
@@ -71,16 +82,16 @@ cv.addEventListener('click',()=>{if(G.mode==='play'&&!G.paused&&!touchy&&!MOUSE.
 addEventListener('keydown',e=>{if(G.mode==='title'&&(e.code==='Enter'||e.code==='Space'))startPlay();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&G.mode==='play'&&!G.paused)setPause(true);});
 addEventListener('message',e=>{const m=e.data;if(!m||m.src!=='hyperdot-arcade')return;
-  if(m.cmd==='start'){if(G.mode==='title'||G.mode==='demo')startPlay();else if(G.paused)setPause(false);}
+  if(m.cmd==='start'){if(G.mode==='title'||G.mode==='demo'||G.mode==='down')startPlay();else if(G.paused)setPause(false);}
   else if(m.cmd==='pause'){if(G.mode==='play'&&!G.paused)setPause(true);}
   else if(m.cmd==='resume'){if(G.mode==='play'&&G.paused)setPause(false);}
   else if(m.cmd==='attract'){ARC.live=false;if(G.mode!=='load')startDemo();else G.mode='demo';}
   else if(m.cmd==='mute'){ARC.muted=true;setVolume();}
   else if(m.cmd==='unmute'){ARC.muted=false;setVolume();}
 });
-if(DEV)window.__ih3={S,KEY,SKY,PFX,rt(n=3){const t0=performance.now();for(let i=0;i<n;i++){R.render(S,cam);R.getContext().finish();}return +((performance.now()-t0)/n).toFixed(1);},G,get P(){return P;},get M(){return M;},VEG,get VEGN(){return VEGN;},R,cam,CAMS,SET,QUAL,setQuality,cycleView,startPlay,startDemo,setPause,
+if(DEV)window.__ih3={S,KEY,SKY,PFX,GUN,MSL,EN,PK,AIM,startWave,spawnEnemy,dropPickup,hurtPlayer,rt(n=3){const t0=performance.now();for(let i=0;i<n;i++){R.render(S,cam);R.getContext().finish();}return +((performance.now()-t0)/n).toFixed(1);},G,get P(){return P;},get M(){return M;},VEG,get VEGN(){return VEGN;},R,cam,CAMS,SET,QUAL,setQuality,cycleView,startPlay,startDemo,setPause,
   ctl(o){CTLX=o;},
   /* run the game forward t seconds at 60 steps a second without drawing (for tests) */
   ff(t){const n=Math.round(t*60);for(let i=0;i<n;i++)tick(1/60);},
-  info(){const i=R.info.render;return {calls:i.calls,tris:i.triangles,veg:VEGN.inst,ql:QL,dyn:DYN,mode:G.mode,x:+P.x.toFixed(1),z:+P.z.toFixed(1),y:+P.y.toFixed(2),air:P.air,fuel:+P.fuel.toFixed(2),hops:P.hops};}};
+  info(){const i=R.info.render;return {calls:i.calls,tris:i.triangles,veg:VEGN.inst,ql:QL,mode:G.mode,x:+P.x.toFixed(1),z:+P.z.toFixed(1),air:P.air,fuel:+P.fuel.toFixed(2),hull:+P.hull.toFixed(0),shield:+P.shield.toFixed(0),tier:GUN.tier,heat:+GUN.heat.toFixed(0),over:GUN.over,msl:MSL.ammo,score:G.score,kills:G.kills,wave:G.wave,enemies:EN.filter(e=>!e.dead).length,bolts:BOLTS.length,ebolts:EBOLTS.length};}};
 boot();

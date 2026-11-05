@@ -4,8 +4,11 @@ const WALK=7.5,RAD=1.35;
 const JET={vh:21,vy:9.5,grav:22,hold:.6,holdG:.42,refill:3.6,drain:.55};
 let P=null;
 function mkPlayer(){return {x:SPAWN.x,z:SPAWN.z,y:hgt(SPAWN.x,SPAWN.z),yaw:SPAWN.yaw,pitch:0,legYaw:SPAWN.yaw,vx:0,vz:0,vy:0,air:false,
-  cells:2,fuel:2,jetT:9,land:0,thrust:0,spd:0,groundT:9,ev:[],hops:0,dist:0};}
+  cells:2,fuel:2,jetT:9,land:0,thrust:0,spd:0,groundT:9,ev:[],hops:0,dist:0,hull:100,hullMax:100,shield:60,shieldMax:60,regenT:0,dead:false};}
 function updPlayer(c,dt){
+  if(P.dead){P.thrust=0;return;}
+  /* shield comes back after 3 s without a hit */
+  if(P.regenT>0)P.regenT-=dt;else P.shield=Math.min(P.shieldMax,P.shield+22*dt);
   P.yaw-=c.turn;P.pitch=clamp(P.pitch+c.pitch,-.3,.34);   /* turn: plus = to the right */
   const fx=-Math.sin(P.yaw),fz=-Math.cos(P.yaw),rx=Math.cos(P.yaw),rz=-Math.sin(P.yaw);
   let wx=fx*c.my+rx*c.mx,wz=fz*c.my+rz*c.mx;const ml=Math.hypot(wx,wz);

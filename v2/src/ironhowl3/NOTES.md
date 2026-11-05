@@ -14,6 +14,12 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
   - Headless Chrome here takes about a second per drawn frame, so always move time with `ff()` and only wait for screenshots.
   - `__ih3.info()` returns calls, triangles, position, fuel and hops. `__ih3.VEGN.by` gives triangles per vegetation kind and level of detail.
 - Cabinet check: `python3 v2/src/ironhowl3/tools/embed_check.py`. It uses `tools/embed_check.html`, loads the game in an iframe and sends start, pause, resume, mute, unmute and attract.
+- Models: `blender/build_howler.py` (the player's mech) and `blender/build_enemies.py` (skitter, hound, gunner) build the GLBs in `games/ironhowl3/models/mech/`. They use the small kit in `blender/lib.py` (chamfered boxes, cylinders, struts, slats, hoses, decal quads, ambient-occlusion bake into vertex colours, glTF export).
+  - Blender's Python module: `python3.13 -m venv bvenv && bvenv/bin/pip install bpy==5.2.3`, then `bvenv/bin/python blender/build_howler.py <repo>/v2/games/ironhowl3/models/mech/howler07.glb` and `bvenv/bin/python blender/build_enemies.py <repo>/v2/games/ironhowl3/models/mech`.
+  - `blender/render_preview.py build_howler out.png` renders four quick views.
+  - Empties are the joints. Their rotations are zeroed at export (the bake pose is only for the shading).
+  - Material names are matched in the game (`MECH_MAT` in 05_mech, `EMAT` in 06c).
+  - Decals do not use the baked shading (they would bake black), and textures used on Blender models load with `flipY:false` (`tex(name,{glb:true})`).
 - Art: `tools/process_art.py` rebuilds `games/ironhowl3/art/` from the original PNGs. Full-size masters are in `src/ironhowl3/art/masters/`.
 
 ## Code map (game/)
@@ -24,18 +30,44 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
 | 02_input | Keyboard, mouse lock, touch (left 45% of the screen = floating stick, rest = drag to aim, JET button), gamepad → `readCtl(dt)`. `turn` plus = right. |
 | 03_render | Renderer, `QUAL` table, sun and hemisphere light, shadow box that follows the mech (snapped to texels), sky dome (gradient, sun, clouds from `34-fog`), `hookWorld(mat,{fade,leaf,ground})` (cloud shadows on the sun light, dither fade per instance, leaf lighting, forest-floor tint). |
 | 04_world | Woods test map: `hgt(x,z)` terrain (rises into ridges past ±80 m), trail polyline, clearings, layout from the catalog biome mix, vegetation instancing, tree colliders `collide()`. |
-| 05_mech | Howler 07 model (chamfered boxes plus the textures), `mergeParts` (fewer draw calls), 2-bone leg IK, walk cycle with foot planting on the terrain, jets (flames, light). |
-| 06_player | Movement: walk 7.5 m/s, jet hop (vh 21 m/s, vy 9.5 m/s, hold to float, 2 fuel cells, 3.6 s per cell), tree collision, map edge, legs face the walking direction (backwards when walking back). |
+| 05_mech | Loads `models/mech/howler07.glb`, swaps in the game materials, `mergeParts` (about 170 pieces become about 60 draw calls), `setTier` (shows one of four barrel sets), 2-bone leg IK (`rev` = knee bends backwards), walk cycle with foot planting, jets. |
+| 06b_weapons | Autocannon tiers I–IV, heat and overheat, VENT (dumps heat, shoves enemies), missiles (salvo of 2, homing), bolts, hit tests (`segSphere`, `treeAt`, ground), crosshair ray with aim assist (`rayAim`), sparks and explosions. |
+| 06c_enemies | Loads the three enemy GLBs, flow-field path-finding on a 2 m grid (`navBuild`/`navDir`), line-of-sight test, brains (skitter swarms and zaps, hound aims then charges, gunner keeps 24–42 m, strafes and fires bursts), waves spawned 55–80 m ahead with red beacons, damage, score with combo, pickups. |
+| 06_player | Hull 100 and shield 60 (back after 3 s, 22/s). Movement: walk 7.5 m/s, jet hop (vh 21 m/s, vy 9.5 m/s, hold to float, 2 fuel cells, 3.6 s per cell), tree collision, map edge, legs face the walking direction (backwards when walking back). |
 | 07_fx | One particle system (smoke blends, glow adds, using premultiplied alpha). Sounds made on the fly: steps, jet, landing, no-fuel click, birds, wind. |
 | 08_camera | The two follow cameras (see below), portrait step-back, camera stays above the terrain, shake, FOV kick on hops. |
-| 09_hud | DOM HUD: jet fuel cells, VIEW and pause buttons, stick, JET button, pause menu (view, quality, sound, look speed, exit when embedded). |
+| 09_hud | DOM HUD. Top left: shield, hull, jets, gun tier, missiles. Top middle: score and combo. Crosshair with heat bar, hit marker, messages, wave banner, damage arcs, edge arrows for unseen machines (60 m). Phone: FIRE (hold and drag to aim), JET, MSL, VENT. Pause menu. |
 | 10_main | Game flow (load → title → play, attract demo), auto quality, events → effects and sound, cabinet commands, the dev handle. |
 
 ## Numbers that matter
 
-- Mech: 4.5 m tall, hip 2.25 m, thigh and shin 1.25 m each, collision radius 1.35 m. The stride grows from 1.0 m to 2.5 m with speed.
-- **Close camera:** 3.5 m back, 5.75 m up, looking 24 m ahead at 4.25 m, FOV 64. This is "just behind the mech, first person" (his words).
-- **Far camera:** 13 m back, 9.6 m up, looking 18 m ahead at 3.3 m, FOV 58. This is "lifted about one mech height and further back, still behind the neck" (his words).
+- Mech (session 3 model):
+  - About 5 m tall to the ear tips, hip 2.4 m, thigh 1.35 m, shin 1.45 m, ankle 0.32 m, reverse knees.
+  - 21.7k triangles, 1 MB GLB.
+  - Collision radius 1.35 m. The stride grows from 1.0 m to 2.4 m with speed.
+- Enemies: about 1.9k, 2.9k and 3.4k triangles. Shown at 1.4×, 1.15× and 1.05× scale.
+
+  | Enemy | HP | Speed | Attack | Score |
+  |---|---|---|---|---|
+  | skitter | 30 | 9.5 m/s | zap for 4 every 1 s | 50 |
+  | hound | 95 | 8.2 m/s | aims 0.75 s, then charges at 26 m/s for 18 (hop over it) | 150 |
+  | gunner | 230 | 4.6 m/s | 3-round bursts every 2.4–3.4 s, bolts 30 m/s for 8 each | 400 |
+
+- Guns: 6/7/8/9 volleys a second with 1/2/3/4 barrels. Damage per bolt 11/8.5/7.2/6.6. Bolts 150 m/s.
+  - Heat: 2.3 per volley, cooling 30/s after 0.45 s. Overheat locks the gun until it cools to 38.
+  - VENT: 8 s cooldown, 15 damage and a shove within 10 m.
+- Missiles: 12 to start, 24 max, 2 per salvo, 75 splash damage within 4.8 m.
+- Pickups:
+  - chip: gun tier +1, to IV
+  - repair: +35 hull
+  - shield: full
+  - missiles: +6
+  - fuel: full
+  - Drop chance: skitter 12%, hound 40%, gunner always (55% of those are chips).
+- Waves loop through 6 mixes, then come back with 30% more HP. A new wave starts 4 s after a clear.
+- Tickets on 'over': floor(score/400) + waves, capped at 60. The best score is saved as `hd-ironhowl3-best`.
+- **Close camera:** 4.6 m back, 6.9 m up, 1.2 m to the right, looking 26 m ahead at 5.2 m, FOV 64. This is "just behind the mech, first person" (his words).
+- **Far camera:** 13 m back, 9.8 m up, 2.6 m to the right, looking 24 m ahead at 5.4 m, FOV 58. This is "lifted about one mech height and further back, still behind the neck" (his words).
 - Portrait screens step both cameras back and widen the FOV.
 - Quality levels (draw distances in metres):
 
@@ -65,6 +97,12 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
   - Cloud texture must load as plain data (not sRGB) or the clouds vanish.
   - Ground cloud shadow scale is 1/420, and the sky uses the matching projection.
   - Hints sit at the top of the screen so the thumbs never cover them.
+- Session 3:
+  - Christopher says his phone handles 1–1.5 million triangles, so the budget is relaxed.
+  - The mech is rebuilt in Blender with wolf-like reverse knees (fits the Howler name), a wolf-head sensor with ears, and the wolf emblem on the jet pack.
+  - Both cameras sit a little to the right so the crosshair is never behind the mech.
+  - Enemies are scaled up so they read at 50 m.
+  - On phones, FIRE also works as the aim drag.
 
 ## Session log
 
@@ -72,6 +110,14 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
   - Art processed (46 images → 49 files, 8.2 MB).
   - Forest pack stored with its catalog, three.js bundle built.
   - `DESIGN.md` written; `preview.html` is the first look.
+- **Session 3 (5 Nov 2026):** combat core.
+  - New Howler 07 model from Blender, with 4 barrel sets shown by gun tier.
+  - Skitter, Hound and Gunner models.
+  - Autocannon tiers, heat, vent, missiles, aim assist.
+  - Flow-field path-finding, waves from the front with beacons.
+  - Shield and hull, damage arcs, edge arrows.
+  - Pickups, score with combo, down screen and retry.
+  - Cabinet bridge checked: ready, score, over with tickets, exit.
 - **Session 2 (5 Nov 2026):** engine core in `index.html`.
   - Terrain with ridges and a trail.
   - Woods from the pack with near/far swap, colliders and see-through trees.
@@ -85,18 +131,18 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
 
 ## Known problems and loose ends
 
-- Real phone speed is unknown. The headless browser is far too slow to judge it, so check on the Pixel 7a and look at the stats line with `?dev`.
-- The leaves of the broad trees (oak, cottonwood) still look blocky up close. That is the pack's style. It could get a soft leaf texture later.
+- Real phone speed is unknown. In a fight the draw calls rise to about 300–390 (each enemy is about 10 pieces). If phones struggle, instance the enemies.
 - The dither fade shows a fine dot pattern on faded trees.
-- The jet flames are plain cones. They could use a texture (`38-muzzle-flash`) later.
-- The mech is boxy. Session 3 adds the gun tiers (barrels per tier), so revisit the shape then.
-- The title screen camera is static.
+- Enemy hit flash turns the armour pink-white. A rim flash might look better.
+- The leaves of the broad trees still look blocky up close.
+- No wreck is left behind after a kill (only smoke).
+- Missiles fire at once, with no lock-on markers yet.
+- The jet flames are plain cones.
+- The autopilot test (`AUTO` in the shot steps) does not dodge, so it loses. A human hopping over Hound charges should do far better.
 
-## Next: session 3 (combat core)
+## Next: session 4 (places)
 
-- Autocannon tiers I–IV: barrel meshes per tier, fire rates 6/7/8/9 per second, heat and VENT.
-- Shields with recharge, hull, damage direction indicator.
-- Missiles with lock-on.
-- The first enemies (Skitter, Gunner, Hound) with path-finding around trees.
-- Pickups (power chip, repair, shield, missile, fuel), a FIRE button on phones (hold) and a MISSILE button, the crosshair with aim assist.
-- Score, plus `score` and `over` messages to the cabinet.
+- Field map: meadow and dry mixes, open hills, sun, cloud shadows, wind in the grass, farm props.
+- Docks map: container stacks (11, 10, 12), cranes, quay, water, the HARBOR 9 neon (44), rain, night sky (31) and harbour skyline (33).
+- Woods polish: light shafts, softer canopy fade.
+- One test map of each kind, chosen from the title screen.
