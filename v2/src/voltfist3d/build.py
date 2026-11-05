@@ -35,6 +35,16 @@ def main():
     three = read(os.path.join('vendor', 'three.vf.js'))
     mods = sorted(f for f in glob.glob('[0-9][0-9]_*.js') if not f.startswith('99_'))
     code = '\n'.join(read(f) for f in mods)
+    # the fighters' painted art (from tools/art_prep.py): one WebP atlas per fighter and the measurements
+    import base64, json as _json
+    if os.path.exists(os.path.join('art', 'meta.json')):
+        imgs = {}
+        for fid in _json.load(open(os.path.join('art', 'meta.json'))):
+            with open(os.path.join('art', fid + '.webp'), 'rb') as fh:
+                imgs[fid] = 'data:image/webp;base64,' + base64.b64encode(fh.read()).decode()
+        code = 'const ARTDATA={meta:' + read(os.path.join('art', 'meta.json')) + ',img:' + _json.dumps(imgs) + '};\n' + code
+    else:
+        code = 'const ARTDATA=null;\n' + code
     page = shell.replace('/*@@THREE@@*/', three).replace('/*@@CODE@@*/', code)
     assert '/*@@' not in page
     with open(OUT, 'w', encoding='utf-8') as f:
