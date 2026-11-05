@@ -195,9 +195,9 @@ function drawCockpit2D(){
     for(let j=y;j<y+h;j++)for(let i=x+((5-(j%5))%5);i<x+w;i+=5)g.fillRect(i,j,1,1);
     holo(T.mesh,x,y,w,h,G.t*.6,tc,T.s||1,-.35,T.mpos||T.pos,T.q,2.6);}
 }
-function optItems(){return [['VIEW: '+['COCKPIT','HUD ONLY','CHASE'][G.camMode],'cam'],['INVERT Y: '+(INVERT?'ON':'OFF'),'inv'],['DOT FILTER: '+(DOTF?'ON':'OFF'),'dotf'],
+function optItems(){return [['VIEW: '+['COCKPIT','HUD ONLY','CHASE'][G.camMode],'cam'],['AIM ASSIST: '+AIM_LV[AIM].n,'aim'],['INVERT Y: '+(INVERT?'ON':'OFF'),'inv'],['DOT FILTER: '+(DOTF?'ON':'OFF'),'dotf'],
   ['HUD DOTS: '+DOTS[dotI],'dots'],['QUALITY: '+(qAuto?'AUTO '+QL[qI].n:QL[qI].n),'q'],['VOICES: '+(VOICE?'ON':'OFF'),'voice'],['SOUND: '+(AU.muted?'OFF':'ON'),'snd'],['BACK','back']];}
 function drawOptions(){dim(G.optFromPause?.66:.5);const cx=W>>1,it=optItems(),sp=H>=180?12:11,y0=Math.round(H*.2);
   txt5(g,'OPTIONS',cx,Math.round(H*.07),GR.cyan,1,'c');panel(W/2-82,y0-6,164,it.length*sp+8,.6);menu(it.map(x=>x[0]),y0,sp);
-  const tip={cam:'C SWITCHES VIEW IN FLIGHT',dotf:'SHOWS THE WHOLE 3D VIEW AS LED DOTS',dots:'HOW FINE THE LED HUD IS',q:'AUTO STEPS DOWN IF THE FRAME RATE DROPS',voice:'SPOKEN RADIO CALLS'}[it[G.menuI]&&it[G.menuI][1]];
+  const tip={aim:'PULLS YOUR NOSE ONTO TARGETS AND BENDS NEAR MISSES',cam:'C SWITCHES VIEW IN FLIGHT',dotf:'SHOWS THE WHOLE 3D VIEW AS LED DOTS',dots:'HOW FINE THE LED HUD IS',q:'AUTO STEPS DOWN IF THE FRAME RATE DROPS',voice:'SPOKEN RADIO CALLS'}[it[G.menuI]&&it[G.menuI][1]];
   if(tip){const ty=Math.min(H-9,y0+it.length*sp+8),tw=tw3(tip);panel(cx-tw/2-4,ty-3,tw+8,11,.8);txt3(g,tip,cx,ty,HC.ink,1,'c');}}

@@ -11,7 +11,7 @@ files = sorted(glob.glob(os.path.join(here, '[a-z]_*.js')))
 code = '\n'.join(open(f).read() for f in files)
 
 TEST = '''window.__vl3={G,get PL(){return PL},PLS,ENT,FX,BOLTS,CAM,MISSIONS,ARC,GLX,PERF,QL,KEY,MOUSE,TS,LATCH,
-  startDemo,newCampaign,brief,launch,tick,draw,renderFrame,setQuality,openOptions,setPause,endMission,afterDebrief,damage,useTheme,
+  toLocal,setAim(i){AIM=i},get AIM(){return AIM},startDemo,newCampaign,brief,launch,tick,draw,renderFrame,setQuality,openOptions,setPause,endMission,afterDebrief,damage,useTheme,
   get qI(){return qI},get NI(){return NI},get RW(){return RW},get RH(){return RH},get DOTF(){return DOTF},set DOTF(v){DOTF=v},
   ff(sec){for(let i=0;i<sec*60;i++)tick(1/60);endInputFrame();}};'''
 

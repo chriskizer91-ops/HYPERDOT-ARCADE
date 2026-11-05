@@ -238,6 +238,10 @@ function turretThink(s,dt){
   }
 }
 /* ===================== player ===================== */
+/* aim assist. Near a target the nose is pulled gently onto its lead point, your own turning is softened a little so it
+   is easier to hold there, and shots that would just miss bend onto the lead point. OFF is the original game. */
+const AIM_LV=[{n:'OFF',cone:0,pull:0,fric:0,bend:.045},{n:'LIGHT',cone:.14,pull:.35,fric:.25,bend:.065},{n:'STRONG',cone:.24,pull:.6,fric:.4,bend:.095}];
+let AIM=clamp(parseInt(store.get('aim',touchy?'2':'1'),10),0,2);if(!(AIM>=0))AIM=touchy?2:1;
 const PLS={lockT:0,locked:false,lockTone:0,tgt:null,missCD:0,energy:100,boostE:100,cockT:0,boostHeld:false,ctl:null,autoT:0,warnBeep:0,flyby:0};
 function maxEnergy(){return 100*(1+.4*(G.up.cap||0));}
 function updPlayer(dt,c){
@@ -247,6 +251,11 @@ function updPlayer(dt,c){
   if(boost){S2.boostE=Math.max(0,S2.boostE-dt*34/(1+.5*(G.up.boost||0)));if(!S2.boostHeld)SFX.boost();}else S2.boostE=Math.min(100,S2.boostE+dt*14*(1+.5*(G.up.boost||0)));
   S2.boostHeld=boost;P.boostK=1+.25*(G.up.boost||0);P.turnK=1+.15*(G.up.agile||0);
   let ctl={pitch:c.pitch,yaw:c.yaw,roll:c.roll,thr:P.thr,boost};
+  const AA=AIM_LV[AIM],T0=S2.tgt;S2.assist=0;
+  if(AA.pull>0&&!G.auto&&T0&&targetable(T0)&&hostile(P.team,T0.team)&&vdist(P.pos,T0.pos)<1800){
+    const l=vnorm(toLocal(P,lead(P.pos,P.vel,T0.pos,T0.vel||[0,0,0],P.d.bolt.spd))),ang=Math.acos(clamp(l[2],-1,1));
+    if(ang<AA.cone){const fade=1-clamp((ang-AA.cone*.5)/(AA.cone*.5),0,1),fr=1-AA.fric*fade;S2.assist=fade;
+      ctl.yaw=ctl.yaw*fr+clamp(Math.atan2(l[0],l[2])*4,-1,1)*AA.pull*fade;ctl.pitch=ctl.pitch*fr+clamp(Math.atan2(l[1],l[2])*4,-1,1)*AA.pull*fade;}}
   /* combat zone fence: a gentle pull back toward the fight */
   const M=G.M;if(M){const d=vdist(P.pos,M.center);if(d>M.radius){const l=vnorm(toLocal(P,M.center)),k=clamp((d-M.radius)/600,0,1);ctl.yaw=lerp(ctl.yaw,clamp(Math.atan2(l[0],l[2])*2,-1,1),k*.8);ctl.pitch=lerp(ctl.pitch,clamp(Math.atan2(l[1],l[2])*2,-1,1),k*.8);G.fence=true;}else G.fence=false;}
   fly(P,dt,ctl);
@@ -258,7 +267,7 @@ function updPlayer(dt,c){
   if(c.target){S2.tgt=nearestToNose(true);SFX.select();S2.lockT=0;}
   if(!S2.tgt||!targetable(S2.tgt)){if(S2.autoT<=0){S2.tgt=nearestToNose(false);S2.autoT=.4;S2.lockT=0;}}
   const T=S2.tgt;let aimP=null;
-  if(T){const lp=lead(P.pos,P.vel,T.pos,T.vel||[0,0,0],P.d.bolt.spd),toL=vnorm(vsub(lp,P.pos)),ang=Math.acos(clamp(vdot(qF(P.q),toL),-1,1));if(ang<.045&&vdist(P.pos,T.pos)<1600)aimP=lp;S2.lead=lp;
+  if(T){const lp=lead(P.pos,P.vel,T.pos,T.vel||[0,0,0],P.d.bolt.spd),toL=vnorm(vsub(lp,P.pos)),ang=Math.acos(clamp(vdot(qF(P.q),toL),-1,1));if(ang<AIM_LV[AIM].bend&&vdist(P.pos,T.pos)<1600)aimP=lp;S2.lead=lp;
     const toT=vnorm(vsub(T.pos,P.pos)),ta=Math.acos(clamp(vdot(qF(P.q),toT),-1,1)),dist=vdist(P.pos,T.pos);
     if(ta<.26&&dist<2800&&T.kind!=='rock'){const lt=.9/(1+.6*(G.up.lock||0));S2.lockT=Math.min(lt,S2.lockT+dt);S2.lockTone-=dt;if(S2.lockT>=lt){if(!S2.locked)SFX.locked();S2.locked=true;}else if(S2.lockTone<=0){SFX.lockTone();S2.lockTone=.18;}}
     else{S2.lockT=Math.max(0,S2.lockT-dt*2);S2.locked=false;}}

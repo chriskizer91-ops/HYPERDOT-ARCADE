@@ -6,6 +6,7 @@ It is the same game: six missions, the Lance, Juno and Rix, the Red Knives, the 
 
 - **Real 3D in WebGL2** at full screen resolution. The ships are built from the original's primitives, with smoother round parts and real lighting: the sun, image-based light and reflections from the nebula, sun shadows, panel detail and lit windows on the big ships, and explosion flashes that light nearby hulls.
 - **Effects:** engine plumes and trails, fireballs, smoke, sparks, shockwave rings, wreckage, shield domes, the Leviathan's beam, sun glare, and bloom.
+- **Aim assist,** in Options: Off (the original), Light (the default on a computer) or Strong (the default on a phone). Near a target it pulls the nose gently onto the lead point, softens your turning a little so you can hold it there, and bends shots that would just miss.
 - **Three views,** switched with C or in Options: Chase (the default), Cockpit (a real 3D dashboard and canopy) and HUD only.
 - **The dots:** the whole HUD is the original's bitmap-font HUD, lit as LED dots over the 3D view. The briefing, ship-roster and target-screen holograms are real meshes rendered into that dot grid. Options also has a **Dot filter** that shows the whole 3D frame on an LED panel.
 - **Quality:** Auto starts at High on a computer and Med on a phone, and steps down if the frame rate can't hold. Add `?q=low`, `?q=med` or `?q=high` to the address to pin it.

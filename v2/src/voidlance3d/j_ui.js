@@ -120,6 +120,7 @@ function optionsTick(e){
   const it=optItems(),a=menuNav(it.length,e);if(e.back){closeOptions();return;}if(a<0)return;const k=it[a][1];
   if(k==='back'){closeOptions();return;}
   if(k==='cam'){G.camMode=(G.camMode+1)%3;store.set('cam',G.camMode);}
+  else if(k==='aim'){AIM=(AIM+1)%AIM_LV.length;store.set('aim',AIM);}
   else if(k==='inv'){INVERT=!INVERT;store.set('inv',INVERT?'1':'0');}
   else if(k==='dotf'){DOTF=!DOTF;store.set('dotf',DOTF?'1':'0');}
   else if(k==='dots'){setDots((dotI+1)%DOTS.length);}
