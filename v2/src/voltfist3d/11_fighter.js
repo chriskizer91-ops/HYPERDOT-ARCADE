@@ -192,7 +192,7 @@ function fighterGeo(def){
 }
 function geoFinish(def,G,R,nl,Lt,uv){
   const sk=skinBuild(def,G,{nl,R});
-  const geo=new THREE.BufferGeometry();if(uv)geo.setAttribute('uv',new THREE.BufferAttribute(uv,2));
+  const geo=new THREE.BufferGeometry();if(uv){geo.setAttribute('uv',new THREE.BufferAttribute(uv.uv,2));geo.setAttribute('uvB',new THREE.BufferAttribute(uv.uv2,2));geo.setAttribute('aWb',new THREE.BufferAttribute(uv.wb,1));}
   geo.setAttribute('position',new THREE.Float32BufferAttribute(G.p,3));geo.setAttribute('normal',new THREE.Float32BufferAttribute(G.n,3));
   geo.setAttribute('color',new THREE.Float32BufferAttribute(G.c,3));geo.setAttribute('aPart',new THREE.Float32BufferAttribute(G.part,1));
   geo.setAttribute('aEmi',new THREE.Float32BufferAttribute(G.emi,1));geo.setAttribute('aOl',new THREE.Float32BufferAttribute(G.ol,1));
@@ -243,10 +243,12 @@ function mkToon(U){
   const m=new THREE.MeshToonMaterial({vertexColors:true,gradientMap:TOONRAMP});
   m.onBeforeCompile=sh=>{
     Object.assign(sh.uniforms,U);
-    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\n'+PARTDECL+'varying float vEmi;varying vec2 vMat;uniform float uGlitch,uTime;')
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\n'+PARTDECL+'varying float vEmi;varying vec2 vMat;uniform float uGlitch,uTime;attribute vec2 uvB;attribute float aWb;varying vec2 vUvB;varying float vWb;')
       .replace('#include <beginnormal_vertex>','vec3 objectNormal=skN(normal);vEmi=aEmi;vMat=aMat;')
-      .replace('#include <begin_vertex>','vec3 transformed=skP(position);if(uGlitch>0.){float bnd=floor(transformed.y*9.+floor(uTime*13.));transformed.x+=uGlitch*step(.82,fract(sin(bnd*12.9898)*43758.5453))*.06*sign(sin(bnd*7.3));}');
-    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform vec3 uRim,uRimDir,uKeyDirV,uKeyColF,uSkyC,uGndC;uniform vec4 uAura;uniform float uFlash,uEmiK,uHolo,uTime,uDimF,uArtEmi,uArtGold,uArtK;varying float vEmi;varying vec2 vMat;')
+      .replace('#include <begin_vertex>','vec3 transformed=skP(position);vUvB=uvB;vWb=aWb;if(uGlitch>0.){float bnd=floor(transformed.y*9.+floor(uTime*13.));transformed.x+=uGlitch*step(.82,fract(sin(bnd*12.9898)*43758.5453))*.06*sign(sin(bnd*7.3));}');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform vec3 uRim,uRimDir,uKeyDirV,uKeyColF,uSkyC,uGndC;uniform vec4 uAura;uniform float uFlash,uEmiK,uHolo,uTime,uDimF,uArtEmi,uArtGold,uArtK,uArtBump;varying float vEmi;varying vec2 vMat;varying vec2 vUvB;varying float vWb;\nvec3 artPerturb(vec3 sp,vec3 sn,vec2 dH){vec3 sx=dFdx(sp),sy=dFdy(sp),r1=cross(sy,sn),r2=cross(sn,sx);float det=dot(sx,r1);vec3 g=sign(det)*(dH.x*r1+dH.y*r2);return normalize(abs(det)*sn-g);}')
+      .replace('#include <map_fragment>','float artH=.5;\n#ifdef USE_MAP\nvec4 tA=texture2D(map,vMapUv),tB=texture2D(map,vUvB),tM=mix(tA,tB,clamp(vWb,0.,1.));diffuseColor.rgb*=tM.rgb;artH=tM.a;\n#endif')
+      .replace('#include <normal_fragment_maps>','#include <normal_fragment_maps>\nif(uArtBump>0.){normal=artPerturb(-vViewPosition,normal,vec2(dFdx(artH),dFdy(artH))*uArtBump*.012);}')
       .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\nif(uArtK>0.){float lg=dot(diffuseColor.rgb,vec3(.3,.59,.11));diffuseColor.rgb=max(mix(vec3(lg),diffuseColor.rgb,1.08),0.)*uArtK;}\ntotalEmissiveRadiance+=vColor.rgb*vEmi*uEmiK+diffuseColor.rgb*uArtEmi*smoothstep(.3,.65,min(diffuseColor.g,diffuseColor.b)-diffuseColor.r*.8);')
       .replace('#include <opaque_fragment>',`
         vec3 Vv=normalize(vViewPosition);float ndv=clamp(dot(normal,Vv),0.,1.),fr=1.-ndv;
@@ -322,7 +324,7 @@ function mkActorMesh(def){
   const info=fighterGeo(def),mats=[];for(let i=0;i<NP;i++)mats.push(new THREE.Matrix4());
   const U={uPart:{value:mats},uFlash:{value:0},uEmiK:{value:def.look.holo?1.1:2.2},uHolo:{value:def.look.holo?1:0},uGlitch:{value:0},uRim:SHU.uRim,uRimDir:SHU.uRimDir,uTime:SHU.uTime,uDimF:{value:1},
     uKeyDirV:SHU.uKeyDirV,uKeyColF:SHU.uKeyColF,uSkyC:SHU.uSkyC,uGndC:SHU.uGndC,uAura:{value:new THREE.Vector4(0,0,0,0)},
-    uArtEmi:{value:info.art?(ARTFX[def.id]||{}).emi||0:0},uArtGold:{value:info.art?(ARTFX[def.id]||{}).gold||0:0},uArtK:{value:info.art?1.27:0}};
+    uArtEmi:{value:info.art?(ARTFX[def.id]||{}).emi||0:0},uArtGold:{value:info.art?(ARTFX[def.id]||{}).gold||0:0},uArtK:{value:info.art?1.27:0},uArtBump:{value:info.art?(ARTFX[def.id]||{}).bump||0:0}};
   const toon=mkToon(U),depth=mkDepth(U),ol=mkOutline(U),rf=mkReflect(U);if(info.art)toon.map=artTex(def.id);
   if(def.look.holo){toon.transparent=true;ol.uniforms.uCol={value:new THREE.Color(.05,.25,.45)};}
   const grp=new THREE.Group();

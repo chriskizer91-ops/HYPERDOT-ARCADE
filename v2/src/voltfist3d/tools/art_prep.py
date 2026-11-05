@@ -168,7 +168,7 @@ def main():
         cs = Fc[:, ff[1][0]:ff[1][1] + 1]; mcs = mC[:, ff[1][0]:ff[1][1] + 1]
         if HEAD_SIDE_FACE[fid] < 0: cs = cs[:, ::-1]; mcs = mcs[:, ::-1]
         # ---- measurements in front-T-pose pixels ----
-        lim = int(0.14 * Hf); TS = [i / 10 for i in range(11)]
+        lim = int(0.14 * Hf); TS = [i / 30 for i in range(31)]
         meas = {}
         for k, (a, b) in {'uaR': ('SR', 'ER'), 'faR': ('ER', 'WR'), 'uaL': ('SL', 'EL'), 'faL': ('EL', 'WL'),
                           'thR': ('hR', 'kR'), 'shR': ('kR', 'aR'), 'thL': ('hL', 'kL'), 'shL': ('kL', 'aL')}.items():
@@ -182,8 +182,8 @@ def main():
             return (r[0][0], r[-1][1])
         yax = side_at(L['W'][1]); axis = (yax[0] + yax[1]) / 2 if yax else 0
         rows = []
-        for i in range(41):
-            y = L['crotch'] + (L['N'][1] - L['crotch']) * i / 40
+        for i in range(121):
+            y = L['crotch'] + (L['N'][1] - L['crotch']) * i / 120
             rr = row_run(mF, y, L['cx']); hw = (rr[1] - rr[0]) / 2 if rr else 0
             if y < L['armpit']: hw = None
             s = side_at(y)
@@ -210,12 +210,12 @@ def main():
         shS = topSd + (shF - topF)
         cxF = np.mean([(mcf[int(topF + k * (chinF - topF))].nonzero()[0][[0, -1]].mean()) for k in (.3, .5, .7)])
         hrowsF = []; hrowsS = []
-        for i in range(25):
-            y = topF + (chinF - topF) * i / 24; r = runs_in_row(mcf[int(y)])
+        for i in range(73):
+            y = topF + (chinF - topF) * i / 72; r = runs_in_row(mcf[int(y)])
             hrowsF.append([float(y), float((r[-1][1] - r[0][0]) / 2) if r else 0, float(((r[-1][1] + r[0][0]) / 2) - cxF) if r else 0])
         nk = runs_in_row(mcs[int(chinS + 0.1 * (shS - chinS))]); axS = (nk[0][0] + nk[-1][1]) / 2 if nk else mcs.shape[1] / 2
-        for i in range(25):
-            y = topSd + (chinS - topSd) * i / 24; r = runs_in_row(mcs[int(y)])
+        for i in range(73):
+            y = topSd + (chinS - topSd) * i / 72; r = runs_in_row(mcs[int(y)])
             hrowsS.append([float(y), float(r[-1][1] - axS) if r else 0, float(axS - r[0][0]) if r else 0])
         # ---- atlas ----
         atlas = np.zeros((A, A, 3), np.uint8)
@@ -248,8 +248,17 @@ def main():
                       side=dict(o=tp(tHS, (axS, chinS)), s=tHS['s'], top=float(topSd), chin=float(chinS), rows=hrowsS),
                       tposeH=float(L['chin'] - L['top']), tposeW=float(max(r[1] for r in hrowsF) * (L['chin'] - L['top']) / (chinF - topF))),
             backH=[LB['top'] * tB['s'] + tB['oy'], LB['bot'] * tB['s'] + tB['oy']], fo=[tF['ox'], tF['oy']])
+        lum = cv2.cvtColor(atlas, cv2.COLOR_RGB2GRAY).astype(np.float32) / 255
+        lum = np.log(lum + 0.06)
+        fine = cv2.GaussianBlur(lum, (0, 0), 1.0) - cv2.GaussianBlur(lum, (0, 0), 9)
+        alpha = np.clip(128 + fine * 160, 0, 255).astype(np.uint8)
+        coarse = cv2.GaussianBlur(lum, (0, 0), 6) - cv2.GaussianBlur(lum, (0, 0), 40)
+        g = cv2.resize(coarse, (256, 256), interpolation=cv2.INTER_AREA)
+        g = np.clip(128 + g * 150, 0, 255).astype(np.uint8)
+        import base64
+        meta['disp'] = base64.b64encode(g.tobytes()).decode()
         META[fid] = meta
-        Image.fromarray(atlas).save(os.path.join(OUT, fid + '.webp'), quality=84, method=6)
+        Image.fromarray(np.dstack([atlas, alpha]), 'RGBA').save(os.path.join(OUT, fid + '.webp'), quality=84, alpha_quality=35, method=6)
         if DBG:
             d = atlas.copy()
             for side, key in (('front', 'front'), ('back', 'back')):
