@@ -58,8 +58,8 @@ function destroyProp(p){
   debris(cx,cy,p.h*.5,p.kind==='cont'?26:14,col,p.kind==='cont'?1.6:1);dustAt(cx,cy,10,.5);
   if(p.kind==='barrel')setTimeout0(()=>explode(cx,cy,.6,3.4,48,'n'),.08);
   if(p.kind==='lamp'){ARENA.lampOff(p);sparks(cx,cy,4,20,[255,220,140]);}
-  if(p.kind==='cont'){fireball(cx,cy,1.2,1.6);FX.smolder(cx,cy,2.2,7);shakeIt(.3);if(Math.random()<.5)dropPick(cx,cy,'scrap');}
-  if(p.kind==='crate'&&Math.random()<.35)dropPick(cx,cy,Math.random()<.4?'repair':'scrap');
+  if(p.kind==='cont'){fireball(cx,cy,1.2,1.6);FX.smolder(cx,cy,2.2,7);shakeIt(.3);const r=Math.random();if(r<.35)dropPick(cx,cy,boostKind());else if(r<.55)dropPick(cx,cy,'repair');else if(r<.8)dropPick(cx,cy,'scrap');}
+  if(p.kind==='crate'&&Math.random()<.4){const r=Math.random();dropPick(cx,cy,r<.45?'repair':r<.7?boostKind():'scrap');}
   G.score+=p.kind==='cont'?150:p.kind==='crate'?25:10;
 }
 const LATER=[];function setTimeout0(f,t){LATER.push({f,t});}
@@ -83,12 +83,13 @@ function killUnit(u){
   if(d.boss){bossDeath(u);return;}
   explode(u.x,u.y,(u.z||0)+.5,d.boom,0,'p');debris(u.x,u.y,(u.z||0)+.8,Math.round(4+d.boom*4),UCOL[u.type]||[90,88,84],1.1);
   if(d.fly){BOMBS.push({x:u.x,y:u.y,z:u.z,vz:-2,crash:1});}
-  const r=Math.random();if(r<.07)dropPick(u.x,u.y,'repair');else if(r<.16)dropPick(u.x,u.y,'cell');else if(r<.36)dropPick(u.x,u.y,'scrap');
+  if((u.type==='tank'||u.type==='mortar'||u.type==='shield'||u.type==='turret')&&Math.random()<.2)dropPick(u.x+rnd(-.5,.5),u.y+rnd(-.5,.5),boostKind());
+  const r=Math.random();if(r<.12)dropPick(u.x,u.y,'repair');else if(r<.2)dropPick(u.x,u.y,'cell');else if(r<.24)dropPick(u.x,u.y,boostKind());else if(r<.44)dropPick(u.x,u.y,'scrap');
 }
 function bossDeath(u){
   G.boss=null;G.slow=.35;G.slowT=2.2;msg(u.d.name+' DESTROYED','',3,GR.volt);SFX.bigboom();CAMFX.fov+=6;
   for(let i=0;i<9;i++)setTimeout0(()=>explode(u.x+rnd(-2.5,2.5),u.y+rnd(-2,2),rnd(1,4),rnd(2,3.5),0,'p'),i*.18);
-  setTimeout0(()=>{explode(u.x,u.y,2,6,0,'p');shakeIt(1.2);for(let i=0;i<6;i++)dropPick(u.x+rnd(-2,2),u.y+rnd(-2,2),pick(['repair','cell','scrap']));},1.7);
+  setTimeout0(()=>{explode(u.x,u.y,2,6,0,'p');shakeIt(1.2);for(let i=0;i<6;i++)dropPick(u.x+rnd(-2,2),u.y+rnd(-2,2),pick(['repair','repair','cell','bdmg','brate','bspr']));},1.7);
   for(const e of EN)if(!e.dead&&e!==u){e.hp=0;e.stun=3;setTimeout0(()=>killUnit(e),rnd(.2,1.4));}
 }
 function hurtPlayer(dmg,sx,sy){
@@ -98,6 +99,9 @@ function hurtPlayer(dmg,sx,sy){
   if(P.hp<=0){P.hp=0;P.dead=true;P.deadT=0;explode(P.x,P.y,1.5,4,0,'p');debris(P.x,P.y,2,22,[224,142,28],1.6);debris(P.x,P.y,1.5,12,[60,62,70],1.3);FX.smolder(P.x,P.y,2,5);SFX.bigboom();G.slow=.3;G.slowT=1.6;setTimeout0(()=>explode(P.x+.5,P.y,2,3,0,'p'),.3);}
 }
 function dropPick(x,y,k){PICK.push({x,y,z:.5,vz:4,k,t:0});}
+/* weapon power-ups (new in 3D): ten seconds of double damage, rapid fire or spread shot */
+const BOOST={bdmg:{id:'dmg',name:'2X DAMAGE',col:'#ff6a3a',say:'Double damage'},brate:{id:'rate',name:'RAPID FIRE',col:'#ffd040',say:'Rapid fire'},bspr:{id:'spr',name:'SPREAD SHOT',col:'#4fe0ff',say:'Spread shot'}},BOOST_T=10;
+const boostKind=()=>pick(['bdmg','brate','bspr']);
 
 /* ---------- enemy brains ---------- */
 function thinkScuttler(u,dt){
@@ -220,6 +224,7 @@ function updPlayer(dt,c){
   const P=PLY;if(P.dead){P.deadT+=dt;return;}
   if(P.inv>0)P.inv-=dt;if(P.flash>0)P.flash-=dt;if(P.muz>0)P.muz-=dt;if(P.missT>0)P.missT-=dt;if(P.dashCD>0)P.dashCD-=dt;if(P.multT>0){P.multT-=dt;if(P.multT<=0)P.mult=1;}
   if(P.od>0){P.od-=dt;if(P.od<=0)msg('OVERDRIVE OFF','',1);}
+  for(const k in P.bst)if(P.bst[k]>0)P.bst[k]-=dt;
   const mP=c.missile&&!CTL.prev.missile,dP=c.dash&&!CTL.prev.dash,hP=c.howl&&!CTL.prev.howl;CTL.prev={missile:c.missile,dash:c.dash,howl:c.howl};
   const spd=6.4*(P.od>0?1.2:1);
   if(P.dashT>0){P.dashT-=dt;P.inv=Math.max(P.inv,.05);if(FRAME%2===0)P.trail.push({x:P.x,y:P.y,body:P.body,turret:P.turret,life:.25});
@@ -238,7 +243,7 @@ function updPlayer(dt,c){
   if(P.over>0){P.over-=dt;P.heat=Math.max(0,P.heat-60*dt);}
   P.fireT-=dt;
   if(c.fire&&P.over<=0){
-    if(P.fireT<=0){P.fireT=(P.od>0?1/19:1/11)/(1+.25*(P.up.rate||0));playerFire();if(P.od<=0){P.heat+=HEAT_PER_SHOT;if(P.heat>=100){P.heat=100;P.over=1.5;SFX.heat();msg('OVERHEAT','VENTING',1.2,GR.red);}}}
+    if(P.fireT<=0){P.fireT=(P.od>0?1/19:1/11)/(1+.25*(P.up.rate||0))*(P.bst.rate>0?.6:1);playerFire();if(P.od<=0){P.heat+=HEAT_PER_SHOT*(P.bst.rate>0?.4:1);if(P.heat>=100){P.heat=100;P.over=1.5;SFX.heat();msg('OVERHEAT','VENTING',1.2,GR.red);}}}
   }else P.heat=Math.max(0,P.heat-46*cool*dt);
   if(mP&&P.missT<=0)fireMissiles();
   if(hP&&P.odM>=100)howl();
@@ -250,7 +255,7 @@ function updPlayer(dt,c){
 }
 function nearestEnemy(x,y,max,cone,ca){let best=null,bd=max||1e9;for(const u of EN){if(u.dead||u.spawnT<.35)continue;const d=Math.hypot(u.x-x,u.y-y);if(cone){const a=Math.atan2(u.y-y,u.x-x);if(Math.abs(angD(a,ca))>cone)continue;}if(d<bd){bd=d;best=u;}}return best;}
 function playerFire(){
-  const P=PLY;P.gun=-P.gun;P.lastFire=G.t;const s=P.gun,m=L2W(P,P.turret,1.4,s*.9),sp=P.up.spread||0,dmg=7*(1+.35*(P.up.dmg||0))*(P.od>0?1.3:1);
+  const P=PLY;P.gun=-P.gun;P.lastFire=G.t;const s=P.gun,m=L2W(P,P.turret,1.4,s*.9),sp=(P.up.spread||0)+(P.bst.spr>0?2:0),dmg=7*(1+.35*(P.up.dmg||0))*(P.od>0?1.3:1)*(P.bst.dmg>0?2:1);
   const tp=P.aimPt&&Math.hypot(P.aimPt[0]-P.x,P.aimPt[1]-P.y)>2.5?P.aimPt:[P.x+Math.cos(P.turret)*14,P.y+Math.sin(P.turret)*14];
   const base=Math.atan2(tp[1]-m[1],tp[0]-m[0]);
   for(let k=-sp;k<=sp;k++){const a=base+k*.09+rnd(-.02,.02);BUL.push({x:m[0],y:m[1],z:1.85,vx:Math.cos(a)*38,vy:Math.sin(a)*38,dmg:k?dmg*.6:dmg,team:'p',kind:'pb',life:.7,r:.16,pierce:P.up.pierce?1:0});}
@@ -261,7 +266,7 @@ function fireMissiles(){
   const P=PLY,n=4+2*(P.up.pods||0);
   const tg=EN.filter(u=>!u.dead&&u.spawnT>=.35).map(u=>({u,s:Math.hypot(u.x-P.x,u.y-P.y)+Math.abs(angD(Math.atan2(u.y-P.y,u.x-P.x),P.turret))*6})).sort((a,b)=>a.s-b.s).slice(0,n);
   for(let i=0;i<n;i++){const s=i%2?1:-1,p=L2W(P,P.turret,.3,s*.74),a=P.turret+s*rnd(.6,1.4);
-    MIS.push({x:p[0],y:p[1],z:2.5,vx:Math.cos(a)*5,vy:Math.sin(a)*5,vz:4,tgt:tg.length?tg[i%tg.length].u:null,life:3.4,team:'p',dmg:26,t:0,delay:i*.06,spd:21,turn:6,ang:a});}
+    MIS.push({x:p[0],y:p[1],z:2.5,vx:Math.cos(a)*5,vy:Math.sin(a)*5,vz:4,tgt:tg.length?tg[i%tg.length].u:null,life:3.4,team:'p',dmg:26*(P.bst.dmg>0?2:1),t:0,delay:i*.06,spd:21,turn:6,ang:a});}
   P.missT=4.2/(1+.35*(P.up.reload||0));SFX.missile();CAMFX.step(.18);
 }
 function howl(){
@@ -316,7 +321,8 @@ function updPick(dt){
   const P=PLY;
   for(const p of PICK){p.t+=dt;p.vz-=12*dt;p.z+=p.vz*dt;if(p.z<.5){p.z=.5;p.vz=Math.abs(p.vz)>1?-p.vz*.4:0;}
     const d=Math.hypot(P.x-p.x,P.y-p.y),mag=P.up.magnet?7:2.4;if(d<mag&&!P.dead){p.x+=(P.x-p.x)*Math.min(1,dt*(P.up.magnet?6:4));p.y+=(P.y-p.y)*Math.min(1,dt*(P.up.magnet?6:4));}
-    if(d<P.r+.4&&!P.dead){p.got=1;SFX.pickup();if(p.k==='repair'){P.hp=Math.min(P.maxHp,P.hp+25);POPS.push({x:P.x,y:P.y,z:3,t:0,s:'+25 HULL',c:'#7dff6a'});}
+    if(d<P.r+.4&&!P.dead){p.got=1;SFX.pickup();if(p.k==='repair'){P.hp=Math.min(P.maxHp,P.hp+35);POPS.push({x:P.x,y:P.y,z:3,t:0,s:'+35 HULL',c:'#7dff6a'});}
+      else if(BOOST[p.k]){const B=BOOST[p.k];P.bst[B.id]=BOOST_T;POPS.push({x:P.x,y:P.y,z:3.4,t:0,s:B.name,c:B.col});SFX.confirm();if(!G.demo)say(B.say);FX.flash(P.x,P.y,1.5,2.5);}
       else if(p.k==='cell'){P.odM=Math.min(100,P.odM+25);POPS.push({x:P.x,y:P.y,z:3,t:0,s:'+HOWL',c:'#ffae2a'});}else{G.score+=250*P.mult;POPS.push({x:P.x,y:P.y,z:3,t:0,s:'+'+fmt(250*P.mult),c:'#ffffff'});}}
     if(p.t>16)p.got=1;}
   for(let i=PICK.length-1;i>=0;i--)if(PICK[i].got)PICK.splice(i,1);
@@ -378,7 +384,7 @@ function updWave(dt){
     if(G.pt>1)G.phase='fight';
     if(G.phase==='fight'&&!G.queue.length&&!PODS.length&&!EN.some(u=>!u.dead)&&!PLY.dead){
       G.phase='clear';G.pt=0;const bonus=1000*G.wave;G.score+=bonus;msg('WAVE CLEAR','+'+fmt(bonus),2.4,GR.green);SFX.clear();if(!G.demo)say('Wave clear');if(!G.demo&&G.wave>G.best){G.best=G.wave;store.set('bw',G.best);}
-      PLY.hp=Math.min(PLY.maxHp,PLY.hp+15);
+      PLY.hp=Math.min(PLY.maxHp,PLY.hp+20);
     }
   }else if(G.phase==='clear'){if(G.pt>2.6){if(G.demo){startWave(pick([2,3,4,5,8,9,10,11].filter(k=>k!==G.wave)));return;}if(G.wave===12&&!G.endless){G.mode='win';G.t=0;setTrack('shop');SFX.clear();return;}openUpgrade();}}
 }

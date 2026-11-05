@@ -33,7 +33,7 @@ body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:var(
 .brand i{font-style:normal;color:#04121a;background:var(--cyan);border-radius:3px;padding:2px 4px 1px;margin-left:6px;letter-spacing:.06em;text-shadow:none;font-size:11px}
 .brand span{color:var(--ink-2);letter-spacing:.2em;font-weight:500;font-size:10px;margin-left:8px;text-shadow:none}
 @media (max-width:560px){.brand span{display:none}}
-@media (max-width:440px){.brand{font-size:12px;letter-spacing:.2em}.opts{gap:6px}.chip{padding:0 9px;font-size:10px;letter-spacing:.06em}.chip .val{display:none}}
+@media (max-width:440px){.brand{font-size:12px;letter-spacing:.2em}.opts{gap:6px}.chip{padding:0 9px;font-size:10px;letter-spacing:.06em}.chip .val,.chip .lbl{display:none}.brand{display:none}.bar{justify-content:flex-end}}
 .chip.on{border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 10px rgba(47,230,255,.35)}
 .opts{display:flex;gap:8px}
 .chip{pointer-events:auto;height:34px;padding:0 12px;border-radius:999px;border:1px solid var(--edge);background:var(--panel);color:var(--ink);cursor:pointer;
@@ -76,7 +76,7 @@ body.embed .bar,body.embed .keys,body.embed #turn{display:none!important}
 <div id="sa"></div>
 <div class="bar">
   <span class="brand">IRONHOWL<i>3D</i><span>MECH ARENA</span></span>
-  <div class="opts"><button class="chip" id="dots" type="button">Dots<span class="val"> <span id="dotsv">Off</span></span></button><button class="chip" id="snd" type="button">Sound on</button><button class="chip" id="pauseBtn" type="button">Pause</button></div>
+  <div class="opts"><button class="chip" id="qual" type="button"><span class="lbl">Quality </span><span id="qualv">High</span></button><button class="chip" id="dots" type="button">Dots<span class="val"> <span id="dotsv">Off</span></span></button><button class="chip" id="snd" type="button">Sound on</button><button class="chip" id="pauseBtn" type="button">Pause</button></div>
 </div>
 <div id="pad" hidden>
   <div class="stk" id="stL" aria-label="Move stick"><b>MOVE</b><div class="kn" id="knL"></div></div>

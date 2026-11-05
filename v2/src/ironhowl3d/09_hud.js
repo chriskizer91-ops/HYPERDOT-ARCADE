@@ -25,14 +25,16 @@ function hud(quiet){
     const dx=sx-W/2,dy=sy-H/2,t=Math.min((W/2-7)/Math.abs(dx||1e-3),(H/2-7)/Math.abs(dy||1e-3));tri(W/2+dx*t,H/2+dy*t,dx,dy,u.d.boss?5:3,u.d.boss?(blink?'#ffd040':'#ff4a3a'):'#ff4a3a');}
   if(!P.dead){let rx,ry;if(AIMMODE==='mouse'&&MOUSE.on&&!touchy){rx=MOUSE.x;ry=MOUSE.y;}else{const q=HPt(P.x+Math.cos(P.turret)*7,P.y+Math.sin(P.turret)*7,1.8);rx=q[0];ry=q[1];}
     rx=Math.round(rx);ry=Math.round(ry);g.fillStyle=P.over>0?HC.red:'#ffd040';g.fillRect(rx-5,ry,3,1);g.fillRect(rx+3,ry,3,1);g.fillRect(rx,ry-5,1,3);g.fillRect(rx,ry+3,1,3);g.fillRect(rx,ry,1,1);}
-  /* top-left: hull, heat, missiles */
-  panel(2,2,76,28);
+  /* top-left: hull, heat, missiles, and any weapon power-ups with their time left */
+  const bl=[];for(const k in BOOST){const B=BOOST[k];if(P.bst[B.id]>0)bl.push([B,P.bst[B.id]]);}
+  panel(2,2,76,28+bl.length*7);
+  bl.forEach(([B,t],i)=>{const y=26+i*7;if(t>2.5||blink){txt3(g,B.name.replace('2X DAMAGE','2X DMG').replace('RAPID FIRE','RAPID').replace('SPREAD SHOT','SPREAD'),5,y,B.col);}segBar(40,y,35,4,t/BOOST_T,B.col);});
   const hf=P.hp/P.maxHp,hc=hf>.5?HC.green:hf>.25?'#ffc21a':(blink?HC.red:'#7a1810');
   txt3(g,'HULL',5,5,HC.dim);segBar(24,5,51,5,hf,hc);
   txt3(g,'HEAT',5,12,P.over>0&&blink?HC.red:HC.dim);segBar(24,12,51,5,P.heat/100,P.over>0?(FRAME>>2)&1?HC.red:'#ffd040':P.heat>70?'#ff7a2a':HC.amber);
   txt3(g,'MSL',5,19,HC.dim);{const np=4+2*(P.up.pods||0),full=4.2/(1+.35*(P.up.reload||0)),rf=P.missT>0?1-P.missT/full:1;const pw=np>6?3:4;
     for(let i=0;i<np;i++){g.fillStyle=rf>=1?'#ffd040':(i/np<rf?'#8a5a10':HC.bg);g.fillRect(24+i*(pw+2),19,pw,5);}}
-  if(hf<.25&&!P.dead&&blink)txt3(g,'HULL CRITICAL',5,33,HC.red);
+  if(hf<.25&&!P.dead&&blink)txt3(g,'HULL CRITICAL',5,33+bl.length*7,HC.red);
   /* top-center: wave or boss */
   if(G.boss&&!G.boss.dead){const b=G.boss,bw=Math.round(Math.min(W,MW*1.1)*.4);panel(cx-bw/2-3,2,bw+6,24);txt3(g,b.d.name,cx,5,'#ff9aab',1,'c');segBar(Math.round(cx-bw/2),13,bw,5,b.hp/b.max,G.bossHit>0?'#ffffff':(b.hp<b.max*.5?'#ff2a6a':'#ff3a2a'));txt3(g,'WAVE '+G.wave,cx,20,HC.dim,1,'c');}
   else{panel(cx-36,2,72,19);txt5(g,'WAVE '+G.wave,cx,4,GR.volt,1,'c');const h=hostiles();txt3(g,G.phase==='clear'?'ALL CLEAR':h+' HOSTILE'+(h===1?'':'S'),cx,13,G.phase==='clear'?HC.green:HC.steel,1,'c');}
@@ -158,9 +160,8 @@ function drawWin(){
   if(EMBED)txt3(g,'+'+ihTickets(true)+' TICKETS',cx,Math.round(H*.18)+7*sc+42,HC.amber,1,'c');   /* paid on TITLE; endless keeps adding */
   if(G.t>1.2)menu(['KEEP FIGHTING: ENDLESS','TITLE'],Math.round(H*.68));
 }
-function pauseItems(){return ['RESUME','RESTART','VIEW: '+(VIEWM?'CLOSE':'HIGH'),'DOTS: '+(DOTS?'ON':'OFF'),'QUIT TO TITLE'];}
-function drawPause(){dim(.6);const cx=W>>1;otxt5(g,'PAUSED',cx,Math.round(H*.16),GR.steel,2,'c',0,'#000');menu(pauseItems(),Math.round(H*.36));
-  txt3(g,'QUALITY '+QN.toUpperCase()+(QPIN?' (PINNED)':''),cx,H-10,HC.dim,1,'c');}
+function pauseItems(){return ['RESUME','RESTART','QUALITY: '+({low:'LOW',med:'MEDIUM',high:'HIGH'})[QN],'VIEW: '+(VIEWM?'CLOSE':'HIGH'),'DOTS: '+(DOTS?'ON':'OFF'),'QUIT TO TITLE'];}
+function drawPause(){dim(.6);const cx=W>>1;otxt5(g,'PAUSED',cx,Math.round(H*.14),GR.steel,2,'c',0,'#000');menu(pauseItems(),Math.round(H*.3));}
 function drawHUD(){
   HUD.begin();
   const m=G.mode;

@@ -16,7 +16,9 @@ const QUAL={
   high:{n:'high',px:3.6e6,shadow:2048,lights:7,msaa:4,rain:1500,prt:1400,seg:[12,4],dyn:.75,refl:.5, haze:22}};
 const QORDER=['low','med','high'];
 const QPIN=(location.search.match(/[?&]q=(low|med|high)/)||[])[1]||null;
-let QN=QPIN||(touchy?'med':'high');
+/* a level you pick yourself (the Quality button, or ?q=) stays put; otherwise it steps down on its own when the frame rate can't hold */
+const QSAVED=store.get('q','');let QLOCK=!!(QPIN||QUAL[QSAVED]);
+let QN=QPIN||(QUAL[QSAVED]?QSAVED:(touchy?'med':'high'));
 let Q=QUAL[QN];
 let DOTS=store.get('dots','0')==='1';
 let VIEWM=store.get('view','0')==='1'?1:0;     /* 0 high three-quarter, 1 close */
@@ -123,7 +125,7 @@ c*=.25;float l=max(c.r,max(c.g,c.b));c*=max(l-uThr,0.0)/max(l,1e-4);o=vec4(c,1.0
   blur:post(`uniform sampler2D uTex;uniform vec2 uDir;
 void main(){vec3 s=texture(uTex,vT).rgb*.227027;s+=(texture(uTex,vT+uDir*1.3846).rgb+texture(uTex,vT-uDir*1.3846).rgb)*.316216;
 s+=(texture(uTex,vT+uDir*3.2308).rgb+texture(uTex,vT-uDir*3.2308).rgb)*.070270;o=vec4(s,1.0);}`,{uTex:{value:null},uDir:{value:new T.Vector2()}}),
-  comp:post(`uniform sampler2D uScene;uniform sampler2D uB1;uniform sampler2D uB2;uniform sampler2D uHud;uniform float uBloom,uDots,uDim,uTime,uExp,uGrain,uHurt,uHudOn;uniform vec2 uGrid;uniform vec3 uTint;uniform vec3 uShad,uHigh;uniform float uSat,uCon;
+  comp:post(`uniform sampler2D uScene;uniform sampler2D uB1;uniform sampler2D uB2;uniform sampler2D uHud;uniform float uBloom,uDots,uDim,uTime,uExp,uGrain,uHurt,uHudOn;uniform vec2 uGrid;uniform vec3 uTint;uniform vec3 uShad,uHigh;uniform float uSat,uCon,uCA;
 vec3 aces(vec3 x){return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.0,1.0);}
 float h12(vec2 p){vec3 p3=fract(vec3(p.xyx)*.1031);p3+=dot(p3,p3.yzx+33.33);return fract((p3.x+p3.y)*p3.z);}
 float ledMask(vec2 cell,out float far){vec2 f=fract(cell)-.5;float fw=max(fwidth(cell.x),fwidth(cell.y));float d=length(f),r=.43;
@@ -132,7 +134,7 @@ void main(){
   vec2 cell=vT*uGrid;ivec2 id=ivec2(clamp(floor(cell),vec2(0),uGrid-1.));float far;float m=ledMask(cell,far);
   vec3 c;
   if(uDots>.5){c=texelFetch(uScene,id,0).rgb*2.1*m+vec3(.52,.5,.62)*.012*m;}
-  else c=texture(uScene,vT).rgb;
+  else{vec2 dq=(vT-.5)*uCA;c=vec3(texture(uScene,vT-dq).r,texture(uScene,vT).g,texture(uScene,vT+dq).b);}
   c+=(texture(uB1,vT).rgb*.8+texture(uB2,vT).rgb*1.2)*uBloom;
   c*=uExp*(1.0-uDim);
   c=aces(c*1.05);c=pow(c,vec3(1.0/2.2));
@@ -147,7 +149,7 @@ void main(){
     c=c*(1.0-h.a*.8)+h.rgb*h.a*m*1.22+gl*.05;
   }
   o=vec4(c,1.0);
-}`,{uScene:{value:null},uB1:{value:null},uB2:{value:null},uHud:{value:null},uBloom:{value:1},uDots:{value:0},uDim:{value:0},uTime:{value:0},uExp:{value:1},uGrain:{value:.025},uHurt:{value:0},uHudOn:{value:1},uGrid:{value:new T.Vector2(384,216)},uTint:{value:new T.Vector3(1,1,1)},uShad:{value:new T.Vector3()},uHigh:{value:new T.Vector3()},uSat:{value:1.1},uCon:{value:.25}})
+}`,{uScene:{value:null},uB1:{value:null},uB2:{value:null},uHud:{value:null},uBloom:{value:1},uDots:{value:0},uDim:{value:0},uTime:{value:0},uExp:{value:1},uGrain:{value:.025},uHurt:{value:0},uHudOn:{value:1},uGrid:{value:new T.Vector2(384,216)},uTint:{value:new T.Vector3(1,1,1)},uShad:{value:new T.Vector3()},uHigh:{value:new T.Vector3()},uSat:{value:1.1},uCon:{value:.25},uCA:{value:.0025}})
 };
 function pass(mat,dst){FSM.material=mat;renderer.setRenderTarget(dst||null);renderer.render(PQ,PC);}
 let WETK=1;
@@ -191,6 +193,7 @@ function capGeo(seg,rings){
 const CAPV={head:'#include <common>\nattribute vec3 aM;attribute vec3 aRL;attribute float aEnd;varying vec3 vM;',
   nrm:'vec3 objectNormal=normalize(position+vec3(0.0,(aRL.x-aRL.y)/max(aRL.z,.001)*(1.0-abs(position.y)),0.0));\n#ifdef USE_TANGENT\nvec3 objectTangent=vec3(1.,0.,0.);\n#endif',
   pos:'vec3 transformed=position*mix(aRL.x,aRL.y,aEnd)+vec3(0.0,aEnd*aRL.z,0.0);'};
+const RIMU={value:new T.Color(.4,.3,.2)};   /* a floodlight edge glow on every machine, coloured per arena */
 function hookStd(mat,isCap){
   mat.onBeforeCompile=sh=>{
     let v=sh.vertexShader;
@@ -200,7 +203,10 @@ function hookStd(mat,isCap){
     sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vM;')
       .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=vM.y;')
       .replace('#include <metalnessmap_fragment>','#include <metalnessmap_fragment>\nmetalnessFactor=vM.z;')
-      .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance+=diffuseColor.rgb*vM.x;');
+      .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance+=diffuseColor.rgb*vM.x;')
+      .replace('#include <opaque_fragment>','{float rim=pow(1.-clamp(dot(normal,normalize(vViewPosition)),0.,1.),3.);outgoingLight+=uRim*rim*(.55+.45*diffuseColor.rgb);}\n#include <opaque_fragment>')
+      .replace('varying vec3 vM;','varying vec3 vM;uniform vec3 uRim;');
+    sh.uniforms.uRim=RIMU;
   };
   mat.customProgramCacheKey=()=>isCap?'cap':'inst';
 }

@@ -1,6 +1,11 @@
 /* ===================== the arena in 3D: ground, walls and gates, buildings, skyline, breakable props, water =====================
    Built from WORLD (same layout as the original). Static light from lamps is painted into a light map on the ground. */
-function mkCanvas(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return [c,c.getContext('2d')];}
+/* a normal map from a height picture (brightness = height): bumps, seams and ribs catch the moving lights */
+function normalTex(src,k,o={}){const w=src.width,h=src.height,s=src.getContext('2d').getImageData(0,0,w,h).data,[c,x]=mkCanvas(w,h),img=x.createImageData(w,h),d=img.data;
+  const H=(px,py)=>{px=(px+w)%w;py=(py+h)%h;const i=(py*w+px)*4;return (s[i]*.3+s[i+1]*.59+s[i+2]*.11)/255;};
+  for(let y=0;y<h;y++)for(let xx=0;xx<w;xx++){const nx=-(H(xx+1,y)-H(xx-1,y))*k,ny=(H(xx,y+1)-H(xx,y-1))*k,l=Math.hypot(nx,ny,1),i=(y*w+xx)*4;d[i]=(nx/l*.5+.5)*255;d[i+1]=(ny/l*.5+.5)*255;d[i+2]=(1/l*.5+.5)*255;d[i+3]=255;}
+  x.putImageData(img,0,0);return canTex(c,Object.assign({lin:true},o));}
+function mkCanvas(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return [c,c.getContext('2d',{willReadFrequently:true})];}
 function canTex(c,o={}){const t=new T.CanvasTexture(c);t.colorSpace=o.lin?T.NoColorSpace:T.SRGBColorSpace;t.wrapS=t.wrapT=o.clamp?T.ClampToEdgeWrapping:T.RepeatWrapping;t.anisotropy=o.aniso||4;
   t.minFilter=o.near?T.NearestFilter:T.LinearMipmapLinearFilter;t.magFilter=o.near?T.NearestFilter:T.LinearFilter;t.generateMipmaps=!o.near;return t;}
 /* world-space UVs: windows, panels and stripes stay the same size on every box, instanced or not */
@@ -22,6 +27,9 @@ function hookWorldUV(mat,tile,o={}){
   #endif
   #ifdef USE_EMISSIVEMAP
   vEmissiveMapUv=fuv/uTile;
+  #endif
+  #ifdef USE_NORMALMAP
+  vNormalMapUv=fuv/uTile;
   #endif
   }`);
     sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform vec3 uRoof;varying float vRoof;')
@@ -62,13 +70,21 @@ const ARENA={grp:null,own:[],lamps:[],inst:{},M4:new T.Matrix4(),Q4:new T.Quater
     x.restore();
     {const img=x.getImageData(0,0,AW,AH),d=img.data;for(let i=0;i<d.length;i+=4){const k=.9+r()*.2;d[i]*=k;d[i+1]*=k;d[i+2]*=k;}x.putImageData(img,0,0);}
     const tG=K(canTex(gc,{clamp:true,aniso:8}));
+    {const [hc,hx]=mkCanvas(AW,AH),rh=mulberry(Wd.seed*7+3);hx.fillStyle='#808080';hx.fillRect(0,0,AW,AH);
+      for(let sx=IN0;sx<INX;sx+=3)for(let sy=IN0;sy<INY;sy+=3){const v=118+rh()*20|0;hx.fillStyle=`rgb(${v},${v},${v})`;hx.fillRect(gx(sx)+2,gx(sy)+2,gx(3)-4,gx(3)-4);}
+      hx.strokeStyle='#202020';hx.lineWidth=Math.max(2,PPU*.14);for(let v=IN0;v<=INX;v+=3){hx.beginPath();hx.moveTo(gx(v),gx(IN0));hx.lineTo(gx(v),gx(INY));hx.stroke();}
+      for(let v=IN0;v<=INY;v+=3){hx.beginPath();hx.moveTo(gx(IN0),gx(v));hx.lineTo(gx(INX),gx(v));hx.stroke();}
+      hx.strokeStyle='#3a3a3a';hx.lineWidth=Math.max(1,PPU*.07);for(let i=0;i<40;i++){let px=gx(IN0+rh()*(INX-IN0)),py=gx(IN0+rh()*(INY-IN0));hx.beginPath();hx.moveTo(px,py);for(let k=0;k<7;k++){px+=(rh()-.5)*gx(1.4);py+=(rh()-.5)*gx(1.4);hx.lineTo(px,py);}hx.stroke();}
+      const im=hx.getImageData(0,0,AW,AH),dd=im.data;for(let i=0;i<dd.length;i+=4){const n=(rh()-.5)*26;dd[i]+=n;dd[i+1]+=n;dd[i+2]+=n;}hx.putImageData(im,0,0);
+      for(const p of puddles){hx.fillStyle='#707070';hx.beginPath();hx.ellipse(gx(p[0]),gx(p[1]),gx(p[2]),gx(p[3]),p[4],0,TAU);hx.fill();}
+      this.tN=K(normalTex(hc,QN==='low'?2.2:3.2,{clamp:true}));}
     const [rc,rx]=mkCanvas(WW*4,WH*4);rx.fillStyle=dock?'rgb(0,96,0)':'rgb(0,215,0)';rx.fillRect(0,0,rc.width,rc.height);
     for(let i=0;i<120;i++){rx.fillStyle=dock?`rgba(0,${150+r()*60|0},0,.5)`:`rgba(0,${200+r()*55|0},0,.5)`;rx.fillRect(r()*rc.width,r()*rc.height,4+r()*12,4+r()*12);}
     for(const p of puddles){rx.fillStyle='rgb(0,22,0)';rx.beginPath();rx.ellipse(p[0]*4,p[1]*4,p[2]*4,p[3]*4,p[4],0,TAU);rx.fill();}
     const tR=K(canTex(rc,{lin:true,clamp:true}));
     const [lc,lx]=mkCanvas(WW*8,WH*8);this.lmc=[lc,lx];
     const tL=K(canTex(lc,{clamp:true}));this.tL=tL;
-    const gMat=K(new T.MeshStandardMaterial({map:tG,roughnessMap:tR,roughness:1,metalness:0,lightMap:tL,lightMapIntensity:dock?5.2:4.2,envMapIntensity:dock?1.1:.25}));
+    const gMat=K(new T.MeshStandardMaterial({map:tG,roughnessMap:tR,roughness:1,metalness:0,lightMap:tL,lightMapIntensity:dock?5.2:4.2,normalMap:this.tN,normalScale:new T.Vector2(.9,.9),envMapIntensity:dock?1.1:.25}));
     const gGeo=K(new T.PlaneGeometry(WW,WH));gGeo.rotateX(-Math.PI/2);gGeo.translate(WW/2,0,WH/2);
     hookWet(gMat);const gm=this.add(new T.Mesh(gGeo,gMat),false,true);gm.layers.set(1);
     this.paintLights();
@@ -84,7 +100,7 @@ const ARENA={grp:null,own:[],lamps:[],inst:{},M4:new T.Matrix4(),Q4:new T.Quater
     wx.fillStyle='rgba(0,0,0,.45)';wx.fillRect(0,0,3,128);wx.fillRect(127,0,2,128);wx.fillStyle='rgba(255,255,255,.06)';wx.fillRect(4,0,2,128);
     wx.fillStyle='rgba(0,0,0,.3)';wx.fillRect(0,120,256,8);for(let i=0;i<6;i++){wx.fillStyle='rgba(0,0,0,.25)';wx.fillRect(20+i*40,40+r()*60,2,10+r()*30);}
     const tW=K(canTex(wc));
-    const wMat=K(new T.MeshStandardMaterial({map:tW,roughness:.85,metalness:.05}));hookWorldUV(wMat,[3,1.5],{roof:linRGB(th.wallT)});
+    const wMat=K(new T.MeshStandardMaterial({map:tW,normalMap:K(normalTex(wc,4)),roughness:.85,metalness:.05}));hookWorldUV(wMat,[3,1.5],{roof:linRGB(th.wallT)});
     const capMat=K(new T.MeshStandardMaterial({color:new T.Color(...linRGB(th.wallT)),roughness:.6,metalness:.3}));
     const warn=[];
     for(const p of Wd.props){if(p.kind!=='wall')continue;
@@ -105,7 +121,7 @@ const ARENA={grp:null,own:[],lamps:[],inst:{},M4:new T.Matrix4(),Q4:new T.Quater
       bulbs.forEach((b,i)=>{this.M4.makeTranslation(b[0],b[2],b[1]);im.setMatrixAt(i,this.M4);im.setColorAt(i,new T.Color(4,.3,.15));});this.add(im);this.inst.bulbs={im,list:bulbs};}
     /* ---------- buildings: lit windows, roof clutter, a door; neon signs on the docks ---------- */
     const fac=this.facade(th,r);
-    const bMat=K(new T.MeshStandardMaterial({map:fac.map,emissiveMap:fac.emi,emissive:0xffffff,emissiveIntensity:dock?2.2:1.8,roughness:.75,metalness:.15}));hookWorldUV(bMat,[6.4,7.2],{roof:[.03,.03,.035]});
+    const bMat=K(new T.MeshStandardMaterial({map:fac.map,normalMap:fac.nrm,emissiveMap:fac.emi,emissive:0xffffff,emissiveIntensity:dock?2.2:1.8,roughness:.75,metalness:.15}));hookWorldUV(bMat,[6.4,7.2],{roof:[.11,.11,.12]});
     const roofM=K(new T.MeshStandardMaterial({color:0x3a3a40,roughness:.8,metalness:.4}));
     this.neons=[];
     for(const p of Wd.props){if(p.kind!=='bldg')continue;
@@ -135,7 +151,7 @@ const ARENA={grp:null,own:[],lamps:[],inst:{},M4:new T.Matrix4(),Q4:new T.Quater
         x.fillStyle=on?`rgb(${wc[0]*k|0},${wc[1]*k|0},${wc[2]*k|0})`:'#22262e';x.fillRect(X,Y,w,h);
         if(on){ex.fillStyle=`rgb(${wc[0]*k*.8|0},${wc[1]*k*.8|0},${wc[2]*k*.8|0})`;ex.fillRect(X,Y,w,h);if(r()<.4){ex.fillStyle='rgba(0,0,0,.6)';ex.fillRect(X,Y,w*(.3+r()*.4),h);}}
         x.fillStyle='rgba(0,0,0,.5)';x.fillRect(X+w/2-1,Y,2,h);}}
-    return {map:K(canTex(c)),emi:K(canTex(e))};
+    return {map:K(canTex(c)),emi:K(canTex(e)),nrm:K(normalTex(c,3))};
   },
   skyline(Wd,th,r,fac){
     const K=this.keep.bind(this),list=[];
@@ -144,7 +160,7 @@ const ARENA={grp:null,own:[],lamps:[],inst:{},M4:new T.Matrix4(),Q4:new T.Quater
     far(-30,90,-34,-10,8,26,26,.35);far(-36,-8,-10,WH+20,6,20,12,.32);far(WW+4,WW+34,-10,WH+20,6,20,12,.32);
     if(th.id!=='docks')far(-20,80,WH+8,WH+30,4,12,10,.3);
     const g=K(new T.BoxGeometry(1,1,1));g.translate(0,.5,0);
-    const m=K(new T.MeshStandardMaterial({map:fac.map,emissiveMap:fac.emi,emissive:0xffffff,emissiveIntensity:th.id==='docks'?1.6:1.2,roughness:.85,metalness:.1}));hookWorldUV(m,[6.4,7.2],{roof:[.02,.02,.025]});
+    const m=K(new T.MeshStandardMaterial({map:fac.map,emissiveMap:fac.emi,emissive:0xffffff,emissiveIntensity:th.id==='docks'?1.6:1.2,roughness:.85,metalness:.1}));hookWorldUV(m,[6.4,7.2],{roof:[.08,.08,.09]});
     const im=new T.InstancedMesh(g,m,list.length),c=new T.Color();
     list.forEach((b,i)=>{this.M4.compose(this.V3.set((b[0]+b[2])/2,0,(b[1]+b[3])/2),this.Q4.identity(),this.S3.set(b[2]-b[0],b[4],b[3]-b[1]));im.setMatrixAt(i,this.M4);c.setRGB(b[5],b[5],b[5]*1.1);im.setColorAt(i,c);});
     this.add(im,true,true);
@@ -211,7 +227,8 @@ c=mix(c,vec3(.006,.012,.03),smoothstep(30.,110.,d));gl_FragColor=vec4(c,1.);}`})
     const [tc,tx]=mkCanvas(256,64);tx.fillStyle='#c4c4c4';tx.fillRect(0,0,256,64);for(let i=0;i<256;i+=10){tx.fillStyle='rgba(0,0,0,.22)';tx.fillRect(i,0,4,64);}tx.fillStyle='rgba(0,0,0,.4)';tx.fillRect(0,0,256,4);tx.fillRect(0,60,256,4);
     for(let i=0;i<20;i++){tx.fillStyle=`rgba(70,40,20,${Math.random()*.3})`;tx.fillRect(Math.random()*256,Math.random()*64,6+Math.random()*30,4+Math.random()*20);}
     const tS=K(canTex(sc)),tE=K(canTex(ec)),tT=K(canTex(tc));
-    const mS=K(new T.MeshStandardMaterial({map:tS,roughness:.55,metalness:.45})),mE=K(new T.MeshStandardMaterial({map:tE,roughness:.55,metalness:.45})),mT=K(new T.MeshStandardMaterial({map:tT,roughness:.6,metalness:.45}));
+    const nS=K(normalTex(sc,6)),nE=K(normalTex(ec,4)),nT=K(normalTex(tc,5));
+    const mS=K(new T.MeshStandardMaterial({map:tS,normalMap:nS,roughness:.5,metalness:.45})),mE=K(new T.MeshStandardMaterial({map:tE,normalMap:nE,roughness:.5,metalness:.45})),mT=K(new T.MeshStandardMaterial({map:tT,normalMap:nT,roughness:.55,metalness:.45}));
     const conts=P.filter(p=>p.kind==='cont');
     if(conts.length){const g=K(new T.BoxGeometry(6,2.6,2.5));const im=new T.InstancedMesh(g,[mE,mE,mT,mT,mS,mS],conts.length);
       conts.forEach((p,i)=>{p.ii=i;p.base=linRGB(th.cont[p.c]).map(v=>v*1.25+.01);this.setCont(im,p,0);});this.add(im,true,true);this.inst.cont={im,list:conts};}
@@ -219,7 +236,7 @@ c=mix(c,vec3(.006,.012,.03),smoothstep(30.,110.,d));gl_FragColor=vec4(c,1.);}`})
     const [cc,cx]=mkCanvas(128,128);cx.fillStyle='#8a6438';cx.fillRect(0,0,128,128);for(let i=0;i<128;i+=16){cx.fillStyle='rgba(0,0,0,.25)';cx.fillRect(0,i,128,2);for(let k=0;k<4;k++){cx.fillStyle=`rgba(${Math.random()<.5?0:255},${Math.random()<.5?40:200},0,.05)`;cx.fillRect(Math.random()*128,i+3,30,10);}}
     cx.strokeStyle='#5a3e20';cx.lineWidth=14;cx.strokeRect(7,7,114,114);cx.beginPath();cx.moveTo(10,10);cx.lineTo(118,118);cx.stroke();cx.fillStyle='rgba(20,10,0,.8)';for(const [a,b] of [[12,12],[116,12],[12,116],[116,116]])cx.fillRect(a-2,b-2,4,4);
     const crates=P.filter(p=>p.kind==='crate');
-    if(crates.length){const g=K(new T.BoxGeometry(1.15,1.1,1.15)),m=K(new T.MeshStandardMaterial({map:K(canTex(cc)),roughness:.85,metalness:0}));const im=new T.InstancedMesh(g,m,crates.length);
+    if(crates.length){const g=K(new T.BoxGeometry(1.15,1.1,1.15)),m=K(new T.MeshStandardMaterial({map:K(canTex(cc)),normalMap:K(normalTex(cc,5)),roughness:.8,metalness:0}));const im=new T.InstancedMesh(g,m,crates.length);
       crates.forEach((p,i)=>{p.ii=i;const k=.8+(p.seed*.4);p.base=[k,k*.95,k*.9];this.M4.compose(this.V3.set((p.x0+p.x1)/2,.55,(p.y0+p.y1)/2),this.Q4.setFromAxisAngle(this.V3.clone().set(0,1,0),(p.seed-.5)*.25),this.S3.set(1,1,1));im.setMatrixAt(i,this.M4);im.setColorAt(i,c.setRGB(...p.base));});
       this.add(im,true,true);this.inst.crate={im,list:crates};}
     /* jersey barriers with hazard chevrons */
@@ -323,7 +340,7 @@ const THEME3={
     scene.fog=new T.Fog(fogC,dock?34:36,dock?115:118);
     hemi.color.setRGB(...(dock?[.32,.42,.85]:[.62,.5,.62]));hemi.groundColor.setRGB(...(dock?[.05,.06,.1]:[.16,.1,.07]));hemi.intensity=dock?.62:.6;HEMIK=hemi.intensity;
     /* the key light (with the shadows) is the big floodlight on the north-west tower at the yard, north-east at the docks */
-    sun.color.setRGB(...(dock?[.7,.82,1]:[1,.74,.46]));sun.intensity=dock?1.7:2.3;SUNDIR=dock?[.5,.78,-.38]:[-.52,.74,-.42];GRADE.set(dock);
+    sun.color.setRGB(...(dock?[.7,.82,1]:[1,.74,.46]));sun.intensity=dock?1.7:2.3;SUNDIR=dock?[.5,.78,-.38]:[-.52,.74,-.42];GRADE.set(dock);if(dock)RIMU.value.setRGB(.12,.38,.7);else RIMU.value.setRGB(.5,.32,.17);
     head.color.setRGB(...(dock?[.62,.78,1]:[1,.85,.62]));
     if(!this.sky){const g=new T.SphereGeometry(200,32,16);this.skyMat=new T.ShaderMaterial({side:T.BackSide,depthWrite:false,fog:false,uniforms:{uH:{value:new T.Color()},uTop:{value:new T.Color()},uSun:{value:new T.Vector3()},uSC:{value:new T.Color()},uStars:{value:0},uT:{value:0}},
       vertexShader:`varying vec3 vD;void main(){vD=normalize(position);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);gl_Position.z=gl_Position.w*.9999;}`,

@@ -39,6 +39,21 @@ The controls are the same: WASD and the mouse, the arrow keys, a gamepad, or two
 - **Bosses:** when a boss drops in, the camera swings to the pod. The landing goes into slow motion, and the boss's name comes up.
 - **Balance:** each cannon shot adds 2.5 heat instead of the original's 4.3. Non-stop fire now takes about 3.6 seconds to overheat instead of about 2.
 
+## Round 3
+
+- **Quality button:** the Quality button (top bar) and QUALITY in the pause menu cycle Low → Medium → High. A level you pick yourself is saved (`hd-ironhowl3d-q`) and stays put. Only the render resolution still adapts.
+- **Tougher mech:** the hull is 150 instead of 100. Repair kits heal 35 and drop more often: 12% of kills (was 7%), plus more from crates and containers. Clearing a wave heals 20.
+- **Weapon power-ups:** each lasts 10 seconds and shows a timer under MSL in the HUD.
+  - **2X DAMAGE:** cannons and missiles hit twice as hard.
+  - **RAPID FIRE:** about 1.7 times the fire rate, with 40% of the heat per shot.
+  - **SPREAD SHOT:** two extra streams on each side.
+  - **Where they drop:** 4% of kills, 20% of tanks, mortars, shielders and turrets, 35% of containers and 10% of crates. Bosses drop them too.
+- **Look:**
+  - The concrete, walls, containers, crates and buildings have surface relief (normal maps), so moving lights catch it.
+  - Every machine gets a floodlight rim light, and the screen edges get a slight colour fringe.
+  - Every enemy has more parts: carapace plates and jaws, antennas, side skirts and exhausts, ammo racks, a spinning radar dish, a shield frame, nav lights, Goliath's searchlight and vents, and The Maw's spines and jaws.
+  - Pickups get light columns and distinct shapes.
+
 ## Quality
 
 The game picks **high** on a desktop and **medium** on a phone. If the frame rate can't hold during play, it first lowers the render resolution, then steps down a level, to **low** at the bottom. Low has no shadow map, fewer lights and fewer particles. To pin a level, add `?q=low`, `?q=med` or `?q=high` to the address.

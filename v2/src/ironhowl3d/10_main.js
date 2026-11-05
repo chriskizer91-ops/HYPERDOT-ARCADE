@@ -79,6 +79,9 @@ function gameOver(){G.mode='over';G.t=0;G.menuI=0;saveHi();setTrack('over');SFX.
 function setPause(on){G.paused=on;G.menuI=0;$('pauseBtn').textContent=on?'Resume':'Pause';if(on)SFX.back();}
 function setDots(on){DOTS=on;store.set('dots',on?'1':'0');$('dotsv').textContent=on?'On':'Off';$('dots').classList.toggle('on',on);}
 function setView(v){VIEWM=v;store.set('view',v?'1':'0');}
+const QLBL={low:'Low',med:'Medium',high:'High'};
+function showQual(){$('qualv').textContent=QLBL[QN];}
+function cycleQuality(){const n=QORDER[(QORDER.indexOf(QN)+1)%QORDER.length];applyQuality(n);QLOCK=true;store.set('q',n);showQual();PERF.wait=3;}
 
 /* ===================== UI tick ===================== */
 let TAP=null;const UIP={},HOT=[];const UIM={x:-1,y:-1};
@@ -104,7 +107,7 @@ function tick(dt){
     const adv=e.ok||e.r||MOUSE.lp||TAP;MOUSE.lp=false;TAP=null;
     if(e.back||e.l&&G.howP===0){G.mode='title';G.menuI=1;SFX.back();}else if(e.l){G.howP--;SFX.select();}else if(adv){G.howP++;SFX.select();if(G.howP>1){G.mode='title';G.menuI=0;}}}
   else if(m==='play'){
-    if(G.paused){const a=menuNav(5,e);if(e.back||e.pz||a===0)setPause(false);else if(a===1){setPause(false);arcQuit();startGame();}else if(a===2){setView(VIEWM?0:1);SFX.select();}else if(a===3){setDots(!DOTS);SFX.select();}else if(a===4){setPause(false);arcQuit();startDemo();}}
+    if(G.paused){const a=menuNav(6,e);if(e.back||e.pz||a===0)setPause(false);else if(a===1){setPause(false);arcQuit();startGame();}else if(a===2){cycleQuality();SFX.select();}else if(a===3){setView(VIEWM?0:1);SFX.select();}else if(a===4){setDots(!DOTS);SFX.select();}else if(a===5){setPause(false);arcQuit();startDemo();}}
     else if(e.pz)setPause(true);
     else step(dt,c);}
   else if(m==='upgrade'){G.t+=dt;const n=G.upg.length;let a=menuNav(n,e,true);
@@ -123,6 +126,7 @@ function tick(dt){
 function toggleSound(){AU.muted=!AU.muted;store.set('mute',AU.muted?'1':'0');setVolume();$('snd').textContent=AU.muted?'Sound off':'Sound on';try{if(AU.muted)speechSynthesis.cancel();}catch(e){}}
 $('snd').addEventListener('click',e=>{audioInit();toggleSound();e.currentTarget.blur();});
 $('dots').addEventListener('click',e=>{setDots(!DOTS);e.currentTarget.blur();});
+$('qual').addEventListener('click',e=>{cycleQuality();e.currentTarget.blur();});
 $('pauseBtn').addEventListener('click',e=>{audioInit();if(G.mode==='play')setPause(!G.paused);else if(G.mode==='howto'){G.mode='title';G.menuI=0;}e.currentTarget.blur();});
 cv.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;e.preventDefault();audioInit();TAP={x:(e.clientX-RECT.x)/RECT.w*W,y:(e.clientY-RECT.y)/RECT.h*H};});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&G.mode==='play'&&!G.paused)setPause(true);});
@@ -155,7 +159,7 @@ function perfTick(ft){
   if(PERF.acc>=2.5){const avg=PERF.acc/PERF.n;PERF.acc=0;PERF.n=0;
     if(avg>1/47){PERF.good=0;
       if(DYN>Q.dyn+.01){DYN=Math.max(Q.dyn,DYN-.15);sizeTargets();PERF.wait=1.5;}
-      else if(!QPIN&&QN!=='low'){applyQuality(QORDER[QORDER.indexOf(QN)-1]);PERF.wait=3;}}
+      else if(!QLOCK&&QN!=='low'){applyQuality(QORDER[QORDER.indexOf(QN)-1]);showQual();PERF.wait=3;}}
     else if(avg<1/57){PERF.good++;if(PERF.good>=4&&DYN<1){DYN=Math.min(1,DYN+.1);sizeTargets();PERF.good=0;PERF.wait=1.5;}}}
 }
 let ACC=0,LAST=0,READY=false;
@@ -177,12 +181,12 @@ let RT_FT=0;
 if(!OK3D){$('err').style.display='grid';ARC.post('ready',{title:ARC.title,tickets:true});}
 else{
   if(AU.muted)$('snd').textContent='Sound off';
-  setDots(DOTS);
+  setDots(DOTS);showQual();
   buildPrims();FX.init();resize();
   startDemo();
   /* compile every shader up front so the first explosion doesn't stutter */
   try{render3D(1/60);renderer.compile(scene,camera);}catch(e){}
-  window.__ih3={ARC,AU,ihTickets,gameOver,G,get PLY(){return PLY},EN,BUL,MIS,PRT,PICK,PODS,RINGS,KEY,MOUSE,TS,LATCH,get WORLD(){return WORLD},startGame,startDemo,startWave,spawnPod,applyUpg,openUpgrade,tick,setDots,setView,applyQuality,renderer,get Q(){return QN},get DYN(){return DYN},get RS(){return RS},PR,FX,STATS,PROF,mkEnemy,EDEF,setPause,hurtPlayer,damageProp,explode,set CAMOV(v){CAMOV=v},get CAM(){return CAM},
+  window.__ih3={ARC,AU,ihTickets,gameOver,G,get PLY(){return PLY},EN,BUL,MIS,PRT,PICK,PODS,RINGS,KEY,MOUSE,TS,LATCH,get WORLD(){return WORLD},startGame,startDemo,startWave,spawnPod,applyUpg,openUpgrade,tick,setDots,setView,applyQuality,renderer,get Q(){return QN},get DYN(){return DYN},get RS(){return RS},PR,FX,STATS,PROF,mkEnemy,EDEF,setPause,hurtPlayer,damageProp,explode,dropPick,get QLOCK(){return QLOCK},set CAMOV(v){CAMOV=v},get CAM(){return CAM},
     ff(sec){for(let i=0;i<sec*60;i++)tick(1/60);endInputFrame();},
     tickCost(k){const t=performance.now();for(let i=0;i<k;i++)tick(1/60);return (performance.now()-t)/k;}};
   requestAnimationFrame(frame);

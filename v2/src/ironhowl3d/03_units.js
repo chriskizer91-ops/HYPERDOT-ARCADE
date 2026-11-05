@@ -5,7 +5,7 @@ const RM={
   red:mkRamp('#a62a26',{r:.42,m:.3}),red2:mkRamp('#cc4430',{r:.4,m:.3}),gun:mkRamp('#4c505a',{r:.38,m:.75}),eye:mkRamp('#ff3a2a',{emi:1,k:4.5}),eyeY:mkRamp('#ffd040',{emi:1,k:4.5}),
   olive:mkRamp('#5e6c3c',{r:.6,m:.25}),shield:mkRamp('#48dcff',{emi:1,k:2.5}),purple:mkRamp('#6a3c8c',{r:.42,m:.4}),bone:mkRamp('#bab2a2',{r:.6,m:.1}),white:mkRamp('#e8e8f0',{r:.35,m:.25}),
   cyanE:mkRamp('#8af8ff',{emi:1,k:4.5}),hot:mkRamp('#ff6a2a',{emi:1,k:5.5}),hazard:mkRamp('#e8b020',{r:.5,m:.2}),rubber:mkRamp('#1c1c20',{r:.85,m:0}),
-  plateD:mkRamp('#3a3328',{r:.5,m:.5}),redE:mkRamp('#ff2a20',{emi:1,k:6}),lamp:mkRamp('#fff4e0',{emi:1,k:7})
+  plateD:mkRamp('#3a3328',{r:.5,m:.5}),redE:mkRamp('#ff2a20',{emi:1,k:6}),lamp:mkRamp('#fff4e0',{emi:1,k:7}),green:mkRamp('#4aff6a',{emi:1,k:5})
 };
 const L2W=(u,ang,f,s)=>{const c=Math.cos(ang),sn=Math.sin(ang);return [u.x+c*f-sn*s,u.y+sn*f+c*s];};
 function capL(u,ang,f0,s0,z0,f1,s1,z1,r0,r1,m){const a=L2W(u,ang,f0,s0),b=L2W(u,ang,f1,s1);cap3(a[0],a[1],z0,b[0],b[1],z1,r0,r1,m);}
@@ -39,7 +39,7 @@ function shadowOf(x,y,rx,alt){if(MODE===2||ROSTERON)return;const k=1/(1+(alt||0)
 
 /* ===================== the player: HOWLER ===================== */
 function mkPlayer(){
-  const p={kind:'player',x:WW/2,y:WH/2+5,z:0,vx:0,vy:0,r:1.0,hp:100,maxHp:100,heat:0,over:0,aim:-Math.PI/2,turret:-Math.PI/2,body:-Math.PI/2,fireT:0,gun:1,muz:0,
+  const p={kind:'player',x:WW/2,y:WH/2+5,z:0,vx:0,vy:0,r:1.0,hp:150,maxHp:150,bst:{dmg:0,rate:0,spr:0},heat:0,over:0,aim:-Math.PI/2,turret:-Math.PI/2,body:-Math.PI/2,fireT:0,gun:1,muz:0,
     missT:0,dashT:0,dashCD:0,inv:0,od:0,odM:0,flash:0,bob:0,trail:[],drones:[],up:{},dead:false,deadT:0,hitT:0,kills:0,score:0,mult:1,multT:0,rec:[0,0],sway:0};
   mkFeet(p,2,.55);return p;
 }
@@ -168,22 +168,27 @@ function holoScan(u,h){if(MODE!==3)return;const k=clamp(u.spawnT/.35,0,1),z=k*h;
 function drawScuttler(u){
   const b=u.body,t=u.t*16+u.ph;shadowOf(u.x,u.y,.62,0);MODE=umode(u);
   const L=[.62,1.57,2.5];
-  for(let k=0;k<6;k++){const s=k<3?1:-1,la=b+s*L[k%3],ph=Math.sin(t+k*1.7),fx=u.x+Math.cos(la)*(.78+ph*.1),fy=u.y+Math.sin(la)*(.78+ph*.1),fz=Math.max(0,Math.cos(t+k*1.7))*.16;
-    const kx=u.x+Math.cos(la)*.45,ky=u.y+Math.sin(la)*.45;cap3(u.x,u.y,.5,kx,ky,.74,.07,.06,RM.dark);cap3(kx,ky,.74,fx,fy,fz,.06,.035,RM.black);}
+  for(let k=0;k<6;k++){const s=k<3?1:-1,la=b+s*L[k%3],ph=Math.sin(t+k*1.7),fx=u.x+Math.cos(la)*(.8+ph*.1),fy=u.y+Math.sin(la)*(.8+ph*.1),fz=Math.max(0,Math.cos(t+k*1.7))*.16;
+    const kx=u.x+Math.cos(la)*.46,ky=u.y+Math.sin(la)*.46;cap3(u.x,u.y,.5,kx,ky,.76,.075,.06,RM.dark);ball(kx,ky,.76,.075,RM.red2);cap3(kx,ky,.76,fx,fy,fz,.06,.03,RM.black);}
   ball(u.x,u.y,.5,.34,RM.red);ball(u.x-Math.cos(b)*.06,u.y-Math.sin(b)*.06,.7,.25,RM.red2);
-  boxL(u,b,-.12,0,.84,.36,.3,.1,RM.dark);
+  for(let i=0;i<3;i++)boxL(u,b,-.28+i*.2,0,.82-i*.03,.16,.36-i*.04,.08,i%2?RM.red:RM.dark,.15);
+  boxL(u,b,-.36,0,.6,.14,.2,.06,RM.eye,.4);
   const e=L2W(u,b,.3,0);ball(e[0],e[1],.56,.09,RM.eye);
-  for(const s of [-1,1]){const m=L2W(u,b,.34,s*.14);cap3(m[0],m[1],.44,m[0]+Math.cos(b+s*.4)*.2,m[1]+Math.sin(b+s*.4)*.2,.36,.04,.02,RM.black);}
+  const jaw=Math.sin(u.t*22+u.ph)*.25;for(const s of [-1,1]){const m=L2W(u,b,.34,s*.14);cap3(m[0],m[1],.44,m[0]+Math.cos(b+s*(.35+jaw))*.24,m[1]+Math.sin(b+s*(.35+jaw))*.24,.34,.045,.02,RM.black);}
   holoScan(u,1);MODE=0;
 }
 function drawGunner(u){
   const b=u.body,a=u.aim;shadowOf(u.x,u.y,.88,0);MODE=umode(u);
-  legs(u,.8,1.05,.62,.14,.11,RM.gun,RM.dark,RM.black,.36,.5,RM.black);
+  legs(u,.8,1.05,.62,.14,.11,RM.gun,RM.dark,RM.black,.36,.5,RM.red2);
   capL(u,a,-.25,0,1.4,.2,0,1.4,.44,.4,RM.gun);
   boxL(u,a,.18,0,1.42,.32,.62,.46,RM.dark,-.25);boxL(u,a,-.45,0,1.5,.3,.5,.5,RM.black);
-  capL(u,a,-.1,0,1.74,.15,0,1.74,.28,.24,RM.red);
+  {const p=L2W(u,a,-.5,-.18);cap3(p[0],p[1],1.75,p[0],p[1],2.3,.02,.015,RM.steel);if((FRAME>>3)&1)ball(p[0],p[1],2.31,.035,RM.eye);}
+  capL(u,a,-.1,0,1.74,.15,0,1.74,.28,.24,RM.red);boxL(u,a,.2,0,1.76,.1,.36,.05,RM.eye,-.3);
+  boxL(u,a,-.05,-.5,1.62,.42,.3,.16,RM.red2,0,-.2);
   capL(u,a,.05,.5,1.35,.95,.5,1.35,.09,.08,RM.black);capL(u,a,-.1,.5,1.35,.2,.5,1.35,.16,.15,RM.dark);
+  boxL(u,a,.98,.5,1.35,.12,.16,.16,RM.dark);boxL(u,a,.1,.5,1.16,.3,.16,.18,RM.olive);
   const e=L2W(u,a,.36,0);ball(e[0],e[1],1.56,.1,u.st==='aim'&&((FRAME>>1)&1)?RM.eyeY:RM.eye);
+  if(u.st==='aim'){const m=L2W(u,a,1.05,.5);glow3(m[0],m[1],1.35,m[0],m[1],1.35,.25,.25,[1,.8,.2],.35);}
   if(u.muz>0){const m=L2W(u,a,1.05,.5);ball(m[0],m[1],1.35,.14,RM.muzzle);glow3(m[0],m[1],1.35,m[0],m[1],1.35,.4,.4,[1,.5,.3],.4);}
   holoScan(u,2);MODE=0;
 }
@@ -192,36 +197,50 @@ function drawTank(u){
   const tr=(u.tread||0);
   for(const s of [-1,1]){boxL(u,b,0,s*.74,.33,2.25,.46,.56,RM.rubber);
     for(let i=0;i<5;i++){const f=-.84+i*.42,p=L2W(u,b,f,s*.98),q=L2W(u,b,f,s*.5);cyl3(p[0],p[1],.3,q[0],q[1],.3,.2,RM.dark);}
-    for(let i=0;i<7;i++){const f=-1.05+(((i/7)*2.1+tr*.7)%2.1),p=L2W(u,b,f,s*.74);box3(p[0],p[1],.63,b,.1,.48,.04,RM.black);}}
+    for(let i=0;i<7;i++){const f=-1.05+(((i/7)*2.1+tr*.7)%2.1),p=L2W(u,b,f,s*.74);box3(p[0],p[1],.63,b,.1,.48,.04,RM.black);}
+    boxL(u,b,0,s*1.0,.62,2.0,.06,.3,hull,0,s*.15);
+    for(let i=0;i<4;i++)boxL(u,b,-.75+i*.5,s*1.03,.66,.06,.03,.06,RM.steel);}
   boxL(u,b,-.1,0,.82,1.7,1.16,.52,hull);boxL(u,b,.86,0,.74,.5,1.1,.4,hull,-.55);boxL(u,b,-.92,0,.92,.3,.9,.36,RM.dark);
   capL(u,b,-.9,0,.72,.9,0,.72,.5,.46,hull);
+  for(const s of [-1,1]){const p=L2W(u,b,-1.0,s*.32);cyl3(p[0],p[1],1.0,p[0],p[1],1.35,.07,RM.black);}
+  if(Math.hypot(u.vx,u.vy)>.4&&Math.random()<.25&&MODE===0&&!G.paused){const p=L2W(u,b,-1.0,(Math.random()<.5?-1:1)*.32);prt({k:'smoke',x:p[0],y:p[1],z:1.4,vx:-Math.cos(b),vy:-Math.sin(b),vz:1.2,life:.8,max:.8,s:.14,grow:1.6,drag:.96,col:[60,58,56]});}
   boxL(u,a,-.05,0,1.28,.95,.86,.42,RM.red2);ball(u.x,u.y,1.15,.46,RM.red2);
-  capL(u,a,.3,0,1.22,1.75,0,1.22,.11,.1,RM.black);boxL(u,a,1.72,0,1.22,.24,.26,.26,RM.dark);
+  boxL(u,a,.5,0,1.24,.24,.5,.3,RM.dark);cyl3(...L2W(u,a,-.22,.22),1.5,...L2W(u,a,-.22,.22),1.6,.16,RM.dark);
+  {const p=L2W(u,a,-.35,-.3);cap3(p[0],p[1],1.48,p[0]-Math.cos(a)*.2,p[1]-Math.sin(a)*.2,2.4,.015,.01,RM.steel);}
+  capL(u,a,.3,0,1.22,1.75,0,1.22,.11,.1,RM.black);cyl3(...L2W(u,a,1.1,0),1.22,...L2W(u,a,1.3,0),1.22,.14,RM.dark);boxL(u,a,1.72,0,1.22,.24,.26,.26,RM.dark);
   const e=L2W(u,a,.25,.3);ball(e[0],e[1],1.48,.08,RM.eye);
   if(u.muz>0){const m=L2W(u,a,1.9,0),e2=L2W(u,a,2.8,0);ball(m[0],m[1],1.22,.26,RM.muzzle);glow3(m[0],m[1],1.22,e2[0],e2[1],1.22,.5,.1,[1,.6,.3],1.2);}
   holoScan(u,1.6);MODE=0;
 }
 function drawMortar(u){
   const b=u.body;shadowOf(u.x,u.y,1.15,0);MODE=umode(u);
-  legs(u,1.0,.85,.7,.12,.09,RM.dark,RM.gun,null,0,0,RM.black);
-  ball(u.x,u.y,.85,.52,RM.olive);boxL(u,b,0,0,.62,.9,.9,.2,RM.dark);
+  legs(u,1.0,.85,.7,.12,.09,RM.dark,RM.gun,null,0,0,RM.olive);
+  for(const f of u.feet)cyl3(f.x,f.y,f.z,f.x,f.y,f.z+.06,.15,RM.black);
+  ball(u.x,u.y,.85,.52,RM.olive);boxL(u,b,0,0,.62,.9,.9,.2,RM.dark);boxL(u,b,0,0,1.12,.6,.62,.12,RM.gun);
   const tb=L2W(u,u.aim,.32,0);cap3(u.x,u.y,1.0,tb[0],tb[1],2.15,.17,.16,RM.dark);
+  for(const k of [.35,.7]){cyl3(lerp(u.x,tb[0],k),lerp(u.y,tb[1],k),lerp(1.0,2.15,k)-.05,lerp(u.x,tb[0],k),lerp(u.y,tb[1],k),lerp(1.0,2.15,k)+.05,.2,RM.steel);}
   ball(tb[0],tb[1],2.18,.12,u.st==='load'?RM.hot:RM.black);
   if(u.st==='load')glow3(tb[0],tb[1],2.2,tb[0],tb[1],2.2,.5,.5,[1,.4,.15],.3*Math.min(1,u.stT*2));
+  for(let i=0;i<3;i++){const p=L2W(u,b,-.5,-.2+i*.2);cap3(p[0],p[1],.9,p[0],p[1],1.25,.07,.06,RM.dark);ball(p[0],p[1],1.28,.06,RM.hot);}
   const e=L2W(u,b,-.3,.25);ball(e[0],e[1],1.2,.07,RM.eye);
   holoScan(u,2.2);MODE=0;
 }
 function drawShielder(u){
   const a=u.aim;shadowOf(u.x,u.y,1.0,0);MODE=umode(u);
-  legs(u,.9,1.0,.6,.16,.12,RM.purple,RM.dark,RM.black,.38,.5,RM.black);
+  legs(u,.9,1.0,.6,.16,.12,RM.purple,RM.dark,RM.black,.38,.5,RM.dark);
   capL(u,a,-.3,0,1.35,.15,0,1.35,.5,.46,RM.purple);boxL(u,a,-.15,0,1.62,.7,.7,.2,RM.dark);
+  for(const s of [-1,1])boxL(u,a,-.1,s*.5,1.58,.5,.24,.2,RM.purple,0,s*.3);
+  ball(...L2W(u,a,.3,0),1.3,.12,u.shp>0?RM.cyanE:RM.eye);
   capL(u,a,-.2,-.62,1.5,.35,-.62,1.2,.16,.2,RM.dark);
   const e=L2W(u,a,.25,0);ball(e[0],e[1],1.62,.09,RM.eye);
   if(u.shp==null||u.shp>0){const sh=u.shieldHit>0,low=u.shp!=null&&u.shp<70*HPK&&(FRAME>>1)&1;
     if(u.st==='stagger'){capL(u,a+.9,.55,-.95,.55,.55,.95,.55,.18,.18,RM.dark);}
     else if(!low){const c=L2W(u,a,.84,0);
       capL(u,a,.84,-.98,.45,.84,.98,.45,.07,.07,RM.dark);capL(u,a,.84,-.98,1.65,.84,.98,1.65,.07,.07,RM.dark);
+      for(const s of [-1,1])capL(u,a,.84,s*.98,.45,.84,s*.98,1.65,.07,.07,RM.dark);
+      cyl3(...L2W(u,a,.55,-.62),1.05,...L2W(u,a,.78,-.62),1.05,.12,RM.steel);
       glowBox(c[0],c[1],1.05,a,.06,1.95,1.2,sh?[1,1,1]:[.3,.85,1],sh?1.4:.55);
+      for(let k=0;k<3;k++){const zz=.65+k*.4+((G.t*.8+u.ph)%1)*.0;glowBox(c[0],c[1],zz,a,.07,1.9,.02,[.5,.95,1],.5);}
       if(MODE===0)glowBox(c[0],c[1],1.05,a,.24,2.1,1.34,[.2,.7,1],.12);}}
   holoScan(u,2);MODE=0;
 }
@@ -230,7 +249,9 @@ function drawTurret(u){
   cyl3(u.x,u.y,0,u.x,u.y,.28,1.02,RM.dark);cyl3(u.x,u.y,.28,u.x,u.y,.4,.8,RM.gun);
   for(let k=0;k<6;k++){const an=k/6*TAU+.3;box3(u.x+Math.cos(an)*.92,u.y+Math.sin(an)*.92,.2,an,.2,.32,.4,RM.hazard);}
   ball(u.x,u.y,.68,.56,RM.steel);ball(u.x,u.y,1.2,.42,RM.red);
-  capL(u,u.aim,.2,0,1.24,.95,0,1.24,.13,.11,RM.black);boxL(u,u.aim,-.1,0,1.36,.5,.5,.18,RM.dark);
+  for(let k=0;k<3;k++)boxL(u,u.aim,-.38,-.15+k*.15,1.25,.18,.04,.34,RM.dark);
+  capL(u,u.aim,.2,0,1.24,.95,0,1.24,.13,.11,RM.black);boxL(u,u.aim,-.1,0,1.36,.5,.5,.18,RM.dark);boxL(u,u.aim,.62,0,1.24,.3,.24,.24,RM.dark);
+  {const ra=u.t*2.5;cap3(u.x,u.y,1.55,u.x,u.y,1.85,.03,.03,RM.steel);box3(u.x,u.y,1.9,ra,.06,.5,.22,RM.gun,0,.3);if((FRAME>>3)&1)ball(u.x,u.y,2.05,.05,RM.redE);}
   const cg=u.st==='charge'?u.stT/1:u.st==='fire'?1:0,e=L2W(u,u.aim,1.0,0);
   ball(e[0],e[1],1.24,.08+cg*.16,cg>0?RM.hot:RM.eye);
   if(cg>0)glow3(e[0],e[1],1.24,e[0],e[1],1.24,.3+cg*.5,.3+cg*.5,[1,.35,.15],.25+cg*.35);
@@ -238,10 +259,13 @@ function drawTurret(u){
 }
 function drawBomber(u){
   const b=u.body;shadowOf(u.x,u.y,1.1,u.z);MODE=umode(u);
-  capL(u,b,-.6,0,u.z,.7,0,u.z,.3,.24,RM.gun);
+  capL(u,b,-.6,0,u.z,.7,0,u.z,.3,.24,RM.gun);boxL(u,b,.45,0,u.z+.16,.32,.22,.1,RM.visor,.2);
   boxL(u,b,-.12,0,u.z+.05,.6,2.2,.08,RM.dark);boxL(u,b,-.62,0,u.z+.3,.3,.06,.5,RM.dark,.3);
-  for(const s of [-1,1]){const p=L2W(u,b,-.1,s*1.05);cyl3(p[0],p[1],u.z-.15,p[0],p[1],u.z+.25,.17,RM.steel);ball(p[0],p[1],u.z-.18,.09,RM.hot);
-    if(MODE===0)glow3(p[0],p[1],u.z-.2,p[0],p[1],u.z-.75,.17,.02,[1,.5,.2],.7);}
+  for(const s of [-1,1])boxL(u,b,-.62,s*.3,u.z+.18,.26,.04,.34,RM.dark,.3,s*.6);
+  boxL(u,b,-.05,0,u.z-.24,.5,.3,.12,RM.black);
+  for(const s of [-1,1]){const p=L2W(u,b,-.1,s*1.05);cyl3(p[0],p[1],u.z-.15,p[0],p[1],u.z+.25,.17,RM.steel);cyl3(p[0],p[1],u.z+.25,p[0],p[1],u.z+.3,.19,RM.dark);ball(p[0],p[1],u.z-.18,.09,RM.hot);
+    if(MODE===0)glow3(p[0],p[1],u.z-.2,p[0],p[1],u.z-.75,.17,.02,[1,.5,.2],.7);
+    const w=L2W(u,b,-.12,s*1.12);if(((FRAME>>4)+(s>0?1:0))&1)ball(w[0],w[1],u.z+.05,.05,s>0?RM.green:RM.redE);}
   const e=L2W(u,b,.7,0);ball(e[0],e[1],u.z+.05,.08,RM.eye);
   holoScan(u,u.z+.5);MODE=0;
 }
@@ -259,6 +283,10 @@ function drawGoliath(u){
     box3(tp[0]+Math.cos(ang)*.3,tp[1]+Math.sin(ang)*.3,4.75,ang,.7,.5,.2,RM.dark);
     if(u.muzS===s&&u.muz>0){const mx=tp[0]+Math.cos(ang)*1.85,my=tp[1]+Math.sin(ang)*1.85;ball(mx,my,4.45,.3,RM.muzzle);glow3(mx,my,4.45,mx+Math.cos(ang)*1.2,my+Math.sin(ang)*1.2,4.45,.6,.1,[1,.6,.3],1.2);}}
   const c=L2W(u,b,1.6,0),pulse=.22+.08*Math.sin(u.t*6);ball(c[0],c[1],3.0,pulse,RM.eye);glow3(c[0],c[1],3.0,c[0],c[1],3.0,pulse*3,pulse*3,[1,.2,.1],.35);
+  /* armour, glowing back vents, a searchlight eye and side hatches */
+  for(const s of [-1,1]){boxL(u,b,.2,s*1.45,4.05,1.6,.2,.5,RM.red,0,s*.35);for(let i=0;i<3;i++)boxL(u,b,-1.0+i*.45,s*1.2,4.4,.3,.25,.08,u.st==='barrage'?RM.hot:RM.dark);}
+  for(let i=0;i<4;i++)boxL(u,b,-1.6,-.45+i*.3,4.0,.06,.2,.5,u.st==='barrage'||u.hp<u.max*.5?RM.hot:RM.black);
+  {const c2=L2W(u,b,1.75,0),g2=L2W(u,b,6,0);ball(c2[0],c2[1],3.4,.18,RM.lamp);glow3(c2[0],c2[1],3.4,g2[0],g2[1],.2,.25,1.4,[1,.85,.6],.12);light(g2[0],g2[1],0,3.6,.8,.55,.3);}
   holoScan(u,5);MODE=0;
 }
 function drawMaw(u){
@@ -270,5 +298,9 @@ function drawMaw(u){
   ball(u.x,u.y,2.5+z,1.05,RM.dark);boxL(u,b,.55,0,2.2+z,.7,1.3,.35,RM.black,-.3);
   for(let i=0;i<5;i++){const e=L2W(u,b,.88,(i-2)*.22);ball(e[0],e[1],2.65+z+(i%2)*.15,i===2?.22:.11,u.st==='charge'||u.st==='beam'?RM.hot:RM.eye);}
   for(let i=0;i<8;i++){const p=L2W(u,b,-1.5+(i%4)*-.25,(i<4?-1:1)*.5);ball(p[0],p[1],3.45+z,.08,RM.cyanE);}
+  /* spines, a glowing belly and snapping jaws */
+  for(let i=0;i<5;i++){const p=L2W(u,b,-.9-i*.3,0);cap3(p[0],p[1],3.4+z-i*.08,p[0]-Math.cos(b)*.2,p[1]-Math.sin(b)*.2,4.3+z-i*.12,.09,.01,RM.bone);}
+  ball(u.x,u.y,1.6+z,.6,u.st==='charge'||u.st==='beam'?RM.hot:RM.purple);glow3(u.x,u.y,1.5+z,u.x,u.y,1.5+z,1.2,1.2,[.8,.2,1],.18);
+  {const jw=Math.sin(u.t*9)*.3;for(const s of [-1,1]){const p=L2W(u,b,.95,s*.45);cap3(p[0],p[1],2.3+z,p[0]+Math.cos(b+s*(.4+jw))*.9,p[1]+Math.sin(b+s*(.4+jw))*.9,1.9+z,.14,.03,RM.bone);}}
   holoScan(u,4);MODE=0;
 }

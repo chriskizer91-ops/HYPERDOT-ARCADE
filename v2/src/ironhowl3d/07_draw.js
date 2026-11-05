@@ -1,12 +1,23 @@
 /* ===================== drawing the scene each frame: machines, pickups, projectiles, beams, lights ===================== */
 const RX={green:mkRamp('#5aff6a',{emi:1,k:3}),amber:mkRamp('#ffae2a',{emi:1,k:3}),silver:mkRamp('#c8ccd8',{r:.25,m:.9}),pod:mkRamp('#80848e',{r:.4,m:.7}),podR:mkRamp('#b03a2a',{r:.45,m:.4}),
   podD:mkRamp('#2a2c32',{r:.5,m:.6})};
+const PKC={repair:[.25,1,.35],cell:[1,.62,.15],bdmg:[1,.32,.14],brate:[1,.85,.2],bspr:[.3,.9,1]};
+const PKM={bdmg:mkRamp('#ff5a2a',{emi:1,k:3.2}),brate:mkRamp('#ffd040',{emi:1,k:3.2}),bspr:mkRamp('#4fe0ff',{emi:1,k:3.2}),frame:mkRamp('#30323a',{r:.35,m:.85})};
 function drawPick(p){
   if(p.t>13&&((FRAME>>2)&1))return;
-  const z=p.z+.35+Math.sin(p.t*4)*.14,x=p.x,y=p.y,sp=p.t*3;
-  shadowOf(x,y,.32,z);
-  if(p.k==='repair'){const c=Math.cos(sp)*.3,s=Math.sin(sp)*.3;cap3(x-c,y-s,z,x+c,y+s,z,.1,.1,RX.green);cap3(x,y,z-.3,x,y,z+.3,.1,.1,RX.green);glow3(x,y,z,x,y,z,.6,.6,[.2,1,.3],.25);}
+  const z=p.z+.45+Math.sin(p.t*4)*.14,x=p.x,y=p.y,sp=p.t*3,col=PKC[p.k];
+  shadowOf(x,y,.35,z);
+  /* a light column so pickups read from across the arena */
+  if(col){glow3(x,y,.1,x,y,3.6,.14,.04,col,.22);FX.dec(FX.dAdd,x,y,.75+.12*Math.sin(p.t*6),0,col[0],col[1],col[2],.8,2,.85,.07,2);}
+  if(p.k==='repair'){const c=Math.cos(sp)*.36,s=Math.sin(sp)*.36;cap3(x-c,y-s,z,x+c,y+s,z,.12,.12,RX.green);cap3(x,y,z-.36,x,y,z+.36,.12,.12,RX.green);glow3(x,y,z,x,y,z,.65,.65,[.2,1,.3],.15);}
   else if(p.k==='cell'){cap3(x,y,z-.22,x,y,z+.22,.17,.17,RX.amber);ball(x,y,z+.34,.07,RM.steel);box3(x,y,z,sp,.4,.06,.5,RM.dark);glow3(x,y,z,x,y,z,.6,.6,[1,.6,.15],.25);}
+  else if(PKM[p.k]){const m=PKM[p.k];
+    /* a spinning frame around a glowing core, a different core for each power-up */
+    box3(x,y,z,sp,.62,.62,.06,PKM.frame,0,0);box3(x,y,z,sp,.06,.62,.62,PKM.frame);
+    if(p.k==='bdmg'){box3(x,y,z,-sp*1.6,.42,.12,.12,m,.0);box3(x,y,z,-sp*1.6,.12,.12,.42,m);box3(x,y,z,-sp*1.6+1.57,.42,.12,.12,m);}
+    else if(p.k==='brate'){for(let i=0;i<3;i++)box3(x,y,z-.2+i*.2,sp*1.4,.38,.1,.08,m,.5);}
+    else{for(let i=-1;i<=1;i++)box3(x+Math.cos(sp*1.2+i*.5)*.12,y+Math.sin(sp*1.2+i*.5)*.12,z,sp*1.2+i*.5,.42,.07,.07,m);}
+    glow3(x,y,z,x,y,z,.7,.7,col,.16);}
   else{ball(x,y,z,.21,RX.silver);const c=Math.cos(sp),s=Math.sin(sp);box3(x+c*.16,y+s*.16,z+.08,sp,.16,.1,.1,RM.white);box3(x-c*.12,y-s*.12,z-.06,-sp,.14,.12,.08,RM.dark);}
 }
 function drawGhost(t){
@@ -60,7 +71,7 @@ function sceneLights(){
   for(const b of BUL){if(b.team==='p')light(b.x,b.y,b.z,1.4,b.kind==='db'?.08:.5,b.kind==='db'?.36:.4,b.kind==='db'?.5:.14);else light(b.x,b.y,b.z,b.kind==='hs'?2.4:1.4,.6,b.kind==='hs'?.3:.1,.08);}
   for(const m of MIS)if(m.delay<=0)light(m.x,m.y,m.z,2.1,.75,.42,.12);
   for(const L of LIGHTS){const a=L.life/L.max;light(L.x,L.y,L.z,L.rad*(.5+.5*a),L.col[0]*a,L.col[1]*a,L.col[2]*a);}
-  for(const p of PICK){const c=p.k==='repair'?[.1,.5,.12]:p.k==='cell'?[.5,.3,.05]:[.25,.25,.3];light(p.x,p.y,0,1.7,c[0],c[1],c[2]);}
+  for(const p of PICK){const c=PKC[p.k]?PKC[p.k].map(v=>v*.5):[.25,.25,.3];light(p.x,p.y,.6,2.2,c[0],c[1],c[2]);}
   for(const p of PODS){const k=1-p.t/p.T;light(p.x+k*k*5,p.y-k*k*2,k*k*34*.3,p.big?6:3,.9,.45,.15);}
 }
 /* ---------- the roster page of HOW TO PLAY: the enemies themselves, turning on a dark stage ---------- */
