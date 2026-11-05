@@ -29,7 +29,7 @@ function drawAir(){
   if(!PLY.dead)for(const d of PLY.drones)drawDrone(d);
   for(const p of PODS){const k=1-p.t/p.T,z=k*k*34,r=p.big?1.1:.45,x=p.x+k*k*5,y=p.y-k*k*2;
     if(z<.05)continue;cap3(x,y,z+r*2.4,x,y,z+r*.6,r*.75,r,p.big?RX.podR:RX.pod);for(let i=0;i<4;i++){const a=i*Math.PI/2+p.t*3;box3(x+Math.cos(a)*r*.7,y+Math.sin(a)*r*.7,z+r*2,a,r*.3,.05,r*1.2,RX.podD);}
-    ball(x,y,z+r*.35,r*(.7+Math.random()*.3),RM.glow);glow3(x,y,z+r*.3,x+k*k*5*.3,y-k*k*.6,z+r*6,r*1.4,r*.3,[1,.5,.15],.9);}
+    ball(x,y,z+r*.35,r*(.7+Math.random()*.3),RM.glow);glow3(x,y,z+r*.3,x+k*k*5*.3,y-k*k*.6,z+r*6,r*1.2,r*.25,[1,.42,.1],p.big?.45:.8);}
   for(const s of SHELLS){const p=shellPos(s);ball(p[0],p[1],p[2],.2,RM.dark);ball(p[0],p[1],p[2]+.12,.08,RM.hot);glow3(p[0],p[1],p[2],p[0],p[1],p[2],.35,.35,[1,.4,.15],.35);}
   for(const b of BOMBS){ball(b.x,b.y,b.z,.2,RM.black);box3(b.x,b.y,b.z+.22,0,.2,.04,.18,RM.dark);ball(b.x,b.y,b.z+.14,.07,RM.eye);}
   for(const m of MIS){if(m.delay>0)continue;const sp=Math.hypot(m.vx,m.vy)||1,dx=m.vx/sp,dy=m.vy/sp;
@@ -47,7 +47,7 @@ const P_OD=()=>PLY&&PLY.od>0;
 function sceneLights(){
   const P=PLY;
   if(!P.dead){
-    const h=L2W(P,P.turret,.9,0),tg=L2W(P,P.turret,8,0);head.position.set(h[0],2.6+P.bob,h[1]);head.target.position.set(tg[0],0,tg[1]);head.target.updateMatrixWorld();head.intensity=G.mode==='title'?28:34;
+    const h=L2W(P,P.turret,1.5,-.62),tg=L2W(P,P.turret,8,0);head.position.set(h[0],2.6+P.bob,h[1]);head.target.position.set(tg[0],0,tg[1]);head.target.updateMatrixWorld();head.intensity=G.mode==='title'?28:34;
     light(P.x,P.y,0,2.6,.22,.17,.1);
     if(P.muz>0){const m=L2W(P,P.turret,1.5,P.gun*.9);light(m[0],m[1],1.8,3.4,1.1,.78,.34);}
     if(P.od>0)light(P.x,P.y,0,4,.55+.3*Math.sin(G.t*22),.3,.08);
@@ -84,12 +84,12 @@ function render3D(dt){
   const t0=performance.now();
   primsBegin();FX.begin();
   ROSTERON=G.mode==='howto'&&G.howP===1;
-  ARENA.grp.visible=!ROSTERON;if(THEME3.sky)THEME3.sky.visible=!ROSTERON;FX.wMesh.visible=!ROSTERON;
-  if(ROSTERON){drawRoster3D();PR.xray.mesh.count=0;head.position.copy(camera.position);RAY.setFromCamera(NDC.set(0,.1),camera);head.target.position.copy(RAY.ray.direction).multiplyScalar(14).add(RAY.ray.origin);head.target.updateMatrixWorld();head.intensity=160;head.distance=40;head.angle=1.1;hemi.intensity=1.6;}
-  else{head.distance=18;head.angle=.52;hemi.intensity=WORLD&&WORLD.th.id==='docks'?.75:.85;}
+  ARENA.grp.visible=!ROSTERON;if(THEME3.sky)THEME3.sky.visible=!ROSTERON;FX.wMesh.visible=!ROSTERON;FX.hMesh.visible=!ROSTERON;
+  if(ROSTERON){drawRoster3D();PR.xray.mesh.count=0;PR.xrayB.mesh.count=0;head.position.copy(camera.position);RAY.setFromCamera(NDC.set(0,.1),camera);head.target.position.copy(RAY.ray.direction).multiplyScalar(14).add(RAY.ray.origin);head.target.updateMatrixWorld();head.intensity=160;head.distance=40;head.angle=1.1;hemi.intensity=1.6;}
+  else{head.distance=18;head.angle=.52;hemi.intensity=HEMIK;}
   if(!ROSTERON){
-    if(PLY&&!PLY.dead)drawPlayer(PLY);
-    PR.xray.mesh.count=PR.cap.n;
+    if(PLY&&!PLY.dead){animPlayer(dt);drawPlayer(PLY);}
+    PR.xray.mesh.count=PR.cap.n;PR.xrayB.mesh.count=PR.box.n;
     if(PLY&&!PLY.dead)for(const t of PLY.trail)drawGhost(t);
     for(const u of EN)if(!u.dead)u.d.draw(u);
     for(const p of PICK)drawPick(p);

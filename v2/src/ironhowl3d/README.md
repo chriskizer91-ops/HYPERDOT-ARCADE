@@ -25,6 +25,20 @@ The controls are the same: WASD and the mouse, the arrow keys, a gamepad, or two
   - **DOTS** (the chip at the top, or the pause menu) renders the whole 3D scene on that same dot grid.
   - **VIEW** in the pause menu switches between the high camera and a closer one.
 
+## Look (round 2)
+
+- **Night battle:** both arenas are darker now, lit by floodlight towers at the corners. Long beams reach through the haze, and the big north floodlight casts the shadows. Low haze drifts through the arena.
+- **Wet ground:** the ground reflects the scene where it's wet, using a mirrored second camera. On the docks that's everywhere, and at the yard only in the puddles. Each frame is also colour-graded.
+- **The Howler:**
+  - Armoured thighs, and hydraulic pistons that slide as the knees bend.
+  - Clawed feet and hip skirts.
+  - A cockpit head with a visor slit, and a shoulder floodlight.
+  - Three-barrel rotary cannons that spin up as you fire.
+  - Missile-pod lids that flip open when a salvo is ready.
+- **Heat:** the barrels glow dull red, then orange, as the heat bar fills. When the guns overheat, the back radiator fins swing open, glowing, and steam blasts out until they've vented.
+- **Bosses:** when a boss drops in, the camera swings to the pod. The landing goes into slow motion, and the boss's name comes up.
+- **Balance:** each cannon shot adds 2.5 heat instead of the original's 4.3. Non-stop fire now takes about 3.6 seconds to overheat instead of about 2.
+
 ## Quality
 
 The game picks **high** on a desktop and **medium** on a phone. If the frame rate can't hold during play, it first lowers the render resolution, then steps down a level, to **low** at the bottom. Low has no shadow map, fewer lights and fewer particles. To pin a level, add `?q=low`, `?q=med` or `?q=high` to the address.

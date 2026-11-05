@@ -1,11 +1,11 @@
 /* ===================== machines: the original's capsules and balls, now real 3D parts, plus armour boxes; legs solved with IK ===================== */
 const RM={
-  amber:mkRamp('#e08e1c',{r:.4,m:.35}),amber2:mkRamp('#f2b444',{r:.38,m:.3}),steel:mkRamp('#5c606b',{r:.38,m:.65}),legs:mkRamp('#4a4e58',{r:.45,m:.55}),dark:mkRamp('#2e3038',{r:.42,m:.7}),black:mkRamp('#18191e',{r:.5,m:.55}),
+  amber:mkRamp('#e08e1c',{r:.4,m:.35}),amber2:mkRamp('#dc9c38',{r:.5,m:.3}),steel:mkRamp('#5c606b',{r:.38,m:.65}),legs:mkRamp('#4a4e58',{r:.45,m:.55}),dark:mkRamp('#2e3038',{r:.42,m:.7}),black:mkRamp('#18191e',{r:.5,m:.55}),
   visor:mkRamp('#5af0ff',{emi:1,k:3.2}),glow:mkRamp('#ffb040',{emi:1,k:3.2}),muzzle:mkRamp('#fff2b0',{emi:1,k:8}),
   red:mkRamp('#a62a26',{r:.42,m:.3}),red2:mkRamp('#cc4430',{r:.4,m:.3}),gun:mkRamp('#4c505a',{r:.38,m:.75}),eye:mkRamp('#ff3a2a',{emi:1,k:4.5}),eyeY:mkRamp('#ffd040',{emi:1,k:4.5}),
   olive:mkRamp('#5e6c3c',{r:.6,m:.25}),shield:mkRamp('#48dcff',{emi:1,k:2.5}),purple:mkRamp('#6a3c8c',{r:.42,m:.4}),bone:mkRamp('#bab2a2',{r:.6,m:.1}),white:mkRamp('#e8e8f0',{r:.35,m:.25}),
   cyanE:mkRamp('#8af8ff',{emi:1,k:4.5}),hot:mkRamp('#ff6a2a',{emi:1,k:5.5}),hazard:mkRamp('#e8b020',{r:.5,m:.2}),rubber:mkRamp('#1c1c20',{r:.85,m:0}),
-  plateD:mkRamp('#3a3328',{r:.5,m:.5}),redE:mkRamp('#ff2a20',{emi:1,k:6})
+  plateD:mkRamp('#3a3328',{r:.5,m:.5}),redE:mkRamp('#ff2a20',{emi:1,k:6}),lamp:mkRamp('#fff4e0',{emi:1,k:7})
 };
 const L2W=(u,ang,f,s)=>{const c=Math.cos(ang),sn=Math.sin(ang);return [u.x+c*f-sn*s,u.y+sn*f+c*s];};
 function capL(u,ang,f0,s0,z0,f1,s1,z1,r0,r1,m){const a=L2W(u,ang,f0,s0),b=L2W(u,ang,f1,s1);cap3(a[0],a[1],z0,b[0],b[1],z1,r0,r1,m);}
@@ -43,40 +43,95 @@ function mkPlayer(){
     missT:0,dashT:0,dashCD:0,inv:0,od:0,odM:0,flash:0,bob:0,trail:[],drones:[],up:{},dead:false,deadT:0,hitT:0,kills:0,score:0,mult:1,multT:0,rec:[0,0],sway:0};
   mkFeet(p,2,.55);return p;
 }
+/* gun barrels warm up as the heat bar fills: black, then dull red, then orange-white */
+const HEATM={c:[0,0,0],emi:0,r:.4,m:.6};
+function heatMat(h){const t=clamp((h-.35)/.65,0,1);let c;
+  if(t<.5){const k=t/.5;c=[lerp(.012,.42,k),lerp(.012,.025,k),lerp(.014,.004,k)];}else{const k=(t-.5)/.5;c=[lerp(.42,1,k),lerp(.025,.5,k),lerp(.004,.12,k)];}
+  HEATM.c=c;HEATM.emi=t*t*2.2;return HEATM;}
+const FINHOT={c:[.75,.16,.03],emi:.9,r:.5,m:.3};
+/* a box laid along a segment (thigh and shin armour) */
+function seg(x0,y0,z0,x1,y1,z1,w,h,mt,frac){const dx=x1-x0,dy=y1-y0,dz=z1-z0,hl=Math.hypot(dx,dy);box3((x0+x1)/2,(y0+y1)/2,(z0+z1)/2,Math.atan2(dy,dx),Math.hypot(hl,dz)*(frac||1),w,h,mt,Math.atan2(dz,hl));}
+/* moving parts that live between frames: spinning barrels, pod lids, radiator fins, steam */
+function animPlayer(dt){
+  const P=PLY;if(!P||P.dead)return;
+  const hot=G.t-(P.lastFire??-9)<.14;
+  P.spinV=lerp(P.spinV||0,hot?(P.od>0?46:30):0,Math.min(1,dt*(hot?10:2.2)));P.spin=(P.spin||0)+P.spinV*dt;
+  P.lid=lerp(P.lid||0,P.missT<=0?1:0,Math.min(1,dt*7));
+  P.fin=lerp(P.fin||0,P.over>0?1:P.heat>72?.3:0,Math.min(1,dt*(P.over>0?12:4)));
+  if(P.over>0){
+    for(const s of [-1,1]){if(Math.random()<.85){const p=L2W(P,P.turret,-1.0,s*.18),c=Math.cos(P.turret),sn=Math.sin(P.turret);
+        prt({k:'steam',x:p[0],y:p[1],z:2.35+P.bob,vx:-c*rnd(2.5,5)+rnd(-.6,.6),vy:-sn*rnd(2.5,5)+rnd(-.6,.6),vz:rnd(1.6,3.4),life:rnd(.5,.9),max:.9,s:.16,grow:2.6,drag:.93});}
+      if(Math.random()<.35){const m=L2W(P,P.turret,1.38,s*.9);prt({k:'steam',x:m[0],y:m[1],z:1.9,vx:rnd(-.3,.3),vy:rnd(-.3,.3),vz:rnd(1,2),life:rnd(.4,.7),max:.7,s:.08,grow:2.2,drag:.95});}}
+    {const v=L2W(P,P.turret,-1.9,0),k=.6+.4*Math.sin(G.t*18);light(v[0],v[1],1.4,2.6,.32*k,.07*k,.02*k);}
+  }else if(P.heat>65&&Math.random()<.25){const s=Math.random()<.5?1:-1,m=L2W(P,P.turret,rnd(.6,1.3),s*.9);prt({k:'steam',x:m[0],y:m[1],z:1.95,vx:0,vy:0,vz:rnd(.6,1.2),life:.6,max:.6,s:.05,grow:2,drag:.95});}
+  if(P.heat>60){const k=(P.heat-60)/40;for(const s of [-1,1]){const m=L2W(P,P.turret,1.7,s*.9);light(m[0],m[1],1.2,1.6,.45*k,.1*k,.02*k);}}
+}
 function drawPlayer(u){
   if(u.dead)return;
   if(u.inv>0&&u.dashT<=0&&((FRAME>>2)&1))return;
-  const b=u.body,a=u.turret,z=u.bob,od=u.od>0;
+  const b=u.body,a=u.turret,z=u.bob,od=u.od>0,hm=heatMat(u.over>0?Math.max(.9,u.heat/100):u.heat/100);
   if(!u.ghost)shadowOf(u.x,u.y,1.3,0);
   MODE=umode(u);
-  legs(u,1.0,1.45+z,.86,.2,.15,RM.legs,RM.dark,RM.black,.5,.35,RM.amber);
-  /* hips */
-  {const l=L2W(u,b,0,-.42),r=L2W(u,b,0,.42);cap3(l[0],l[1],1.5+z,r[0],r[1],1.5+z,.3,.3,RM.dark);boxL(u,b,-.05,0,1.58+z,.6,.62,.36,RM.gun);}
-  /* waist and torso, turning with the guns */
-  ball(u.x,u.y,1.78+z,.34,RM.black);
+  const cb=Math.cos(b),sb=Math.sin(b);
+  /* legs: thigh with armour, knee cap, shin guard, a hydraulic piston that slides as the knee bends, ankle, clawed foot */
+  for(let i=0;i<u.feet.length;i++){const f=u.feet[i],side=Math.sin(f.a)>=0?1:-1,hp=L2W(u,b,0,side*.5),hz=1.45+z;
+    const K=knee(hp[0],hp[1],hz,f.x,f.y,f.z+.15,.86,side,b,.35),ax=f.x,ay=f.y,az=f.z+.14;
+    cap3(hp[0],hp[1],hz,K[0],K[1],K[2],.19,.16,RM.legs);seg(hp[0],hp[1],hz,K[0],K[1],K[2],.32,.3,RM.amber,.62);
+    ball(K[0],K[1],K[2],.19,RM.dark);box3(K[0]+cb*.15,K[1]+sb*.15,K[2]+.02,b,.14,.28,.3,RM.amber2,.5);
+    cap3(K[0],K[1],K[2],ax,ay,az,.16,.13,RM.dark);seg(lerp(K[0],ax,.15),lerp(K[1],ay,.15),lerp(K[2],az,.15),lerp(K[0],ax,.7),lerp(K[1],ay,.7),lerp(K[2],az,.7),.24,.22,RM.gun);
+    {const A=[lerp(hp[0],K[0],.35)-cb*.2,lerp(hp[1],K[1],.35)-sb*.2,lerp(hz,K[2],.35)],B=[lerp(K[0],ax,.45)-cb*.19,lerp(K[1],ay,.45)-sb*.19,lerp(K[2],az,.45)];
+      const dx=B[0]-A[0],dy=B[1]-A[1],dz=B[2]-A[2],d=Math.hypot(dx,dy,dz)||1,L=Math.min(.44,d*.7);
+      cap3(A[0],A[1],A[2],A[0]+dx/d*L,A[1]+dy/d*L,A[2]+dz/d*L,.065,.06,RM.steel);cap3(B[0],B[1],B[2],B[0]-dx/d*L,B[1]-dy/d*L,B[2]-dz/d*L,.035,.035,RM.white);}
+    ball(ax,ay,az,.13,RM.black);
+    box3(ax+cb*.04,ay+sb*.04,f.z+.09,b,.58,.36,.16,RM.black);
+    for(const k of [-.12,0,.12]){const tx=ax+cb*.36-sb*k,ty=ay+sb*.36+cb*k;box3(tx,ty,f.z+.07,b,.22,.085,.1,RM.dark,-.3);}
+    box3(ax-cb*.32,ay-sb*.32,f.z+.1,b,.18,.12,.1,RM.dark,.45);}
+  /* hips and skirts */
+  boxL(u,b,-.04,0,1.52+z,.62,.88,.36,RM.gun);
+  for(const s of [-1,1])boxL(u,b,0,s*.6,1.4+z,.56,.08,.42,RM.amber,0,s*.28);
+  boxL(u,b,.34,0,1.38+z,.08,.5,.34,RM.amber2,.3);
+  cyl3(u.x,u.y,1.66+z,u.x,u.y,1.84+z,.34,RM.black);
+  /* torso, turning with the guns */
   boxL(u,a,-.12,0,2.04+z,1.12,1.06,.66,RM.amber);
+  boxL(u,a,-.22,0,2.4+z,.78,.9,.08,RM.amber2);
+  for(const s of [-1,1])for(const f of [-.42,.14])boxL(u,a,f,s*.535,2.04+z,.03,.02,.58,RM.black);
   boxL(u,a,.5,0,2.0+z,.32,.86,.52,RM.amber2,-.45);
-  boxL(u,a,-.72,0,2.06+z,.26,.8,.5,RM.dark);
-  capL(u,a,-.36,0,2.44+z,.16,0,2.44+z,.4,.34,RM.amber2);
-  capL(u,a,.62,-.21,2.16+z,.62,.21,2.16+z,.085,.085,RM.visor);
+  for(let k=0;k<5;k++)boxL(u,a,.63,-.32+k*.16,1.82+z,.04,.15,.07,k%2?RM.black:RM.hazard,-.45);
+  /* head: armoured cockpit with a glowing visor slit and two running lights */
+  boxL(u,a,.14,0,2.58+z,.6,.56,.3,RM.amber2);boxL(u,a,.48,0,2.55+z,.16,.5,.24,RM.amber2,-.6);
+  boxL(u,a,.55,0,2.58+z,.05,.42,.07,RM.visor,-.6);
+  for(const s of [-1,1]){const p=L2W(u,a,.44,s*.27);ball(p[0],p[1],2.66+z,.035,RM.redE);}
+  boxL(u,a,-.02,0,2.76+z,.36,.3,.06,RM.dark);
+  /* shoulder floodlight */
+  boxL(u,a,.22,-.62,2.62+z,.24,.18,.15,RM.dark);boxL(u,a,.35,-.62,2.62+z,.02,.14,.1,RM.lamp);
+  /* back: engine block, radiator fins that swing open to vent, exhausts */
+  boxL(u,a,-.76,0,2.06+z,.3,.82,.52,RM.dark);
+  {const th=u.fin*1.0;for(let k=0;k<4;k++){const sk=-.27+k*.18,fw=-.93-Math.sin(th)*.21,fz=1.95+Math.cos(th)*.21;boxL(u,a,fw,sk,fz+z,.035,.14,.42,u.fin>.15&&MODE===0?FINHOT:RM.steel,th);}}
+  for(const s of [-1,1]){const p=L2W(u,a,-.78,s*.3),q=L2W(u,a,-.96,s*.3);cyl3(p[0],p[1],2.38+z,q[0],q[1],2.72+z,.07,RM.black);
+    if(od||u.fin>.15)ball(q[0],q[1],2.74+z,.06,od?RM.cyanE:RM.hot);
+    if(MODE===0&&od){glow3(q[0],q[1],2.74+z,q[0],q[1],3.1+z,.12,.03,[.3,.9,1],.6);}}
+  /* arms: shoulder joint and armour, gun housing, ammo drum, a three-barrel rotary cannon that spins up and glows with heat */
   for(const s of [-1,1]){
-    /* shoulder joint, cannon housing, armour cap, barrel with recoil, muzzle brake */
-    const rk=u.rec[s>0?1:0]*.24;
-    ball(...L2W(u,a,0,s*.66),1.92+z,.22,RM.dark);
-    capL(u,a,-.22,s*.9,1.85+z,.36,s*.9,1.85+z,.21,.2,RM.steel);
-    boxL(u,a,.04,s*.9,2.06+z,.62,.3,.12,RM.amber);
-    capL(u,a,.36-rk,s*.9,1.85+z,1.3-rk,s*.9,1.85+z,.09,.08,RM.black);
-    boxL(u,a,1.3-rk,s*.9,1.85+z,.18,.21,.21,RM.dark);
-    if(u.up.spread){capL(u,a,.3,s*.9+s*.19,1.96+z,1.08,s*.9+s*.19,1.96+z,.055,.055,RM.black);if(u.up.spread>1)capL(u,a,.3,s*.9-s*.19,1.96+z,1.08,s*.9-s*.19,1.96+z,.055,.055,RM.black);}
-    if(u.muz>0&&u.gun===s&&MODE===0){const m=L2W(u,a,1.48-rk,s*.9),e=L2W(u,a,2.2,s*.9),col=od?[.4,.95,1]:[1,.85,.45];
-      ball(m[0],m[1],1.85+z,.16,od?RM.cyanE:RM.muzzle);glow3(m[0],m[1],1.85+z,e[0],e[1],1.85+z,.26,.05,col,1.3);glow3(m[0],m[1],1.85+z,m[0],m[1],1.85+z,.5,.5,col,.35);}
-    /* missile pods: four tubes each, lit when loaded */
-    boxL(u,a,-.06,s*.74,2.44+z,.72,.42,.42,RM.dark);boxL(u,a,-.06,s*.74,2.68+z,.6,.34,.07,RM.amber);
+    const rk=u.rec[s>0?1:0]*.2;
+    {const p=L2W(u,a,0,s*.5),q=L2W(u,a,0,s*.76);cyl3(p[0],p[1],1.95+z,q[0],q[1],1.95+z,.17,RM.dark);}
+    boxL(u,a,-.02,s*.86,2.17+z,.64,.38,.16,RM.amber,0,s*.2);
+    boxL(u,a,.02,s*.9,1.86+z,.66,.3,.3,RM.gun);boxL(u,a,.02,s*.9,2.03+z,.5,.22,.05,RM.amber2);
+    {const p=L2W(u,a,-.14,s*.76),q=L2W(u,a,-.14,s*1.04);cyl3(p[0],p[1],1.66+z,q[0],q[1],1.66+z,.14,RM.dark);}
+    {const p=L2W(u,a,-.26,s*.62),q=L2W(u,a,-.12,s*.8);cap3(p[0],p[1],2.0+z,q[0],q[1],1.76+z,.045,.045,RM.black);}
+    const sp=(u.spin||0)*(s>0?1:-1);
+    for(let k=0;k<3;k++){const an=sp+k*2.094,o1=Math.cos(an)*.068,o2=Math.sin(an)*.068;capL(u,a,.34-rk,s*.9+o1,1.85+z+o2,1.3-rk,s*.9+o1,1.85+z+o2,.042,.036,hm);}
+    for(const f of [.7,1.08])boxL(u,a,f-rk,s*.9,1.85+z,.05,.21,.21,RM.dark);
+    boxL(u,a,1.33-rk,s*.9,1.85+z,.12,.22,.22,RM.black);
+    if(u.up.spread){capL(u,a,.3,s*.9+s*.2,1.98+z,1.08,s*.9+s*.2,1.98+z,.05,.05,RM.black);if(u.up.spread>1)capL(u,a,.3,s*.9-s*.2,1.98+z,1.08,s*.9-s*.2,1.98+z,.05,.05,RM.black);}
+    if(u.muz>0&&u.gun===s&&MODE===0){const m=L2W(u,a,1.46-rk,s*.9),e=L2W(u,a,2.3,s*.9),col=od?[.4,.95,1]:[1,.85,.45];
+      ball(m[0],m[1],1.85+z,.16,od?RM.cyanE:RM.muzzle);glow3(m[0],m[1],1.85+z,e[0],e[1],1.85+z,.28,.05,col,1.3);glow3(m[0],m[1],1.85+z,m[0],m[1],1.85+z,.55,.55,col,.35);
+      const c1=L2W(u,a,1.5-rk,s*.9-.32),c2=L2W(u,a,1.5-rk,s*.9+.32);glow3(c1[0],c1[1],1.85+z,c2[0],c2[1],1.85+z,.05,.05,col,.9);}
+    /* missile pod: a lid that flips open when the salvo is ready */
+    boxL(u,a,-.06,s*.74,2.44+z,.72,.42,.42,RM.dark);
+    {const th=(u.lid||0)*1.05,lf=-.4+Math.cos(th)*.3,lz=2.67+Math.sin(th)*.3;boxL(u,a,lf,s*.74,lz+z,.6,.38,.05,RM.amber,th);}
     for(const k of [-.1,.1])for(const kz of [-.09,.09]){const p=L2W(u,a,.31,s*.74+k);ball(p[0],p[1],2.44+z+kz,.065,u.missT<=0?RM.glow:RM.black);}
   }
-  for(const s of [-1,1]){const e=L2W(u,a,-.86,s*.26);ball(e[0],e[1],2.0+z,.065,od?RM.cyanE:RM.glow);
-    if(MODE===0){const e2=L2W(u,a,-1.1,s*.26);glow3(e[0],e[1],2.0+z,e2[0],e2[1],1.95+z,.1,.04,od?[.3,.9,1]:[1,.6,.2],od?.6:.25);}}
-  {const t=L2W(u,a,-.5,-.4);cap3(t[0],t[1],2.6+z,t[0],t[1],3.3+z,.03,.02,RM.steel);if((FRAME>>4)&1)ball(t[0],t[1],3.32+z,.05,RM.redE);}
+  {const t=L2W(u,a,-.5,-.4);cap3(t[0],t[1],2.62+z,t[0],t[1],3.32+z,.03,.018,RM.steel);if((FRAME>>4)&1)ball(t[0],t[1],3.34+z,.05,RM.redE);}
   MODE=0;
 }
 function drawDrone(d){

@@ -33,7 +33,7 @@ function hookWorldUV(mat,tile,o={}){
 function boxAt(x0,y0,x1,y1,z0,z1){const g=new T.BoxGeometry(x1-x0,z1-z0,y1-y0);g.translate((x0+x1)/2,(z0+z1)/2,(y0+y1)/2);return g;}
 const ARENA={grp:null,own:[],lamps:[],inst:{},M4:new T.Matrix4(),Q4:new T.Quaternion(),V3:new T.Vector3(),S3:new T.Vector3(),flick:0,
   keep(o){this.own.push(o);return o;},
-  clear(){if(this.grp)scene.remove(this.grp);for(const o of this.own)if(o.dispose)o.dispose();this.own=[];this.grp=new T.Group();scene.add(this.grp);this.inst={};this.lamps=[];},
+  clear(){WETU.length=0;if(this.grp)scene.remove(this.grp);for(const o of this.own)if(o.dispose)o.dispose();this.own=[];this.grp=new T.Group();scene.add(this.grp);this.inst={};this.lamps=[];},
   add(m,cast,recv){m.castShadow=!!cast;m.receiveShadow=recv!==false;this.grp.add(m);return m;},
   build(Wd){
     this.clear();const th=Wd.th,dock=th.id==='docks',r=mulberry(Wd.seed*3+1),K=this.keep.bind(this);
@@ -47,8 +47,8 @@ const ARENA={grp:null,own:[],lamps:[],inst:{},M4:new T.Matrix4(),Q4:new T.Quater
     for(let v=IN0;v<=INY;v+=3){x.beginPath();x.moveTo(gx(IN0),gx(v));x.lineTo(gx(INX),gx(v));x.stroke();}
     for(let i=0;i<34;i++){x.fillStyle=`rgba(0,0,0,${.1+r()*.18})`;x.beginPath();x.ellipse(gx(IN0+r()*(INX-IN0)),gx(IN0+r()*(INY-IN0)),gx(.4+r()*1.6),gx(.3+r()*1.1),r()*3,0,TAU);x.fill();}
     x.strokeStyle='rgba(0,0,0,.4)';x.lineWidth=Math.max(1,PPU*.05);for(let i=0;i<36;i++){let px=gx(IN0+r()*(INX-IN0)),py=gx(IN0+r()*(INY-IN0));x.beginPath();x.moveTo(px,py);for(let k=0;k<7;k++){px+=(r()-.5)*gx(1.4);py+=(r()-.5)*gx(1.4);x.lineTo(px,py);}x.stroke();}
-    const puddles=[];if(dock)for(let i=0;i<16;i++)puddles.push([IN0+r()*(INX-IN0),IN0+r()*(INY-IN0),.8+r()*2.2,.4+r()*1.1,r()*3]);
-    for(const p of puddles){x.fillStyle='rgba(14,22,40,.45)';x.beginPath();x.ellipse(gx(p[0]),gx(p[1]),gx(p[2]),gx(p[3]),p[4],0,TAU);x.fill();}
+    const puddles=[];for(let i=0;i<(dock?18:9);i++)puddles.push([IN0+r()*(INX-IN0),IN0+r()*(INY-IN0),.8+r()*2.2,.4+r()*1.1,r()*3]);
+    for(const p of puddles){x.fillStyle=dock?'rgba(14,22,40,.45)':'rgba(26,20,16,.5)';x.beginPath();x.ellipse(gx(p[0]),gx(p[1]),gx(p[2]),gx(p[3]),p[4],0,TAU);x.fill();}
     /* drains and manholes */
     for(let i=0;i<6;i++){const dx=gx(IN0+3+r()*(INX-IN0-6)),dy=gx(IN0+3+r()*(INY-IN0-6));x.fillStyle='rgba(10,10,12,.7)';x.fillRect(dx,dy,gx(.8),gx(.8));x.strokeStyle='rgba(120,120,120,.35)';x.lineWidth=1;for(let k=1;k<5;k++){x.beginPath();x.moveTo(dx+gx(.16*k),dy);x.lineTo(dx+gx(.16*k),dy+gx(.8));x.stroke();}}
     const cx=gx(WW/2),cy=gx(WH/2);x.strokeStyle=th.paint;x.lineWidth=Math.max(1,PPU*.16);x.beginPath();x.arc(cx,cy,gx(4.2),0,TAU);x.stroke();
@@ -62,7 +62,7 @@ const ARENA={grp:null,own:[],lamps:[],inst:{},M4:new T.Matrix4(),Q4:new T.Quater
     x.restore();
     {const img=x.getImageData(0,0,AW,AH),d=img.data;for(let i=0;i<d.length;i+=4){const k=.9+r()*.2;d[i]*=k;d[i+1]*=k;d[i+2]*=k;}x.putImageData(img,0,0);}
     const tG=K(canTex(gc,{clamp:true,aniso:8}));
-    const [rc,rx]=mkCanvas(WW*4,WH*4);rx.fillStyle=dock?'rgb(0,120,0)':'rgb(0,232,0)';rx.fillRect(0,0,rc.width,rc.height);
+    const [rc,rx]=mkCanvas(WW*4,WH*4);rx.fillStyle=dock?'rgb(0,96,0)':'rgb(0,215,0)';rx.fillRect(0,0,rc.width,rc.height);
     for(let i=0;i<120;i++){rx.fillStyle=dock?`rgba(0,${150+r()*60|0},0,.5)`:`rgba(0,${200+r()*55|0},0,.5)`;rx.fillRect(r()*rc.width,r()*rc.height,4+r()*12,4+r()*12);}
     for(const p of puddles){rx.fillStyle='rgb(0,22,0)';rx.beginPath();rx.ellipse(p[0]*4,p[1]*4,p[2]*4,p[3]*4,p[4],0,TAU);rx.fill();}
     const tR=K(canTex(rc,{lin:true,clamp:true}));
@@ -70,13 +70,14 @@ const ARENA={grp:null,own:[],lamps:[],inst:{},M4:new T.Matrix4(),Q4:new T.Quater
     const tL=K(canTex(lc,{clamp:true}));this.tL=tL;
     const gMat=K(new T.MeshStandardMaterial({map:tG,roughnessMap:tR,roughness:1,metalness:0,lightMap:tL,lightMapIntensity:dock?5.2:4.2,envMapIntensity:dock?1.1:.25}));
     const gGeo=K(new T.PlaneGeometry(WW,WH));gGeo.rotateX(-Math.PI/2);gGeo.translate(WW/2,0,WH/2);
-    this.add(new T.Mesh(gGeo,gMat),false,true);
+    hookWet(gMat);const gm=this.add(new T.Mesh(gGeo,gMat),false,true);gm.layers.set(1);
     this.paintLights();
     /* surroundings: dark ground (and the harbour on the docks) */
     const oMat=K(new T.MeshStandardMaterial({color:new T.Color(...linRGB(th.out).map(v=>v*1.6+.004)),roughness:dock?.55:.95,metalness:0}));
     const oGeo=K(new T.PlaneGeometry(320,dock?(WH+1.2+140):320));oGeo.rotateX(-Math.PI/2);oGeo.translate(WW/2,-.02,dock?(WH+1.2-(WH+1.2+140)/2):WH/2);
-    this.add(new T.Mesh(oGeo,oMat),false,true);
+    hookWet(oMat);const om=this.add(new T.Mesh(oGeo,oMat),false,true);om.layers.set(1);
     if(dock)this.water();
+    this.towers(Wd,th,r);
     /* ---------- walls with panel seams, a top cap and red warning lights ---------- */
     const [wc,wx]=mkCanvas(256,128);wx.fillStyle=th.wallF;wx.fillRect(0,0,256,128);
     for(let i=0;i<500;i++){wx.fillStyle=`rgba(${r()<.5?0:255},${r()<.5?0:255},${r()<.5?0:255},.035)`;wx.fillRect(r()*256,r()*128,2+r()*6,2+r()*6);}
@@ -151,6 +152,31 @@ const ARENA={grp:null,own:[],lamps:[],inst:{},M4:new T.Matrix4(),Q4:new T.Quater
     const bl=list.filter(b=>b[4]>9);const bg=K(new T.SphereGeometry(.22,8,6)),bm=K(new T.MeshBasicMaterial({color:0xffffff,fog:false}));const bi=new T.InstancedMesh(bg,bm,Math.max(1,bl.length));bi.count=bl.length;
     bl.forEach((b,i)=>{this.M4.makeTranslation((b[0]+b[2])/2,b[4]+.3,(b[1]+b[3])/2);bi.setMatrixAt(i,this.M4);bi.setColorAt(i,new T.Color(5,.4,.2));});this.add(bi);this.inst.beacons={im:bi,n:bl.length};
   },
+  /* floodlight towers at the corners: lattice masts, lamp banks, and long beams through the haze */
+  towers(Wd,th,r){
+    const K=this.keep.bind(this),dock=th.id==='docks',col=dock?[.75,.88,1.1]:[1.15,.82,.5];
+    const spots=[[IN0-5,IN0-4.5],[INX+5,IN0-4.5],[IN0-7,INY+6],[INX+7,INY+6]];
+    const mast=K(new T.MeshStandardMaterial({color:0x2a2c32,roughness:.5,metalness:.8}));
+    const lampM=K(new T.MeshBasicMaterial({color:new T.Color(col[0]*5,col[1]*5,col[2]*5),fog:false}));
+    const beamG=K(new T.CylinderGeometry(.9,7.5,1,24,1,true).translate(0,-.5,0).rotateX(-Math.PI/2));
+    const beamM=K(new T.ShaderMaterial({transparent:true,depthWrite:false,blending:T.AdditiveBlending,side:T.DoubleSide,fog:false,uniforms:{uC:{value:new T.Color(...col)},uK:{value:dock?.05:.045}},
+      vertexShader:`varying float vZ;varying vec3 vN;varying vec3 vV;void main(){vZ=-position.z;vec4 w=modelMatrix*vec4(position,1.);vN=normalize(mat3(modelMatrix)*normal);vV=normalize(cameraPosition-w.xyz);gl_Position=projectionMatrix*viewMatrix*w;}`,
+      fragmentShader:`uniform vec3 uC;uniform float uK;varying float vZ;varying vec3 vN;varying vec3 vV;void main(){float a=(1.-smoothstep(.0,1.,vZ))*smoothstep(0.,.04,vZ)*pow(abs(dot(vN,vV)),1.6)*uK;gl_FragColor=vec4(uC*a,1.);}`}));
+    this.beams=[];
+    for(const [tx,ty] of spots){
+      const h=15,g=K(new T.CylinderGeometry(.22,.35,h,6));g.translate(0,h/2,0);const m=new T.Mesh(g,mast);m.position.set(tx,0,ty);this.add(m,true,false);
+      for(let k=1;k<6;k++){const b=new T.Mesh(K(new T.BoxGeometry(1.6,.08,.08)),mast);b.position.set(tx,k*2.6,ty);b.rotation.y=k*1.1;this.add(b,false,false);}
+      const aim=Math.atan2(WH/2-ty,WW/2-tx),head=new T.Group();head.position.set(tx,h+.6,ty);head.rotation.y=-aim+Math.PI/2;
+      const frame=new T.Mesh(K(new T.BoxGeometry(3.2,1.7,.4)),mast);head.add(frame);
+      for(let i=0;i<3;i++)for(let j=0;j<2;j++){const L=new T.Mesh(K(new T.BoxGeometry(.8,.62,.08)),lampM);L.position.set(-1.05+i*1.05,-.38+j*.76,.22);head.add(L);}
+      head.rotation.x=.55;this.grp.add(head);
+      /* the beam: from the lamp bank down toward the middle of the arena */
+      const dx=WW/2-tx,dy=WH/2-ty,dist=Math.hypot(dx,dy)*.82,len=Math.hypot(dist,h);const bm=new T.Mesh(beamG,beamM);bm.position.set(tx,h+.4,ty);
+      bm.lookAt(tx+dx/Math.hypot(dx,dy)*dist,0,ty+dy/Math.hypot(dx,dy)*dist);bm.scale.set(1,1,len);bm.renderOrder=6;this.grp.add(bm);this.beams.push(bm);
+      WORLD.lamps.push({kind:'flood',cx:tx+dx/Math.hypot(dx,dy)*dist*.75,cy:ty+dy/Math.hypot(dx,dy)*dist*.75,rad:11,col:col.map(v=>v*.55),dead:false});
+    }
+    this.paintLights();
+  },
   water(){
     const K=this.keep.bind(this);
     const g=K(new T.PlaneGeometry(320,160,1,1));g.rotateX(-Math.PI/2);g.translate(WW/2,-.9,INY+1.2+80);
@@ -164,7 +190,7 @@ float q=smoothstep(.62,.95,r);float band=sin(vW.x*.21)*.5+.5;
 c+=mix(vec3(.05,.5,.9),vec3(.9,.1,.5),band)*q*.55*exp(-(vW.z-${(INY+1.2).toFixed(1)})*.06);
 c+=vec3(.02,.05,.09)*r;
 c=mix(c,vec3(.006,.012,.03),smoothstep(30.,110.,d));gl_FragColor=vec4(c,1.);}`}));
-    this.waterMat=m;this.add(new T.Mesh(g,m),false,false);
+    this.waterMat=m;this.add(new T.Mesh(g,m),false,false).layers.set(1);
     /* the quay edge */
     const e=K(new T.MeshStandardMaterial({color:0x1a1e26,roughness:.8,metalness:.2}));this.add(new T.Mesh(K(boxAt(-60,INY+1.0,WW+60,INY+1.35,-1,.02)),e),false,true);
     const bol=K(new T.CylinderGeometry(.18,.22,.5,10)),bm=K(new T.MeshStandardMaterial({color:0x2a2e38,roughness:.5,metalness:.7}));
@@ -210,7 +236,7 @@ c=mix(c,vec3(.006,.012,.03),smoothstep(30.,110.,d));gl_FragColor=vec4(c,1.);}`})
       if(band){bx.fillStyle='#ffd228';bx.fillRect(0,24,128,16);bx.fillStyle='#1a1814';for(let i=0;i<128;i+=16)bx.fillRect(i+4,27,6,10);}
       for(let i=0;i<30;i++){bx.fillStyle=`rgba(60,30,10,${Math.random()*.3})`;bx.fillRect(Math.random()*128,Math.random()*64,2+Math.random()*10,2+Math.random()*6);}return K(canTex(bc));};
     for(const [kind,col,band] of [[0,'#c82e1e',1],[1,'#2878c8',0]]){const list=P.filter(p=>p.kind==='barrel'&&p.c===kind);if(!list.length)continue;
-      const g=K(new T.CylinderGeometry(.45,.45,1.05,16,1)),m=K(new T.MeshStandardMaterial({map:mkB(col,band),roughness:.45,metalness:.55})),mt=K(new T.MeshStandardMaterial({color:col,roughness:.4,metalness:.6}));
+      const g=K(new T.CylinderGeometry(.45,.45,1.05,16,1)),m=K(new T.MeshStandardMaterial({map:mkB(col,band),roughness:.5,metalness:.3})),mt=K(new T.MeshStandardMaterial({color:col,roughness:.5,metalness:.35}));
       const im=new T.InstancedMesh(g,[m,mt,mt],list.length);list.forEach((p,i)=>{p.ii=i;p.base=[1,1,1];this.M4.makeTranslation(p.cx,.525,p.cy);im.setMatrixAt(i,this.M4);im.setColorAt(i,c.setRGB(1,1,1));});
       this.add(im,true,true);this.inst['barrel'+kind]={im,list};}
   },
@@ -258,9 +284,9 @@ void main(){vY=position.y;vec4 w=modelMatrix*instanceMatrix*vec4(position,1.);vN
   /* the light map: lamp pools, red gate lamps and neon, minus anything that's been shot out */
   paintLights(){
     const [c,x]=this.lmc,s=8,th=WORLD.th;x.globalCompositeOperation='source-over';x.fillStyle='#000';x.fillRect(0,0,c.width,c.height);x.globalCompositeOperation='lighter';
-    for(const L of WORLD.lamps){if(L.dead)continue;const col=L.col||(L.gate?[1.1,.2,.15]:th.lamp),rad=(L.rad||(L.gate?3.2:7.5))*s,k=(L.gate?.9:1.25)*(L.kind==='neon'?.8:1);
+    for(const L of WORLD.lamps){if(L.dead)continue;const col=L.col||(L.gate?[1.1,.2,.15]:th.lamp),rad=(L.rad||(L.gate?3.2:7.5))*s,k=(L.gate?.9:1.25)*(L.kind==='neon'?.8:1)*(L.kind==='lamp'?1.15:1);
       const gr=x.createRadialGradient(L.cx*s+(L.gate?0:.45*s),L.cy*s,0,L.cx*s,L.cy*s,rad);
-      const cc=a=>`rgba(${c255(col[0]*k*200)},${c255(col[1]*k*200)},${c255(col[2]*k*200)},${a})`;gr.addColorStop(0,cc(1));gr.addColorStop(.35,cc(.55));gr.addColorStop(.7,cc(.16));gr.addColorStop(1,cc(0));
+      const cc=a=>`rgba(${c255(col[0]*k*200)},${c255(col[1]*k*200)},${c255(col[2]*k*200)},${a})`;if(L.kind==='flood'){gr.addColorStop(0,cc(.5));gr.addColorStop(.5,cc(.25));gr.addColorStop(1,cc(0));x.fillStyle=gr;x.beginPath();x.arc(L.cx*s,L.cy*s,rad,0,TAU);x.fill();continue;}gr.addColorStop(0,cc(1));gr.addColorStop(.35,cc(.55));gr.addColorStop(.7,cc(.16));gr.addColorStop(1,cc(0));
       x.fillStyle=gr;x.beginPath();x.arc(L.cx*s,L.cy*s,rad,0,TAU);x.fill();}
     x.globalCompositeOperation='source-over';this.tL.needsUpdate=true;
   },
@@ -293,10 +319,11 @@ const THEME3={
   sky:null,env:null,
   set(th){
     const dock=th.id==='docks';
-    const fogC=dock?new T.Color(.012,.018,.045):new T.Color(.07,.035,.04);
-    scene.fog=new T.Fog(fogC,dock?38:40,dock?120:125);
-    hemi.color.setRGB(...(dock?[.32,.42,.85]:[.62,.5,.62]));hemi.groundColor.setRGB(...(dock?[.05,.06,.1]:[.16,.1,.07]));hemi.intensity=dock?.75:.85;
-    sun.color.setRGB(...(dock?[.55,.68,1]:[1,.62,.36]));sun.intensity=dock?1.1:2.6;SUNDIR=dock?[.45,.75,-.5]:[-.75,.42,.38];
+    const fogC=dock?new T.Color(.01,.016,.04):new T.Color(.045,.024,.03);
+    scene.fog=new T.Fog(fogC,dock?34:36,dock?115:118);
+    hemi.color.setRGB(...(dock?[.32,.42,.85]:[.62,.5,.62]));hemi.groundColor.setRGB(...(dock?[.05,.06,.1]:[.16,.1,.07]));hemi.intensity=dock?.62:.6;HEMIK=hemi.intensity;
+    /* the key light (with the shadows) is the big floodlight on the north-west tower at the yard, north-east at the docks */
+    sun.color.setRGB(...(dock?[.7,.82,1]:[1,.74,.46]));sun.intensity=dock?1.7:2.3;SUNDIR=dock?[.5,.78,-.38]:[-.52,.74,-.42];GRADE.set(dock);
     head.color.setRGB(...(dock?[.62,.78,1]:[1,.85,.62]));
     if(!this.sky){const g=new T.SphereGeometry(200,32,16);this.skyMat=new T.ShaderMaterial({side:T.BackSide,depthWrite:false,fog:false,uniforms:{uH:{value:new T.Color()},uTop:{value:new T.Color()},uSun:{value:new T.Vector3()},uSC:{value:new T.Color()},uStars:{value:0},uT:{value:0}},
       vertexShader:`varying vec3 vD;void main(){vD=normalize(position);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);gl_Position.z=gl_Position.w*.9999;}`,
@@ -307,8 +334,8 @@ vec3 q=floor(vD*260.);float st=step(.9975,h(q))*uStars*smoothstep(.05,.4,vD.y)*(
       this.sky=new T.Mesh(g,this.skyMat);this.sky.renderOrder=-10;this.sky.frustumCulled=false;scene.add(this.sky);}
     const u=this.skyMat.uniforms;
     if(dock){u.uH.value.setRGB(.03,.05,.13);u.uTop.value.setRGB(.002,.003,.012);u.uSC.value.setRGB(.05,.08,.2);u.uStars.value=1;}
-    else{u.uH.value.setRGB(.42,.12,.06);u.uTop.value.setRGB(.012,.008,.03);u.uSC.value.setRGB(1,.45,.15);u.uStars.value=.35;}
-    u.uSun.value.set(SUNDIR[0],Math.max(.05,SUNDIR[1]*.25),SUNDIR[2]);
+    else{u.uH.value.setRGB(.26,.07,.04);u.uTop.value.setRGB(.008,.006,.022);u.uSC.value.setRGB(.9,.35,.12);u.uStars.value=.7;}
+    u.uSun.value.set(dock?.3:-.9,.06,dock?-.9:.15);
     scene.background=null;
     this.mkEnv(dock);
   },
@@ -319,8 +346,8 @@ vec3 q=floor(vD*260.);float st=step(.9975,h(q))*uStars*smoothstep(.05,.4,vD.y)*(
     m.uniforms.a.value.setRGB(...(dock?[.05,.08,.18]:[.35,.18,.12]));m.uniforms.b.value.setRGB(...(dock?[.01,.01,.02]:[.05,.03,.025]));
     es.add(new T.Mesh(g,m));
     const pan=(x,y,z,w,h,c)=>{const p=new T.Mesh(new T.PlaneGeometry(w,h),new T.MeshBasicMaterial({color:new T.Color(...c),side:T.DoubleSide}));p.position.set(x,y,z);p.lookAt(0,0,0);es.add(p);};
-    if(dock){pan(-6,3,4,3,1,[.2,2.5,4]);pan(6,2,-3,4,1,[4,.5,2]);pan(0,8,0,6,6,[.3,.4,.8]);pan(4,1,6,2,1,[.2,3,3]);}
-    else{pan(-7,2,3,6,2,[5,2.2,.8]);pan(0,8,0,6,6,[.8,.6,.7]);pan(6,2,-4,3,1,[2,1.2,.5]);}
+    if(dock){pan(-6,3,4,3,1,[.15,1.6,2.6]);pan(6,2,-3,4,1,[2.6,.35,1.3]);pan(0,8,0,6,6,[.12,.16,.32]);pan(4,1,6,2,1,[.15,1.8,1.8]);}
+    else{pan(-7,2,3,6,2,[1.8,.9,.35]);pan(0,8,0,6,6,[.3,.22,.28]);pan(6,2,-4,3,1,[.9,.55,.25]);}
     const pm=new T.PMREMGenerator(renderer);if(this.env)this.env.dispose();this.env=pm.fromScene(es,.02).texture;pm.dispose();
     scene.environment=this.env;g.dispose();m.dispose();
   }

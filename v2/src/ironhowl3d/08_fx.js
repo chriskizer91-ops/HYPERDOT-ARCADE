@@ -5,12 +5,18 @@ function quadGeo(cap,attrs){
   g.instanceCount=0;g.boundingSphere=new T.Sphere(new T.Vector3(),1e5);return {g,A,cap,n:0};
 }
 function flushQ(Q){Q.g.instanceCount=Q.n;for(const k in Q.A){const a=Q.A[k];a.clearUpdateRanges();if(Q.n){a.addUpdateRange(0,Q.n*a.itemSize);a.needsUpdate=true;}}}
-const PVS=`attribute vec4 iP;attribute vec4 iC;attribute vec4 iV;varying vec4 vC;varying vec2 vU;varying float vS;
-void main(){vec4 mv=viewMatrix*vec4(iP.xyz,1.);vec2 q=position.xy;vS=iV.w;
+const PVS=`attribute vec4 iP;attribute vec4 iC;attribute vec4 iV;varying vec4 vC;varying vec2 vU;varying float vS;varying float vSeed;
+void main(){vec4 mv=viewMatrix*vec4(iP.xyz,1.);vec2 q=position.xy;vS=iV.w;vSeed=fract(dot(floor(iP.xyz*3.7),vec3(.131,.217,.173))+float(gl_InstanceID)*.618);
   if(iV.w>0.){vec2 d=(viewMatrix*vec4(iV.xyz,0.)).xy;float l=length(d);vec2 dir=l>1e-4?d/l:vec2(0.,1.);vec2 nr=vec2(-dir.y,dir.x);mv.xy+=dir*q.y*(iP.w+l*iV.w)+nr*q.x*iP.w*.4;}
   else mv.xy+=q*iP.w;
   vU=position.xy*2.;vC=iC;gl_Position=projectionMatrix*mv;}`;
-const PFS=`varying vec4 vC;varying vec2 vU;varying float vS;void main(){float d=vS>0.?length(vU*vec2(1.,.55)):length(vU);float a=vS>0.?smoothstep(1.,.2,d):pow(max(0.,1.-d*d),1.6);if(a<.004)discard;gl_FragColor=vec4(vC.rgb*a*vC.a,vC.a*a);}`;
+const PFS=`varying vec4 vC;varying vec2 vU;varying float vS;varying float vSeed;
+float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y);}
+void main(){float d,a;
+  if(vS>0.){d=length(vU*vec2(1.,.55));a=smoothstep(1.,.2,d);}
+  else{vec2 q=vU*1.6+vSeed*13.;float nn=n(q)*.55+n(q*2.3+3.1)*.3+n(q*5.1)*.15;d=length(vU)+(nn-.5)*.55;a=pow(max(0.,1.-d*d),1.4)*(.55+.6*nn);}
+  if(a<.004)discard;gl_FragColor=vec4(vC.rgb*a*vC.a,vC.a*a);}`;
 const DVS=`attribute vec4 iD;attribute vec4 iC;attribute vec4 iK;varying vec4 vC;varying vec4 vK;varying vec2 vU;
 void main(){float c=cos(iD.w),s=sin(iD.w);vec2 q=position.xy;vec2 r=vec2(q.x*c-q.y*s,q.x*s+q.y*c)*iD.z*2.;vU=position.xy*2.;vC=iC;vK=iK;
   gl_Position=projectionMatrix*viewMatrix*vec4(iD.x+r.x,.035+iK.w*.006,iD.y+r.y,1.);}`;
@@ -33,8 +39,8 @@ const FX={
     const madd=mk(PVS,PFS,'add'),malp=mk(PVS,PFS,'alpha'),dadd=mk(DVS,DFS,'add'),dalp=mk(DVS,DFS,'alpha');
     madd.blending=T.AdditiveBlending;dadd.blending=T.AdditiveBlending;
     const M=(q,m,o)=>{const x=new T.Mesh(q.g,m);x.frustumCulled=false;x.renderOrder=o;scene.add(x);return x;};
-    this.mDAlp=M(this.dAlp,dalp,3);this.mDAdd=M(this.dAdd,dadd,4);this.mPAlp=M(this.pAlp,malp,7);this.mPAdd=M(this.pAdd,madd,8);
-    this.weather();
+    this.mDAlp=M(this.dAlp,dalp,3);this.mDAdd=M(this.dAdd,dadd,4);this.mDAlp.layers.set(1);this.mDAdd.layers.set(1);this.mPAlp=M(this.pAlp,malp,7);this.mPAdd=M(this.pAdd,madd,8);
+    this.weather();this.haze();
   },
   SC:[],scN:0,FL:[],SM:[],FP:[],
   scorch(x,y,rad,k){const S=this.SC;const o={x,y,r:rad*1.05,k:Math.min(.85,(k||.6)*1.1),rot:Math.random()*TAU,seed:Math.random()};if(S.length<260)S.push(o);else{S[this.scN]=o;this.scN=(this.scN+1)%260;}},
@@ -72,6 +78,7 @@ const FX={
         case 'smoke':case 'trail':{const s=Math.max(.15,p.s)*1.6,c=p.col?[p.col[0]/255*.25,p.col[1]/255*.25,p.col[2]/255*.25]:smk;
           this.part(this.pAlp,p.x,p.y,p.z,s,c[0],c[1],c[2],Math.min(1,a*1.3)*.62,0,0,0,0);
           if(p.k==='trail'&&a>.72)this.part(this.pAdd,p.x,p.y,p.z,s*.55,3,1.5,.4,(a-.72)*3,0,0,0,0);break;}
+        case 'steam':{const c=WORLD.th.id==='docks'?[.32,.36,.44]:[.42,.4,.4];this.part(this.pAlp,p.x,p.y,p.z,Math.max(.1,p.s)*1.8,c[0],c[1],c[2],Math.min(1,a*1.6)*.5,0,0,0,0);break;}
         case 'dust':this.part(this.pAlp,p.x,p.y,p.z+.1,Math.max(.15,p.s)*1.6,dust[0],dust[1],dust[2],a*.45,0,0,0,0);break;
         case 'spark':{const c=p.col||[255,214,110];this.part(this.pAdd,p.x,p.y,p.z,.05,c[0]/255*4,c[1]/255*4,c[2]/255*4,Math.min(1,a*2),p.vx,p.vy,p.vz,.03);break;}
         case 'spl':this.part(this.pAdd,p.x,p.y,p.z,.04,.4,.6,.8,a*.6,p.vx,p.vy,p.vz,.02);break;
@@ -111,7 +118,24 @@ void main(){vec3 box=vec3(46.,16.,34.);float sp=uMode<.5?22.:-1.2;
       fragmentShader:`uniform vec3 uCol;uniform float uMode;varying float vA;varying vec2 vU;void main(){float a=uMode<.5?(1.-abs(vU.x)*2.)*vU.y:max(0.,1.-length(vec2(vU.x*2.,(vU.y-.5)*2.)));gl_FragColor=vec4(uCol*a*vA,1.);}`});
     this.wMesh=new T.Mesh(g,this.wMat);this.wMesh.frustumCulled=false;this.wMesh.renderOrder=9;scene.add(this.wMesh);this.wGeo=g;
   },
+  /* low haze drifting through the arena, catching the floodlights */
+  haze(){
+    const n=24,g=new T.InstancedBufferGeometry();g.setAttribute('position',new T.BufferAttribute(new Float32Array([-.5,-.5,0,.5,-.5,0,.5,.5,0,-.5,.5,0]),3));g.setIndex([0,1,2,0,2,3]);
+    const s=new Float32Array(n*4);for(let i=0;i<n*4;i++)s[i]=Math.random();g.setAttribute('iS',new T.InstancedBufferAttribute(s,4));g.instanceCount=0;g.boundingSphere=new T.Sphere(new T.Vector3(),1e5);
+    this.hMat=new T.ShaderMaterial({transparent:true,depthWrite:false,fog:false,uniforms:{uT:{value:0},uC:{value:new T.Vector3()},uCol:{value:new T.Color()},uK:{value:.06}},
+      vertexShader:`attribute vec4 iS;uniform float uT;uniform vec3 uC;varying vec2 vU;varying float vA;varying float vSd;
+void main(){vec2 box=vec2(48.,36.);vec3 p=vec3(iS.x*box.x+uT*(.35+iS.w*.4),.5+iS.y*1.4,iS.z*box.y+uT*.12);
+  p.xz=uC.xz-box*.5+mod(p.xz-(uC.xz-box*.5),box);vec4 mv=viewMatrix*vec4(p,1.);float sz=8.+iS.w*7.;mv.xy+=position.xy*sz*vec2(1.6,1.);
+  vU=position.xy*2.;vSd=iS.w;vec2 e=abs(p.xz-uC.xz)/(box*.5);vA=(1.-smoothstep(.6,1.,max(e.x,e.y)));gl_Position=projectionMatrix*mv;}`,
+      fragmentShader:`uniform vec3 uCol;uniform float uK,uT;varying vec2 vU;varying float vA;varying float vSd;
+float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y);}
+void main(){vec2 q=vU*1.3+vSd*20.+vec2(uT*.03,0.);float nn=n(q)*.6+n(q*2.7)*.4;float a=pow(max(0.,1.-dot(vU,vU)),1.5)*nn*vA*uK;gl_FragColor=vec4(uCol*a,a);}`,
+      blending:T.CustomBlending,blendSrc:T.OneFactor,blendDst:T.OneMinusSrcAlphaFactor});
+    this.hMesh=new T.Mesh(g,this.hMat);this.hMesh.frustumCulled=false;this.hMesh.renderOrder=6;scene.add(this.hMesh);this.hGeo=g;
+  },
   weatherUpd(){
+    {const dock=WORLD&&WORLD.th.id==='docks',u=this.hMat.uniforms;u.uT.value=G.t;u.uC.value.set(CAM.x,0,CAM.y);if(dock)u.uCol.value.setRGB(.13,.2,.34);else u.uCol.value.setRGB(.32,.22,.15);u.uK.value=dock?.15:.15;this.hGeo.instanceCount=Q.haze;}
     const dock=WORLD&&WORLD.th.id==='docks',u=this.wMat.uniforms;u.uT.value=G.t;u.uC.value.set(CAM.x,0,CAM.y);u.uMode.value=dock?0:1;
     if(dock)u.uCol.value.setRGB(.7,.82,1.1);else u.uCol.value.setRGB(2.4,.9,.3);
     this.wGeo.instanceCount=dock?Q.rain:Math.round(Q.rain*.12);

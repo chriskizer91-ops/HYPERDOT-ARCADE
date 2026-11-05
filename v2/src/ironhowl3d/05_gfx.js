@@ -11,9 +11,9 @@ function linRGB(h){return hexRGB(h).map(lin);}
 
 /* ---------- quality ---------- */
 const QUAL={
-  low: {n:'low', px:.6e6, shadow:0,   lights:2,msaa:0,rain:300, prt:700, seg:[8,2], dyn:.6},
-  med: {n:'med', px:1.15e6,shadow:1024,lights:4,msaa:0,rain:700, prt:1100,seg:[10,3],dyn:.7},
-  high:{n:'high',px:3.6e6,shadow:2048,lights:7,msaa:4,rain:1500,prt:1400,seg:[12,4],dyn:.75}};
+  low: {n:'low', px:.6e6, shadow:0,   lights:2,msaa:0,rain:300, prt:700, seg:[8,2], dyn:.6, refl:0,  haze:0},
+  med: {n:'med', px:1.15e6,shadow:1024,lights:4,msaa:0,rain:700, prt:1100,seg:[10,3],dyn:.7, refl:.3, haze:10},
+  high:{n:'high',px:3.6e6,shadow:2048,lights:7,msaa:4,rain:1500,prt:1400,seg:[12,4],dyn:.75,refl:.5, haze:22}};
 const QORDER=['low','med','high'];
 const QPIN=(location.search.match(/[?&]q=(low|med|high)/)||[])[1]||null;
 let QN=QPIN||(touchy?'med':'high');
@@ -28,15 +28,32 @@ const OK3D=!!renderer;
 const HALF=OK3D&&(renderer.extensions.has('EXT_color_buffer_float')||renderer.extensions.has('EXT_color_buffer_half_float'));
 if(OK3D){
   renderer.autoClear=true;renderer.toneMapping=T.NoToneMapping;renderer.outputColorSpace=T.LinearSRGBColorSpace;
-  renderer.shadowMap.type=T.PCFShadowMap;renderer.shadowMap.enabled=Q.shadow>0;renderer.shadowMap.autoUpdate=true;
+  renderer.shadowMap.type=T.PCFShadowMap;renderer.shadowMap.enabled=Q.shadow>0;renderer.shadowMap.autoUpdate=false;
   renderer.info.autoReset=true;
 }
 const scene=new T.Scene();
 const camera=new T.PerspectiveCamera(40,16/9,.5,260);
-scene.add(camera);
+scene.add(camera);camera.layers.enable(1);
+/* the mirror camera for wet-ground reflections: it sees layer 0 only (no ground, no decals, no water) */
+const rcam=new T.PerspectiveCamera(40,16/9,.5,260);rcam.layers.set(0);
+const REFL={on:false,mat:new T.Matrix4(),k:0,black:new T.DataTexture(new Uint8Array([0,0,0,255]),1,1)};REFL.black.needsUpdate=true;
+const WETU=[];   /* the uniforms of every wet surface */
+function hookWet(mat,k){
+  mat.onBeforeCompile=sh=>{
+    sh.uniforms.uRefl={value:REFL.black};sh.uniforms.uRM={value:REFL.mat};sh.uniforms.uRK={value:0};sh.uniforms.uRT={value:0};WETU.push(sh.uniforms);mat.userData.u=sh.uniforms;
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nuniform mat4 uRM;varying vec4 vRU;varying vec3 vWP;').replace('#include <project_vertex>','#include <project_vertex>\n{vec4 rw=modelMatrix*vec4(transformed,1.);vWP=rw.xyz;vRU=uRM*rw;}');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform sampler2D uRefl;uniform float uRK,uRT;varying vec4 vRU;varying vec3 vWP;')
+      .replace('#include <opaque_fragment>',`{float wet=clamp((1.-roughnessFactor)*1.35-.08,0.,1.);if(uRK>0.&&wet>.02){
+  vec2 j=vec2(sin(vWP.x*3.1+uRT*1.7)+sin(vWP.z*4.3-uRT*2.3),cos(vWP.z*2.7+uRT*1.3)+sin(vWP.x*5.1+uRT))*.0025*(1.2-wet);
+  vec3 rc=texture(uRefl,vRU.xy/vRU.w+j).rgb;float fr=pow(1.-clamp(dot(normal,normalize(vViewPosition)),0.,1.),2.5);
+  outgoingLight+=rc*wet*wet*(.28+.72*fr)*uRK;}}
+#include <opaque_fragment>`);
+  };
+  mat.customProgramCacheKey=()=>'wet';
+}
 
 /* ---------- lights: sky fill, a key light with shadows, the mech's headlight and a pool of point lights for flashes ---------- */
-const hemi=new T.HemisphereLight(0x8890c0,0x302820,1.1);scene.add(hemi);
+const hemi=new T.HemisphereLight(0x8890c0,0x302820,1.1);scene.add(hemi);let HEMIK=.6;
 const sun=new T.DirectionalLight(0xffc890,2.4);sun.castShadow=true;scene.add(sun);scene.add(sun.target);
 function setShadowSize(n){if(!n)return;sun.shadow.mapSize.set(n,n);if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null;}const c=sun.shadow.camera;c.left=-30;c.right=30;c.top=24;c.bottom=-24;c.near=1;c.far=120;c.updateProjectionMatrix();sun.shadow.bias=-.0006;sun.shadow.normalBias=.04;}
 setShadowSize(Q.shadow||1024);
@@ -83,6 +100,7 @@ function sizeTargets(){
   RW=Math.max(64,Math.round(VW*RS));RH=Math.max(36,Math.round(VH*RS));
   RT.scene=mkRT(RW,RH,{depthBuffer:true,samples:Q.msaa&&HALF?Q.msaa:0});
   RT.dots=mkRT(W,H,{depthBuffer:true,minFilter:T.NearestFilter,magFilter:T.NearestFilter});
+  if(Q.refl)RT.refl=mkRT(Math.round(RW*Q.refl),Math.round(RH*Q.refl),{depthBuffer:true});
   const bw=Math.max(8,VW>>2),bh=Math.max(8,VH>>2);
   RT.a=mkRT(bw,bh);RT.b=mkRT(bw,bh);RT.c=mkRT(Math.max(4,bw>>1),Math.max(4,bh>>1));RT.d=mkRT(Math.max(4,bw>>1),Math.max(4,bh>>1));
 }
@@ -105,7 +123,7 @@ c*=.25;float l=max(c.r,max(c.g,c.b));c*=max(l-uThr,0.0)/max(l,1e-4);o=vec4(c,1.0
   blur:post(`uniform sampler2D uTex;uniform vec2 uDir;
 void main(){vec3 s=texture(uTex,vT).rgb*.227027;s+=(texture(uTex,vT+uDir*1.3846).rgb+texture(uTex,vT-uDir*1.3846).rgb)*.316216;
 s+=(texture(uTex,vT+uDir*3.2308).rgb+texture(uTex,vT-uDir*3.2308).rgb)*.070270;o=vec4(s,1.0);}`,{uTex:{value:null},uDir:{value:new T.Vector2()}}),
-  comp:post(`uniform sampler2D uScene;uniform sampler2D uB1;uniform sampler2D uB2;uniform sampler2D uHud;uniform float uBloom,uDots,uDim,uTime,uExp,uGrain,uHurt,uHudOn;uniform vec2 uGrid;uniform vec3 uTint;
+  comp:post(`uniform sampler2D uScene;uniform sampler2D uB1;uniform sampler2D uB2;uniform sampler2D uHud;uniform float uBloom,uDots,uDim,uTime,uExp,uGrain,uHurt,uHudOn;uniform vec2 uGrid;uniform vec3 uTint;uniform vec3 uShad,uHigh;uniform float uSat,uCon;
 vec3 aces(vec3 x){return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.0,1.0);}
 float h12(vec2 p){vec3 p3=fract(vec3(p.xyx)*.1031);p3+=dot(p3,p3.yzx+33.33);return fract((p3.x+p3.y)*p3.z);}
 float ledMask(vec2 cell,out float far){vec2 f=fract(cell)-.5;float fw=max(fwidth(cell.x),fwidth(cell.y));float d=length(f),r=.43;
@@ -118,6 +136,7 @@ void main(){
   c+=(texture(uB1,vT).rgb*.8+texture(uB2,vT).rgb*1.2)*uBloom;
   c*=uExp*(1.0-uDim);
   c=aces(c*1.05);c=pow(c,vec3(1.0/2.2));
+  {float l=dot(c,vec3(.2126,.7152,.0722));c=mix(vec3(l),c,uSat);c+=uShad*pow(1.-l,3.)+uHigh*l*l;c=mix(c,smoothstep(0.,1.,c),uCon);}
   vec2 q=vT-.5;c*=1.0-dot(q,q)*.55;
   c+=uHurt*vec3(.5,.03,.02)*smoothstep(.18,.5,length(q));
   c+=(h12(gl_FragCoord.xy+fract(uTime)*91.7)-.5)*uGrain;
@@ -128,12 +147,26 @@ void main(){
     c=c*(1.0-h.a*.8)+h.rgb*h.a*m*1.22+gl*.05;
   }
   o=vec4(c,1.0);
-}`,{uScene:{value:null},uB1:{value:null},uB2:{value:null},uHud:{value:null},uBloom:{value:1},uDots:{value:0},uDim:{value:0},uTime:{value:0},uExp:{value:1},uGrain:{value:.025},uHurt:{value:0},uHudOn:{value:1},uGrid:{value:new T.Vector2(384,216)},uTint:{value:new T.Vector3(1,1,1)}})
+}`,{uScene:{value:null},uB1:{value:null},uB2:{value:null},uHud:{value:null},uBloom:{value:1},uDots:{value:0},uDim:{value:0},uTime:{value:0},uExp:{value:1},uGrain:{value:.025},uHurt:{value:0},uHudOn:{value:1},uGrid:{value:new T.Vector2(384,216)},uTint:{value:new T.Vector3(1,1,1)},uShad:{value:new T.Vector3()},uHigh:{value:new T.Vector3()},uSat:{value:1.1},uCon:{value:.25}})
 };
 function pass(mat,dst){FSM.material=mat;renderer.setRenderTarget(dst||null);renderer.render(PQ,PC);}
+let WETK=1;
+/* colour grading per arena: tinted shadows and highlights, saturation and a gentle S-curve */
+const GRADE={set(dock){const u=PM.comp.uniforms;if(dock){u.uShad.value.set(-.01,.012,.05);u.uHigh.value.set(.03,-.005,.03);u.uSat.value=1.18;u.uCon.value=.3;WETK=1.6;}else{u.uShad.value.set(.0,.018,.04);u.uHigh.value.set(.06,.02,-.03);u.uSat.value=1.12;u.uCon.value=.3;WETK=.9;}}};
 const POSTV={dim:0,hurt:0,exp:1};const STATS={calls:0,tri:0};
 function present(){
   const base=DOTS?RT.dots:RT.scene;
+  renderer.shadowMap.needsUpdate=true;
+  const rOn=!!RT.refl&&!ROSTERON&&!DOTS;
+  if(rOn){
+    /* mirror the camera in the ground plane */
+    rcam.fov=camera.fov;rcam.aspect=camera.aspect;rcam.near=camera.near;rcam.far=camera.far;rcam.updateProjectionMatrix();
+    const p=camera.position;rcam.position.set(p.x,-p.y,p.z);camera.getWorldDirection(_v2);_v.set(p.x+_v2.x,-(p.y+_v2.y),p.z+_v2.z);
+    const up=new T.Vector3(0,1,0).applyQuaternion(camera.quaternion);rcam.up.set(up.x,-up.y,up.z);rcam.lookAt(_v);rcam.updateMatrixWorld();
+    REFL.mat.set(.5,0,0,.5,0,.5,0,.5,0,0,.5,.5,0,0,0,1).multiply(rcam.projectionMatrix).multiply(rcam.matrixWorldInverse);
+    renderer.setRenderTarget(RT.refl);renderer.render(scene,rcam);renderer.shadowMap.needsUpdate=false;
+  }
+  for(const u of WETU){u.uRefl.value=rOn?RT.refl.texture:REFL.black;u.uRK.value=rOn?WETK:0;u.uRT.value=G.t;}
   renderer.setRenderTarget(base);renderer.render(scene,camera);STATS.calls=renderer.info.render.calls;STATS.tri=renderer.info.render.triangles;
   const b=PM.bright.uniforms,bl=PM.blur.uniforms;
   b.uTex.value=base.texture;b.uPx.value.set(1/base.width,1/base.height);b.uThr.value=HALF?1.0:.8;pass(PM.bright,RT.a);
@@ -217,8 +250,11 @@ function buildPrims(){
   /* the x-ray silhouette: the player's own parts, drawn only where a prop stands in front of them */
   const xm=new T.MeshBasicMaterial({color:0xffa040,transparent:false,blending:T.AdditiveBlending,depthWrite:false,depthFunc:T.GreaterDepth,fog:false});
   hookAdd(xm,true);xm.customProgramCacheKey=()=>'xray';xm.onBeforeCompile=(f=>sh=>{f(sh);sh.fragmentShader=sh.fragmentShader.replace('diffuseColor.rgb*=vM.x;','diffuseColor.rgb=diffuse*(.32+.18*step(.5,fract((gl_FragCoord.x+gl_FragCoord.y)*.25)));');})(xm.onBeforeCompile);
-  const xr=new T.InstancedMesh(PR.cap.mesh.geometry,xm,1);xr.instanceMatrix=PR.cap.mesh.instanceMatrix;xr.instanceColor=PR.cap.mesh.instanceColor;xr.frustumCulled=false;xr.count=0;xr.renderOrder=1;scene.add(xr);
+  const xr=new T.InstancedMesh(PR.cap.mesh.geometry,xm,1);xr.layers.set(1);xr.instanceMatrix=PR.cap.mesh.instanceMatrix;xr.instanceColor=PR.cap.mesh.instanceColor;xr.frustumCulled=false;xr.count=0;xr.renderOrder=1;scene.add(xr);
   PR.xray={mesh:xr,begin(){},end(){}};
+  const xmb=new T.MeshBasicMaterial({color:0xffa040,transparent:false,blending:T.AdditiveBlending,depthWrite:false,depthFunc:T.GreaterDepth,fog:false});hookAdd(xmb,false);xmb.customProgramCacheKey=()=>'xrayB';xmb.onBeforeCompile=(f=>sh=>{f(sh);sh.fragmentShader=sh.fragmentShader.replace('diffuseColor.rgb*=vM.x;','diffuseColor.rgb=diffuse*(.32+.18*step(.5,fract((gl_FragCoord.x+gl_FragCoord.y)*.25)));');})(xmb.onBeforeCompile);
+  const xb=new T.InstancedMesh(PR.box.mesh.geometry,xmb,1);xb.layers.set(1);xb.instanceMatrix=PR.box.mesh.instanceMatrix;xb.instanceColor=PR.box.mesh.instanceColor;xb.frustumCulled=false;xb.count=0;xb.renderOrder=1;scene.add(xb);
+  PR.xrayB={mesh:xb,begin(){},end(){}};
 }
 /* material descriptors: linear colour, emission, roughness, metalness */
 function mkRamp(hex,o={}){return {c:linRGB(hex),emi:o.emi?(o.k||2.4):0,r:o.r??.55,m:o.m??.3,hex};}
@@ -230,7 +266,7 @@ const TMPC=[0,0,0];
 /* where a part goes and what colour it gets, given the drawing mode */
 function route(mt,add){
   if(MODE===2){TMPC[0]=GHOST[0];TMPC[1]=GHOST[1];TMPC[2]=GHOST[2];return GALPHA*.9;}
-  if(MODE===3){const f=.5+.5*Math.sin(G.t*40+FRAME);TMPC[0]=.3;TMPC[1]=.9;TMPC[2]=1;return .25+.35*f;}
+  if(MODE===3){const f=.5+.5*Math.sin(G.t*40+FRAME);TMPC[0]=.3;TMPC[1]=.9;TMPC[2]=1;return (.25+.35*f)*(FLASHK<1?.3:1);}
   return -1;
 }
 function writeCol(P,i,mt,a){
@@ -308,13 +344,18 @@ const SHK={t:0,ph:[Math.random()*9,Math.random()*9,Math.random()*9]};
 const CV=[{pitch:56*D2R,dist:20,fov:40},{pitch:44*D2R,dist:14.5,fov:44}];
 const _v=new T.Vector3(),_v2=new T.Vector3();
 let CAMOV=null;   /* test hook: {x,y,pitch,dist,fov} */
-let CAMYAW=0;     /* the title and end screens slowly swing the camera round; play keeps north up */
+let CAMYAW=0;const CINE={k:0,x:30,y:19};     /* the title and end screens slowly swing the camera round; play keeps north up */
 function placeCamera(dt){
   const v=CAMOV||CV[VIEWM],a=RECT.w/RECT.h;
   let dist=v.dist;const hf=2*Math.atan(Math.tan(v.fov*D2R/2)*a),wantW=VIEWM?16:21,wNow=2*dist*Math.tan(hf/2);if(wNow<wantW&&!CAMOV)dist*=wantW/wNow;
   if(PORTRAIT)dist*=1.05;
   camera.fov=v.fov+CAMFX.fov;
-  let fx=CAMOV?CAMOV.x:CAM.x,fy=CAMOV?CAMOV.y:CAM.y;
+  /* boss entrance: swing to the drop pod, hold on the landing, then hand back */
+  let ck=0,bx=CAM.x,by=CAM.y;
+  if(!CAMOV&&G.mode==='play'&&!G.demo){const bp=PODS.find(p=>p.big);if(bp){ck=clamp((bp.t-(bp.T-1.7))/.5,0,1);bx=bp.x;by=bp.y;}else if(G.boss&&G.boss.t<1.7){ck=1-clamp((G.boss.t-1.1)/.6,0,1);bx=G.boss.x;by=G.boss.y;}}
+  CINE.k+=(ck-CINE.k)*Math.min(1,dt*(ck>CINE.k?3:2.5));if(ck>0){CINE.x=bx;CINE.y=by;}
+  const cs=CINE.k*CINE.k*(3-2*CINE.k);
+  let fx=CAMOV?CAMOV.x:lerp(CAM.x,CINE.x,cs),fy=CAMOV?CAMOV.y:lerp(CAM.y,CINE.y,cs);
   if(!CAMOV){if(G.mode==='title')fy+=2.2;fx=clamp(fx,IN0+5,INX-5);fy=clamp(fy,IN0+1.5,INY-1);}
   SHK.t+=dt;const sh=reduce?0:G.shake*G.shake*.55,t=SHK.t*38;
   const jx=(Math.sin(t+SHK.ph[0])+Math.sin(t*1.7+SHK.ph[1])*.5)*sh,jy=(Math.sin(t*1.3+SHK.ph[2])+Math.sin(t*2.3)*.5)*sh,jz=Math.sin(t*1.9+SHK.ph[1])*sh*.6;
@@ -322,8 +363,11 @@ function placeCamera(dt){
   const cx=fx+jx+CAMFX.rx,cz=fy+jy+CAMFX.ry;
   const show=!CAMOV&&(G.mode==='title'||G.mode==='over'||G.mode==='win');
   CAMYAW+=((show?Math.sin(G.t*.16)*.42:0)-CAMYAW)*Math.min(1,dt*(show?1.2:5));
-  const hd=Math.cos(v.pitch)*dist;
-  camera.position.set(cx+Math.sin(CAMYAW)*hd,Math.sin(v.pitch)*dist+1.4+jz+kick,cz+Math.cos(CAMYAW)*hd);
+  /* look at the boss from the open middle of the arena, so buildings don't get in the way */
+  const cyw=Math.abs(CINE.x-WW/2)+Math.abs(CINE.y-WH/2)>3?clamp(angD(Math.atan2(WW/2-CINE.x,WH/2+6-CINE.y),0),-1.1,1.1):.4;
+  const pitch=lerp(v.pitch,47*D2R,cs);dist=lerp(dist,19,cs);const yw=lerp(CAMYAW,cyw,cs);
+  const hd=Math.cos(pitch)*dist;
+  camera.position.set(cx+Math.sin(yw)*hd,Math.sin(pitch)*dist+1.4+jz+kick,cz+Math.cos(yw)*hd);
   _v.set(cx,1.2+kick*.4,cz);camera.lookAt(_v);
   camera.rotation.z+=reduce?0:CAMFX.roll+sh*.012*Math.sin(t*.7);
   camera.updateProjectionMatrix();camera.updateMatrixWorld();

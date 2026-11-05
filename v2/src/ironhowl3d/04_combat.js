@@ -213,6 +213,8 @@ const UPG=[
 ];
 const FIX={id:'fix',name:'FIELD REPAIR',d:['FULL HULL AND','+5,000 SCORE'],max:99};
 function applyUpg(id){const P=PLY;if(id==='fix'){P.hp=P.maxHp;G.score+=5000;return;}P.up[id]=(P.up[id]||0)+1;if(id==='armor'){P.maxHp+=30;P.hp=P.maxHp;}if(id==='drone')P.drones.push({x:P.x,y:P.y,z:2.6,a:0,spin:0,cool:0,ph:P.drones.length*Math.PI});}
+/* heat per cannon shot. The original used 4.3 (about 2 seconds of non-stop fire to overheat); 3D uses 2.5 (about 3.6 seconds) */
+const HEAT_PER_SHOT=2.5;
 const CTL={prev:{missile:false,dash:false,howl:false}};
 function updPlayer(dt,c){
   const P=PLY;if(P.dead){P.deadT+=dt;return;}
@@ -233,10 +235,10 @@ function updPlayer(dt,c){
   else if(c.aim==='dir'){aim=Math.atan2(c.ay,c.ax);P.aimPt=null;}
   P.aim=aim;P.turret=turnTo(P.turret,aim,dt*10);
   const cool=(P.up.cool?1+.6*P.up.cool:1);
-  if(P.over>0){P.over-=dt;P.heat=Math.max(0,P.heat-60*dt);if(FRAME%3===0)prt({k:'smoke',x:P.x,y:P.y,z:2.4,vx:rnd(-1,1),vy:rnd(-1,1),vz:2,life:.8,max:.8,s:.3,grow:1.5,col:[200,200,200]});}
+  if(P.over>0){P.over-=dt;P.heat=Math.max(0,P.heat-60*dt);}
   P.fireT-=dt;
   if(c.fire&&P.over<=0){
-    if(P.fireT<=0){P.fireT=(P.od>0?1/19:1/11)/(1+.25*(P.up.rate||0));playerFire();if(P.od<=0){P.heat+=4.3;if(P.heat>=100){P.heat=100;P.over=1.5;SFX.heat();msg('OVERHEAT','VENTING',1.2,GR.red);}}}
+    if(P.fireT<=0){P.fireT=(P.od>0?1/19:1/11)/(1+.25*(P.up.rate||0));playerFire();if(P.od<=0){P.heat+=HEAT_PER_SHOT;if(P.heat>=100){P.heat=100;P.over=1.5;SFX.heat();msg('OVERHEAT','VENTING',1.2,GR.red);}}}
   }else P.heat=Math.max(0,P.heat-46*cool*dt);
   if(mP&&P.missT<=0)fireMissiles();
   if(hP&&P.odM>=100)howl();
@@ -248,7 +250,7 @@ function updPlayer(dt,c){
 }
 function nearestEnemy(x,y,max,cone,ca){let best=null,bd=max||1e9;for(const u of EN){if(u.dead||u.spawnT<.35)continue;const d=Math.hypot(u.x-x,u.y-y);if(cone){const a=Math.atan2(u.y-y,u.x-x);if(Math.abs(angD(a,ca))>cone)continue;}if(d<bd){bd=d;best=u;}}return best;}
 function playerFire(){
-  const P=PLY;P.gun=-P.gun;const s=P.gun,m=L2W(P,P.turret,1.4,s*.9),sp=P.up.spread||0,dmg=7*(1+.35*(P.up.dmg||0))*(P.od>0?1.3:1);
+  const P=PLY;P.gun=-P.gun;P.lastFire=G.t;const s=P.gun,m=L2W(P,P.turret,1.4,s*.9),sp=P.up.spread||0,dmg=7*(1+.35*(P.up.dmg||0))*(P.od>0?1.3:1);
   const tp=P.aimPt&&Math.hypot(P.aimPt[0]-P.x,P.aimPt[1]-P.y)>2.5?P.aimPt:[P.x+Math.cos(P.turret)*14,P.y+Math.sin(P.turret)*14];
   const base=Math.atan2(tp[1]-m[1],tp[0]-m[0]);
   for(let k=-sp;k<=sp;k++){const a=base+k*.09+rnd(-.02,.02);BUL.push({x:m[0],y:m[1],z:1.85,vx:Math.cos(a)*38,vy:Math.sin(a)*38,dmg:k?dmg*.6:dmg,team:'p',kind:'pb',life:.7,r:.16,pierce:P.up.pierce?1:0});}
@@ -329,7 +331,8 @@ function spawnGate(type){const gt=pick(WORLD.gates),e=mkEnemy(type,gt.x+rnd(-1.5
 function spawnAir(type){const side=(Math.random()*4)|0,x=side===0?IN0-2:side===1?INX+2:rnd(IN0,INX),y=side===2?IN0-2:side===3?INY+2:rnd(IN0,INY);const e=mkEnemy(type,x,y);e.spawnT=1;e.body=Math.atan2(PLY.y-y,PLY.x-x);EN.push(e);}
 function updPods(dt){
   for(const p of PODS){p.t+=dt;if(p.t>=p.T&&!p.done){p.done=1;const e=mkEnemy(p.type,p.x,p.y);e.spawnT=0;EN.push(e);if(e.d.boss){G.boss=e;}
-    shakeIt(p.big?1:.25);at(p.x,p.y).impact();CAMFX.step(p.big?.5:.12);dustAt(p.x,p.y,p.big?30:12,p.big?.8:.4);RINGS.push({x:p.x,y:p.y,r0:.3,r1:p.big?7:2.6,life:.4,max:.4,col:[255,210,150]});scorch(p.x,p.y,p.big?4:1.6,.5);
+    shakeIt(p.big?1:.25);at(p.x,p.y).impact();CAMFX.step(p.big?.5:.12);
+    if(p.big&&!G.demo){G.slow=.35;G.slowT=.9;SFX.bigboom();msg(EDEF[p.type].name,p.type==='goliath'?'SIEGE WALKER':'THE DEEP DOCK HORROR',2.4,GR.red);debris(p.x,p.y,.5,30,[110,100,90],2.2);FX.flash(p.x,p.y,1,7);RINGS.push({x:p.x,y:p.y,r0:1,r1:14,life:.8,max:.8,col:[255,170,110]});}dustAt(p.x,p.y,p.big?30:12,p.big?.8:.4);RINGS.push({x:p.x,y:p.y,r0:.3,r1:p.big?7:2.6,life:.4,max:.4,col:[255,210,150]});scorch(p.x,p.y,p.big?4:1.6,.5);
     LIGHTS.push({x:p.x,y:p.y,z:0,rad:p.big?10:4,col:[1.4,.8,.4],life:.35,max:.35});
     if(!PLY.dead&&Math.hypot(PLY.x-p.x,PLY.y-p.y)<(p.big?4:1.8))hurtPlayer(p.big?20:10,p.x,p.y);
     for(const pr of propsNear(p.x,p.y))if(Math.hypot(clamp(p.x,pr.x0,pr.x1)-p.x,clamp(p.y,pr.y0,pr.y1)-p.y)<(p.big?3:1.2))damageProp(pr,200);}}
