@@ -46,7 +46,7 @@ function actorMeshes(){
   mb=new MB();mb.cyl(0,0,0,3.2,.42,.42,8,[.62,.08,.05,.3],pl);mb.cyl(0,0,3.2,3.6,.44,.3,8,[.85,.82,.75,.2],pl);AM.flare=mb.build();
 }
 const MX=new Float32Array(16);
-function drawPart(pw,mesh,m,tint,emis){gl.uniformMatrix4fv(pw.u.uM,false,m);gl.uniform3fv(pw.u.uTint,tint||ONE3);gl.uniform3fv(pw.u.uEmis,emis||ZERO3);drawMesh(mesh);}
+function drawPart(pw,mesh,m,tint,emis){gl.uniformMatrix4fv(pw.u.uM,false,m);if(pw.u.uOrg)gl.uniform4f(pw.u.uOrg,m[12],m[13],m[14],Math.atan2(m[2],m[0]));gl.uniform3fv(pw.u.uTint,tint||ONE3);gl.uniform3fv(pw.u.uEmis,emis||ZERO3);drawMesh(mesh);}
 const ONE3=new Float32Array([1,1,1]),ZERO3=new Float32Array([0,0,0]);
 /* GL point from a point of the town */
 const GLP=(x,y,z)=>[x,z,y];
@@ -65,7 +65,7 @@ function drawSolids(pw){
       if(p.k==='oil')drawPart(pw,AM.oil,M4.trs(p.x,p.y,bob,p.t*1.1,1,1,1,MX));else drawPart(pw,AM.flare,M4.trs(p.x,p.y,bob,p.t,1,1,1,MX),ONE3,new Float32Array([.25,.03,.02]));}
     for(const f of FLARES)drawPart(pw,AM.flare,M4.trs(f.x,f.y,0,f.t,.9,.9,.8,MX),ONE3,new Float32Array([1.5,.4,.25]));
   }
-  gl.uniformMatrix4fv(pw.u.uM,false,IDM);gl.uniform3fv(pw.u.uTint,ONE3);gl.uniform3fv(pw.u.uEmis,ZERO3);
+  gl.uniformMatrix4fv(pw.u.uM,false,IDM);gl.uniform3fv(pw.u.uTint,ONE3);gl.uniform3fv(pw.u.uEmis,ZERO3);if(pw.u.uOrg)gl.uniform4f(pw.u.uOrg,0,0,0,0);
 }
 const C3L=[1,.55,.22];
 /* ---------- REMAKE: the lamplighter's rig ---------- */
@@ -80,26 +80,32 @@ function drawLamplighter(pw){
   const bob=Math.abs(Math.cos(ph))*.32*ks-dk*2.6,lean=.07*ks*fwdV+dk*.85-P.hurt*.5,sway=Math.sin(ph)*.05*ks;
   const tint=P.hurt>0?new Float32Array([1+P.hurt*3,1-P.hurt*.6,1-P.hurt*.6]):ONE3;
   const root=M4.trs(P.x,P.y,0,a,1,1,1);const J=(...ms)=>ms.reduce((p,q)=>M4.mul(p,q));
+  /* STUDIO swaps in the rebuilt parts and adds the coat's skirts, the scarf's end and the pole's hook */
+  const SL=studio(),A=SL?AM2:AM,swS={};
   /* legs */
-  for(const side of [-1,1]){const p2=ph+(side>0?Math.PI:0),sw=Math.sin(p2)*.62*ks-dk*.6,knee=Math.max(0,Math.sin(p2+1.25))*.95*ks+dk*1.4;
-    const hip=J(root,M4.t(0,6.2+bob,side*.72),M4.rz(sw));drawPart(pw,AM.thigh,hip,tint);drawPart(pw,AM.shin,J(hip,M4.t(0,-3,0),M4.rz(-knee)),tint);}
+  for(const side of [-1,1]){const p2=ph+(side>0?Math.PI:0),sw=Math.sin(p2)*.62*ks-dk*.6,knee=Math.max(0,Math.sin(p2+1.25))*.95*ks+dk*1.4;swS[side]=sw;
+    const hip=J(root,M4.t(0,6.2+bob,side*.72),M4.rz(sw));drawPart(pw,A.thigh,hip,tint);drawPart(pw,A.shin,J(hip,M4.t(0,-3,0),M4.rz(-knee)),tint);}
   /* the coat and the body */
-  const torso=J(root,M4.t(0,6.2+bob,0),M4.rz(-lean),M4.rx(sway));drawPart(pw,AM.torso,torso,tint);
-  const neck=J(torso,M4.t(.05,5.0,0));drawPart(pw,AM.head,J(neck,M4.rz(.12+dk*.4)),tint);
+  const torso=J(root,M4.t(0,6.2+bob,0),M4.rz(-lean),M4.rx(sway));drawPart(pw,A.torso,torso,tint);
+  if(SL){drawPart(pw,AM2.skirtR,J(torso,M4.rz(swS[1]*.5+lean*.6)),tint);drawPart(pw,AM2.skirtL,J(torso,M4.rz(swS[-1]*.5+lean*.6)),tint);
+    drawPart(pw,AM2.scarfEnd,J(torso,M4.t(-1.02,4.5,.38),M4.rz(-(.18+ks*.75+Math.sin(ph*2)*.07*ks)-dk*.5),M4.rx(.12+sway)),tint);}
+  const neck=J(torso,M4.t(.05,5.0,0));drawPart(pw,A.head,J(neck,M4.rz(.12+dk*.4)),tint);
   const xf=(m,x,y,z)=>{const q=M4.xf(m,x,y,z);return [q[0],q[1],q[2]];};
   /* the lantern arm: from the right shoulder to the hand that holds the lantern out */
   const sR=xf(torso,.15,4.25,1.55),hand=[P.lx+rx*.05,10.25-dk*6,P.ly+ry*.05],eR=[(sR[0]+hand[0])/2+rx*.5,(sR[1]+hand[1])/2-1.1,(sR[2]+hand[2])/2+ry*.5];
-  drawPart(pw,AM.sleeve,M4.seg(sR,eR,.72),tint);drawPart(pw,AM.sleeve,M4.seg(eR,hand,.62),tint);drawPart(pw,AM.hand,M4.t(hand[0],hand[1],hand[2]),tint);
+  const handM=h=>SL?M4.trs(h[0],h[2],h[1],a,1,1,1):M4.t(h[0],h[1],h[2]);
+  drawPart(pw,SL?AM2.sleeveU:AM.sleeve,M4.seg(sR,eR,.72),tint);drawPart(pw,SL?AM2.sleeveF:AM.sleeve,M4.seg(eR,hand,.62),tint);drawPart(pw,A.hand,handM(hand),tint);
   const g=LU.lanI[0],em=new Float32Array([C3L[0]*g*2.6,C3L[1]*g*2.6,C3L[2]*g*2.6]),lz=7.1-dk*6;
-  drawPart(pw,AM.lant,M4.trs(P.lx,P.ly,lz,a,1,1,1,MX));drawPart(pw,AM.lglass,M4.trs(P.lx,P.ly,lz,a,1,1,1,MX),ZERO3,em);
+  drawPart(pw,A.lant,M4.trs(P.lx,P.ly,lz,a,1,1,1,MX));drawPart(pw,A.lglass,M4.trs(P.lx,P.ly,lz,a,1,1,1,MX),ZERO3,em);
   /* the lighting pole in the other hand: carried slanting forward, raised to a lamp's cage while it kindles */
   const kL=P.kl&&P.kindle>0&&!P.kl.lit?P.kl:null;RIG.kpole+=((kL?1:0)-RIG.kpole)*Math.min(1,dt*5);const kp=RIG.kpole;
   const sL=xf(torso,.15,4.25,-1.55),hL=xf(root,1.1+Math.sin(ph)*.5*ks,7.6+bob+kp*3.2,-1.95);
-  const eL=[(sL[0]+hL[0])/2-rx*.4,(sL[1]+hL[1])/2-.9,(sL[2]+hL[2])/2-ry*.4];drawPart(pw,AM.sleeve,M4.seg(sL,eL,.72),tint);drawPart(pw,AM.sleeve,M4.seg(eL,hL,.62),tint);drawPart(pw,AM.hand,M4.t(hL[0],hL[1],hL[2]),tint);
+  const eL=[(sL[0]+hL[0])/2-rx*.4,(sL[1]+hL[1])/2-.9,(sL[2]+hL[2])/2-ry*.4];drawPart(pw,SL?AM2.sleeveU:AM.sleeve,M4.seg(sL,eL,.72),tint);drawPart(pw,SL?AM2.sleeveF:AM.sleeve,M4.seg(eL,hL,.62),tint);drawPart(pw,A.hand,handM(hL),tint);
   let tip=xf(root,5.4,19.5-dk*13,-2.3+Math.sin(ph)*.3*ks);if(RIG.lampTip&&kp>0){const T=RIG.lampTip;tip=[lerp(tip[0],T[0],kp),lerp(tip[1],T[1],kp),lerp(tip[2],T[2],kp)];}
   if(kL)RIG.lampTip=[kL.x-ca*1.5,TOWN.lampsZ-1.5,kL.y-sa*1.5];
   const dv=[tip[0]-hL[0],tip[1]-hL[1],tip[2]-hL[2]],dl=Math.hypot(...dv)||1,bot=[hL[0]-dv[0]/dl*4,hL[1]-dv[1]/dl*4,hL[2]-dv[2]/dl*4];
-  drawPart(pw,AM.pole,M4.seg(bot,tip,.2),tint);RIG.tip=tip;RIG.kp=kp;
+  drawPart(pw,A.pole,M4.seg(bot,tip,.2),tint);RIG.tip=tip;RIG.kp=kp;
+  if(SL){const ts=[tip[0]-dv[0]/dl*1.4,tip[1]-dv[1]/dl*1.4,tip[2]-dv[2]/dl*1.4];drawPart(pw,AM2.ptip,M4.seg(ts,tip,1),tint);}
 }
 /* ---------- REMAKE: smoke that trails off the darkness, dust that shows only in the beam ---------- */
 const VFX=[],DUST=[];for(let i=0;i<150;i++)DUST.push({x:Math.random()*90-45,y:Math.random()*90-45,z:Math.random()*22+1,ph:Math.random()*TAU,s:Math.random()});
@@ -107,7 +113,7 @@ function vfxEmit(x,y,z,n,spr,up,life,sz){for(let k=0;k<n&&VFX.length<600;k++){co
 function vfxStep(dt){let n=0;for(const p of VFX){p.t+=dt;if(p.t>=p.life)continue;p.x+=p.vx*dt;p.y+=p.vy*dt;p.z+=p.vz*dt;p.vx*=.98;p.vy*=.98;VFX[n++]=p;}VFX.length=n;}
 
 function drawVoids(){
-  if(TOWN.kind!=='night')return;const p=PG.voidp,u=p.u;gl.useProgram(p.p);gl.uniformMatrix4fv(u.uVP,false,R3.VP);gl.uniform3fv(u.uCam,R3.cam);const dt=1/60;
+  if(TOWN.kind!=='night')return;if(studio())return drawVoidsS();const p=PG.voidp,u=p.u;gl.useProgram(p.p);gl.uniformMatrix4fv(u.uVP,false,R3.VP);gl.uniform3fv(u.uCam,R3.cam);const dt=1/60;
   for(const s of SH){s.t3=(s.t3||0)+dt*(s.fz>.5?.08:1);const sc=.55+.45*clamp(s.hp,0,1),a=Math.hypot(s.vx,s.vy)>1?Math.atan2(s.vy,s.vx):Math.atan2(P.y-s.y,P.x-s.x);s.a3=a;
     gl.uniformMatrix4fv(u.uM,false,M4.trs(s.x,s.y,0,a,sc,sc,sc*(.9+.1*Math.sin(s.t3*3)),MX));gl.uniform4f(u.uVw,s.t3,s.id*1.7,s.burn>0?1.5:.85,13.6);
     gl.uniform4f(u.uVoid,s.fz,s.burn>0?1:0,s.in,0);gl.uniform3f(u.uVoidC,.008,.004,.02);drawMesh(AM.shade);}
@@ -115,6 +121,19 @@ function drawVoids(){
     gl.uniform4f(u.uVoid,z.fz,z.burn>0?1:0,1,0);gl.uniform3f(u.uVoidC,.01,.006,.016);drawMesh(AM.snuf);}
   const B=BOSS;if(B.on){const rs=.35+.65*B.rise,r=Math.max(.01,B.r);gl.uniformMatrix4fv(u.uM,false,M4.trs(B.x,B.y,-r*.45+r*1.05*rs,Math.atan2(P.y-B.y,P.x-B.x),r*1.15,r*1.15,r*1.75*rs,MX));
     gl.uniform4f(u.uVw,B.t,3.1,.22,1);gl.uniform4f(u.uVoid,0,B.hurt>0?.9:0,2,0);gl.uniform3f(u.uVoidC,.004,.001,.008);drawMesh(AM.boss);}
+}
+/* STUDIO: the same darkness in its new shapes, drawn twice: depth first, then blended, so only its front shows */
+const VQ=[];
+function drawVoidsS(){
+  const p=PG.voidS,u=p.u,dt=1/60;gl.useProgram(p.p);gl.uniformMatrix4fv(u.uVP,false,R3.VP);gl.uniform3fv(u.uCam,R3.cam);VQ.length=0;
+  for(const s of SH){s.t3=(s.t3||0)+dt*(s.fz>.5?.08:1);const sc=.55+.45*clamp(s.hp,0,1),a=Math.hypot(s.vx,s.vy)>1?Math.atan2(s.vy,s.vx):Math.atan2(P.y-s.y,P.x-s.x);s.a3=a;
+    VQ.push([M4.trs(s.x,s.y,0,a,sc,sc,sc*(.9+.1*Math.sin(s.t3*3))),[s.t3,s.id*1.7,s.burn>0?1.5:.85,13.6],[s.fz,s.burn>0?1:0,s.in,0],[.008,.004,.02],AM2.shade]);}
+  for(const z of SNUF){z.t3=(z.t3||0)+dt*(z.fz>.5?.1:1);VQ.push([M4.trs(z.x,z.y,0,z.a3||0,1,1,1),[z.t3,7.3,.55,22.2],[z.fz,z.burn>0?1:0,1,1],[.01,.006,.016],AM2.snuf]);}
+  const B=BOSS;if(B.on){const rs=.35+.65*B.rise,r=Math.max(.01,B.r);VQ.push([M4.trs(B.x,B.y,-r*.45+r*1.05*rs,Math.atan2(P.y-B.y,P.x-B.x),r*1.15,r*1.15,r*1.75*rs),[B.t,3.1,.22,1],[0,B.hurt>0?.9:0,2,2],[.004,.001,.008],AM2.boss]);}
+  if(!VQ.length)return;
+  const pass=()=>{for(const q of VQ){gl.uniformMatrix4fv(u.uM,false,q[0]);gl.uniform4fv(u.uVw,q[1]);gl.uniform4fv(u.uVoid,q[2]);gl.uniform3fv(u.uVoidC,q[3]);drawMesh(q[4]);}};
+  gl.colorMask(false,false,false,false);pass();gl.colorMask(true,true,true,true);
+  gl.enable(gl.BLEND);gl.blendFuncSeparate(gl.ONE,gl.ONE_MINUS_SRC_ALPHA,gl.ZERO,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);pass();gl.depthMask(true);gl.disable(gl.BLEND);
 }
 /* ---------- sprites: four batches (darkness, smoke, light, eyes seen through walls) ---------- */
 const SPR={cap:6000,b:[[],[],[],[]],n:[0,0,0,0],data:null};SPR.data=new Float32Array(SPR.cap*12);
@@ -150,14 +169,19 @@ function fillSprites(dt){
   if(LAN3.on){const ca=Math.cos(P.aim),sa=Math.sin(P.aim),ch=Math.cos(BEAM.half+.04);for(const d of DUST){d.ph+=dt*.4;let x=P.x+((d.x+Math.sin(d.ph)*2-P.x%90+135)%90-45),y=P.y+((d.y+Math.cos(d.ph*.8)*2-P.y%90+135)%90-45),z=d.z+Math.sin(d.ph*1.3)*.8;
       const dx=x-LAN3.x,dy=y-LAN3.y,dh=Math.hypot(dx,dy);let I=0;if(dh<BEAM.R&&dh>1&&P.beamK>.05){const cs=(dx*ca+dy*sa)/dh,el=Math.abs((z-8)/dh);if(cs>ch&&el<.5)I=P.beamK*oilK()*(1-dh/BEAM.R)*smooth(ch,ch+.05,cs)*(1-el*2);}
       const dc=Math.hypot(x-CAM3.e[0],y-CAM3.e[1],z-CAM3.e[2]);I*=smooth(10,22,dc);if(I>.03&&hzLit(HZL.r0,HZL.nr,HZL.st,LAN3.x,LAN3.y,8,x,y,z))sp(2,x,y,z,.07+d.s*.06,1,.8,.55,I*1.3,1);}}
+  /* STUDIO: the lamplighter's shadows on the street, away from his lantern and from each lamp near him */
+  if(studio()&&(!P.dead||S.mode==='dying')){sp(0,P.x,P.y,.1,3.4,0,0,0,.42,0,1);const lk=LU.lanI[0];
+    if(LAN3.on&&lk>.05){let dx=P.x-P.lx,dy=P.y-P.ly;const dl=Math.hypot(dx,dy)||1;dx/=dl;dy/=dl;sp(0,P.x+dx*4.8,P.y+dy*4.8,.11,4.2,0,0,0,Math.min(.5,.36*lk),0,1,Math.atan2(dy,dx),2.1);}
+    for(const L of LAMPS){if(!(L.vis>.05))continue;const dx=P.x-L.x,dy=P.y-L.y,d=Math.hypot(dx,dy),R=L.R*.85;if(d>R||d<2)continue;
+      const k=L.vis*(1-d/R),len=Math.min(26,3+14*d/Math.max(4,TOWN.lampsZ-14)),w=2.4+len*.08;sp(0,P.x+dx/d*len*.5,P.y+dy/d*len*.5,.12,w,0,0,0,.42*k,0,1,Math.atan2(dy,dx),len*.5/w);}}
   /* the wells breathe darkness */
   for(const w of WELLS)for(let k=0;k<3;k++){const q=((t*.25+k/3)%1);sp(0,w.x+Math.sin(t+k*2)*1.5,w.y+Math.cos(t*.7+k)*1.5,1+q*9,3+q*4,0,0,0,.3*(1-q)*Math.min(1,q*4),0);}
   /* shades: a pool of darkness on the ground, a haze round the body, two eyes */
   for(const s of SH){const k=s.in,a=s.a3||0,ca=Math.cos(a),sa=Math.sin(a),rx=-sa,ry=ca,sc=.55+.45*clamp(s.hp,0,1);
     sp(0,s.x,s.y,.2,10*sc,0,0,0,.62*k,0,1);sp(0,s.x,s.y,7*sc,8*sc,0,0,0,.42*k*(1-.4*s.fz),0);
-    const open=((s.eye+s.id)%4.3)>.18,eb=(s.fz>.5?.35:.8)*k;if(open)for(const sd of [-1,1]){const ex=s.x+ca*1.5*sc+rx*.55*sd*sc,ey=s.y+sa*1.5*sc+ry*.55*sd*sc,ez=11.5*sc;sp(2,ex,ey,ez,.42,1,.86,.6,2.6*eb,9,0,0,1.5);sp(3,ex,ey,ez,.6,1,.8,.5,.9*eb,9,0,0,1.5);}}
+    const open=((s.eye+s.id)%4.3)>.18,eb=(s.fz>.5?.35:.8)*k;if(open)for(const sd of [-1,1]){const fe=studio()?1.9:1.5,ex=s.x+ca*fe*sc+rx*.55*sd*sc,ey=s.y+sa*fe*sc+ry*.55*sd*sc,ez=11.5*sc;sp(2,ex,ey,ez,.42,1,.86,.6,2.6*eb,9,0,0,1.5);sp(3,ex,ey,ez,.6,1,.8,.5,.9*eb,9,0,0,1.5);}}
   for(const z of SNUF){const a=z.a3||0,ca=Math.cos(a),sa=Math.sin(a),rx=-sa,ry=ca;sp(0,z.x,z.y,.2,12,0,0,0,.6,0,1);sp(0,z.x,z.y,12,11,0,0,0,.35,0);
-    const eb=z.fz>.5?.4:.9;for(const sd of [-1,1]){const ex=z.x+ca*1.4+rx*.5*sd,ey=z.y+sa*1.4+ry*.5*sd;sp(2,ex,ey,19.6,.45,1,.8,.55,2.4*eb,9,0,0,1.5);sp(3,ex,ey,19.6,.65,1,.8,.5,.9*eb,9,0,0,1.5);}}
+    const eb=z.fz>.5?.4:.9,fe=studio()?1.65:1.4;for(const sd of [-1,1]){const ex=z.x+ca*fe+rx*.5*sd,ey=z.y+sa*fe+ry*.5*sd;sp(2,ex,ey,19.6,.45,1,.8,.55,2.4*eb,9,0,0,1.5);sp(3,ex,ey,19.6,.65,1,.8,.5,.9*eb,9,0,0,1.5);}}
   const B=BOSS;if(B.on){const r=B.r,rs=.35+.65*B.rise;sp(0,B.x,B.y,.3,r*2.8,0,0,0,.75*rs,0,1);sp(0,B.x,B.y,r*1.2*rs,r*2.4,0,0,0,.55*rs,0);
     const e=B.eye>0?Math.min(1,B.eye*2):0,glow=(B.hurt>0?2.2:1.4)*(B.dead?Math.max(0,1-B.dead):1),ez=-r*.45+r*1.05*rs+r*1.75*rs*.35,ey=B.y+r*1.05;
     if(e>0){sp(2,B.x,ey,ez,3.2*e+.4,1,.9,.7,3.5*glow,9,0,0,2.4);sp(2,B.x,ey,ez,12*e,1,.75,.45,.5*glow*e,0);sp(3,B.x,ey,ez,4*e,1,.85,.6,1.2*glow,9,0,0,2.4);}

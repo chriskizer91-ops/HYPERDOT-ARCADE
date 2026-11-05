@@ -28,7 +28,7 @@ const FADE={};
 function fade(id,on){const el=$(id);if(FADE[id]===on)return;FADE[id]=on;
   if(on){el.hidden=false;requestAnimationFrame(()=>requestAnimationFrame(()=>{if(FADE[id])el.classList.add('on');}));}
   else{el.classList.remove('on');setTimeout(()=>{if(!FADE[id])el.hidden=true;},950);}}
-function storyShow(i){const c=CHAPTERS[i];if(!c)return;$('stCh').textContent=c[0];$('stT').textContent=c[1];$('stP').textContent=c[2];fade('story',true);}
+function storyShow(i){const c=CHAPTERS[i];if(!c)return;const art=studio()&&IMGS['7.'+(i+1)];$('story').style.backgroundImage=art?'linear-gradient(rgba(4,4,8,.45),rgba(4,4,8,.7)),url('+art+')':'';$('stCh').textContent=c[0];$('stT').textContent=c[1];$('stP').textContent=c[2];fade('story',true);}
 function storyHide(){fade('story',false);}
 function logoShow(on){fade('logo',on);}
 /* ---------- looking round: the mouse (held still by pointer lock), a drag on the screen, the BEAM button dragged ---------- */
@@ -44,7 +44,7 @@ const DRAG={};function dragLook(el,k){el.addEventListener('pointerdown',e=>{if(e
   const end=e=>{delete DRAG[e.pointerId];};el.addEventListener('pointerup',end);el.addEventListener('pointercancel',end);}
 dragLook(cv,1.7);dragLook($('bA'),1.7);
 const UIP={};
-function edges(c){c.m=K('KeyM');c.g=K('KeyG');const e={};for(const k of ['ok','back','pause','a','b','u','d','l','r','m','g']){e[k]=c[k]&&!UIP[k];UIP[k]=c[k];}if(e.m)toggleSound();if(e.g)toggleDots();return e;}
+function edges(c){c.m=K('KeyM');c.g=K('KeyG');c.lk=K('KeyL');const e={};for(const k of ['ok','back','pause','a','b','u','d','l','r','m','g','lk']){e[k]=c[k]&&!UIP[k];UIP[k]=c[k];}if(e.m)toggleSound();if(e.g)toggleDots();if(e.lk)toggleLook();return e;}
 const IDLE={x:0,y:0,a:false,b:false,ax:0,ay:0,aim:null};
 const ATT=[9,7,9.5,34];
 /* a tap on the screen, in HUD dots */
@@ -57,7 +57,7 @@ function tick(dt){
   if(S.paused){
     const n=pauseItems().length;if(e.u){S.pauseI=(S.pauseI+n-1)%n;SFX.move();}if(e.d){S.pauseI=(S.pauseI+1)%n;SFX.move();}
     let ti=-1;if(tap){const [,ty]=tapHud();for(let i=0;i<n;i++){const y=pauseRowY(i);if(ty>=y-3&&ty<y+9)ti=i;}}
-    if(e.ok||ti>=0){const i=ti>=0?ti:S.pauseI;if(i===0)setPause(false);else if(i===1){toggleDots();SFX.confirm();}else{setPause(false);if(EMBED)ARC.exit();APP_attract();}}
+    if(e.ok||ti>=0){const i=ti>=0?ti:S.pauseI;if(i===0)setPause(false);else if(i===1){toggleLook();SFX.confirm();}else if(i===2){toggleDots();SFX.confirm();}else{setPause(false);if(EMBED)ARC.exit();APP_attract();}}
     return;
   }
   const m=S.mode;
@@ -126,6 +126,10 @@ function frame(ts){
 /* ---------- chrome + boot ---------- */
 function toggleSound(){AU.muted=!AU.muted;store.set('hd-lanternr-mute',AU.muted?'1':'0');setVolume();$('snd').textContent=AU.muted?'Sound off':'Sound on';}
 function toggleDots(){R3.dots=!R3.dots;store.set('hd-lanternr-dots',R3.dots?'1':'0');$('resv').textContent=R3.dots?'ON':'OFF';}
+/* the Look switch: Studio (the new paint, models and grade) or Classic (as the remake first shipped) */
+function toggleLook(){setLook(R3.look==='studio'?'classic':'studio');}
+function lookLabel(){$('lookv').textContent=R3.look==='studio'?'STUDIO':'CLASSIC';}
+$('look').addEventListener('click',e=>{toggleLook();e.currentTarget.blur();});
 $('snd').addEventListener('click',e=>{audioInit();toggleSound();e.currentTarget.blur();});
 $('res').addEventListener('click',e=>{toggleDots();e.currentTarget.blur();});
 $('pauseBtn').addEventListener('click',e=>{audioInit();setPause(!S.paused);e.currentTarget.blur();});
@@ -136,9 +140,9 @@ function layoutChrome(){const portrait=touchy&&innerHeight>innerWidth*1.05,bs=do
   if(touchy){const v=Math.min(innerWidth,innerHeight);bs.setProperty('--stick',Math.min(150,v*(portrait?.36:.34))+'px');bs.setProperty('--b',Math.min(62,v*(portrait?.15:.13))+'px');}}
 addEventListener('resize',()=>{layoutChrome();if(gl&&!GLERR)r3Resize();});
 if(AU.muted)$('snd').textContent='Sound off';
-$('resv').textContent=R3.dots?'ON':'OFF';
+$('resv').textContent=R3.dots?'ON':'OFF';lookLabel();
 if(gl){try{r3Init();}catch(e){GLERR=String(e&&e.message||e);console.error(e);}}
-  window.__la={CAM3,VFX,ARC,AU,TG,gl,SPR,LU,S,P,SH,LAMPS,MOTHS,SNUF,BOSS,GREAT,FLARES,NIGHTS,R3,RTM,TOWN,HZ,PICKS,tick,lampsLit,lampToggle,litCells,autopilot,start:APP_start,startNight,attract:APP_attract,nightSetup,fireFlare,spawnShade,spawnMoths,spawnSnuffer,bossStart,wakeGreatLamp,KEY,LATCH,setQuality,toggleDots,screenToWorld,worldToScreen,
+  window.__la={CAM3,VFX,ARC,AU,TG,gl,SPR,LU,S,P,SH,LAMPS,MOTHS,SNUF,BOSS,GREAT,FLARES,NIGHTS,R3,RTM,TOWN,HZ,PICKS,tick,lampsLit,lampToggle,litCells,autopilot,start:APP_start,startNight,attract:APP_attract,setLook,TX,studio,AM2,nightSetup,fireFlare,spawnShade,spawnMoths,spawnSnuffer,bossStart,wakeGreatLamp,KEY,LATCH,setQuality,toggleDots,screenToWorld,worldToScreen,
     ff(sec){for(let i=0;i<sec*60;i++)tick(1/60);endInputFrame();},lightAll(){for(const L of LAMPS)if(!L.lit){lampToggle(L,true);L.once=1;}litCells();}};
 if(!gl||GLERR){$('err').style.display='grid';if(GLERR)$('err').textContent='LANTERN: THE LONG NIGHT could not build its shaders on this graphics card. '+GLERR.slice(0,400);}
 else{layoutChrome();r3Resize();APP_attract();ARC.post('ready',{title:CAB.title,tickets:CAB.tickets});requestAnimationFrame(frame);}

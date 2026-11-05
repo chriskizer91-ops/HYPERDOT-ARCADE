@@ -5,30 +5,43 @@
        hold: first the resolution, then the mist, the rain and the soft shadows.
    ===================================================================================== */
 const QS={
-  high:{scale:1,fogDiv:2,steps:18,rain:1400,lanTaps:3,lampSh:1,fogSh:2,moonPcf:2,moonSz:2048},
-  med:{scale:.5,fogDiv:3,steps:12,rain:800,lanTaps:3,lampSh:1,fogSh:1,moonPcf:1,moonSz:2048},
-  low:{scale:.5,fogDiv:4,steps:8,rain:350,lanTaps:1,lampSh:1,fogSh:1,moonPcf:1,moonSz:1024}
+  high:{scale:1,fogDiv:2,steps:18,rain:1400,lanTaps:3,lampSh:1,fogSh:2,moonPcf:2,moonSz:2048,refl:1},
+  med:{scale:.5,fogDiv:3,steps:12,rain:800,lanTaps:3,lampSh:1,fogSh:1,moonPcf:1,moonSz:2048,refl:1},
+  low:{scale:.5,fogDiv:4,steps:8,rain:350,lanTaps:1,lampSh:1,fogSh:1,moonPcf:1,moonSz:1024,refl:0}
 };
 const QPIN=(/[?&]q=(low|med|high)/.exec(location.search)||[])[1];
 const R3={ts:1,q:QPIN||(touchy?'med':'high'),scale:1,auto:!QPIN,ft:16,slow:0,fast:0,cssW:1,cssH:1,dpr:1,VP:M4.id(),V:M4.id(),PR:M4.id(),IVP:M4.id(),cam:[0,0,0],cr:[1,0,0],cu:[0,1,0],
-  dots:store.get('hd-lanternr-dots','0')==='1',t:0,frames:0,tgt:{x:192,y:128},camD:180,pitch:1.0,fov:.66,shake:[0,0],moonVP:M4.id(),built:false};
+  dots:store.get('hd-lanternr-dots','0')==='1',look:store.get('hd-lanternr-look','studio')==='classic'?'classic':'studio',t:0,frames:0,tgt:{x:192,y:128},camD:180,pitch:1.0,fov:.66,shake:[0,0],moonVP:M4.id(),built:false};
 R3.scale=QS[R3.q].scale;
 const PG={},TG={};let VAO0=null,SPRVAO=null,SPRBUF=null,FOGNT=null,HUDT=null,HUDW=0,HUDH=0,MOONT=null;
 function r3Init(){
   PG.world=prog(VS_WORLD,FS_WORLD);PG.pre=prog(VS_WORLD,FS_PRE);PG.depth=prog(VS_DEPTH,FS_DEPTH);PG.voidp=prog(VS_VOID,FS_VOID);PG.water=prog(VS_WORLD,FS_WATER);
   PG.spr=prog(VS_SPR,FS_SPR);PG.rain=prog(VS_RAIN,FS_RAIN);PG.fog=prog(VS_FS,FS_FOG);PG.bright=prog(VS_FS,FS_BRIGHT);PG.down=prog(VS_FS,FS_DOWN);PG.up=prog(VS_FS,FS_UP);
   PG.comp=prog(VS_FS,FS_COMP);PG.sky=prog(VS_FS,FS_SKY);PG.dots=prog(VS_FS,FS_DOTS);
+  /* STUDIO: its own town, darkness, sky and finish; Classic's programs above are left exactly as they were */
+  PG.worldS=prog(VS_WORLD,FS_WORLDS);PG.voidS=prog(VS_VOID,FS_VOIDS);PG.skyS=prog(VS_FS,FS_SKY,'#define STUDIO\n');PG.compS=prog(VS_FS,FS_COMP,'#define STUDIO\n');
+  gl.useProgram(PG.worldS.p);gl.uniform1i(PG.worldS.u.uTA,8);gl.uniform1i(PG.worldS.u.uTN,9);
   VAO0=gl.createVertexArray();
   SPRVAO=gl.createVertexArray();gl.bindVertexArray(SPRVAO);SPRBUF=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,SPRBUF);gl.bufferData(gl.ARRAY_BUFFER,SPR.cap*48,gl.DYNAMIC_DRAW);
   for(let k=0;k<3;k++){gl.enableVertexAttribArray(4+k);gl.vertexAttribPointer(4+k,4,gl.FLOAT,false,48,k*16);gl.vertexAttribDivisor(4+k,1);}gl.bindVertexArray(null);
   const fn=new Uint8Array(FOGS*FOGS);for(let i=0;i<fn.length;i++)fn[i]=Math.round(FOGT[i]*255);FOGNT=mkTex(FOGS,FOGS,gl.R8,gl.RED,gl.UNSIGNED_BYTE,fn,gl.LINEAR,gl.REPEAT);
-  hzInit();actorMeshes();
+  hzInit();actorMeshes();actorMeshes2();
   /* the noise tile every shader reads (unit 7, bound once for good) */
   const nt=new Uint8Array(256*256);for(let y=0;y<256;y++)for(let x=0;x<256;x++){let q=[(x*.1031)%1,(y*.1031)%1,(x*.1031)%1];const dd=q[0]*(q[1]+33.33)+q[1]*(q[2]+33.33)+q[2]*(q[0]+33.33);q=q.map(v=>v+dd);nt[y*256+x]=Math.floor((((q[0]+q[1])*q[2])%1+1)%1*255.99);}
   gl.activeTexture(gl.TEXTURE7);const NTX=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,NTX);gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);gl.texImage2D(gl.TEXTURE_2D,0,gl.R8,256,256,0,gl.RED,gl.UNSIGNED_BYTE,nt);
   gl.generateMipmap(gl.TEXTURE_2D);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.REPEAT);
   for(const k in PG){const p=PG[k];if(p.u.uNT){gl.useProgram(p.p);gl.uniform1i(p.u.uNT,7);}}gl.activeTexture(gl.TEXTURE0);
+  if(R3.look==='studio')texGen();skyImages();
 }
+/* STUDIO: the look in use, and the switch between the two */
+const studio=()=>R3.look==='studio'&&TX.ready;
+function setLook(k){R3.look=k==='classic'?'classic':'studio';store.set('hd-lanternr-look',R3.look);if(R3.look==='studio'&&gl&&!GLERR)texGen();lookLabel();}
+/* the sky's pictures, when the image list's 5.1 to 5.4 have been added */
+const SKYI={};function skyImages(){for(const [k,key] of [['sky','5.1'],['moon','5.2'],['dawn','5.3'],['skyl','5.4']])if(IMGS[key]){const im=new Image();im.onload=()=>{const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,gl.RGBA,gl.UNSIGNED_BYTE,im);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);gl.generateMipmap(gl.TEXTURE_2D);
+  texParams(gl.LINEAR_MIPMAP_LINEAR,k==='moon'?gl.CLAMP_TO_EDGE:gl.REPEAT);SKYI[k]=t;};im.src=IMGS[key];}}
+/* STUDIO: a grade for each night (shadow tint, saturation; highlight tint, contrast) */
+const GRADE=[[[.95,1,1.08,1],[1.04,1,.94,.15]],[[.9,1.02,1.07,.92],[1.02,1,.95,.12]],[[.92,1.04,1,.85],[1,1.02,.95,.18]],[[1.02,1,.96,.88],[1.05,1,.9,.1]],[[.9,.98,1.12,1],[1.05,.99,.92,.2]]];
 function r3Resize(){
   const dpr=Math.min(window.devicePixelRatio||1,2),cw=Math.max(2,innerWidth),ch=Math.max(2,innerHeight);R3.cssW=cw;R3.cssH=ch;R3.dpr=dpr;
   cv.width=Math.round(cw*dpr);cv.height=Math.round(ch*dpr);r3Targets();layoutHud();
@@ -196,7 +209,8 @@ function render3D(dt){
   const dawn=R3.dawn||0;gl.clearColor(lerp(.004,.12,dawn),lerp(.005,.1,dawn),lerp(.01,.12,dawn),1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   gl.disable(gl.BLEND);gl.disable(gl.CULL_FACE);
   PM('pre');
-  const SK=R3.skip||{};if(!SK.sky){const p=PG.sky,u=p.u;gl.useProgram(p.p);gl.disable(gl.DEPTH_TEST);gl.depthMask(false);gl.uniformMatrix4fv(u.uInvVP,false,R3.IVP);gl.uniform3fv(u.uCamP,R3.cam);
+  const SK=R3.skip||{},SL=studio();if(!SK.sky){const p=SL?PG.skyS:PG.sky,u=p.u;gl.useProgram(p.p);
+    if(SL){gl.uniform4f(u.uSkF,SKYI.sky?1:0,SKYI.moon?1:0,SKYI.skyl?1:0,SKYI.dawn?1:0);bindT(2,SKYI.sky||null,u.uSkyI);bindT(3,SKYI.moon||null,u.uMoonI);bindT(4,SKYI.skyl||null,u.uSkylI);bindT(5,SKYI.dawn||null,u.uDawnI);}gl.disable(gl.DEPTH_TEST);gl.depthMask(false);gl.uniformMatrix4fv(u.uInvVP,false,R3.IVP);gl.uniform3fv(u.uCamP,R3.cam);
     gl.uniform3fv(u.uMoonD,moonSky());gl.uniform3fv(u.uSunD,SUN);gl.uniform4f(u.uSk,R3.t,dawn,(TOWN.kind==='title'?1:ST.moon)*(1-dawn*.5),TOWN.sea?1:0);gl.bindVertexArray(VAO0);gl.drawArrays(gl.TRIANGLES,0,3);}
   gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.depthMask(true);
   /* the cutaway circle round the lamplighter: houses between him and the camera open up */
@@ -205,9 +219,10 @@ function render3D(dt){
   PM('sky');
   if(!SK.town){const pp=PG.pre;gl.useProgram(pp.p);gl.uniformMatrix4fv(pp.u.uVP,false,R3.VP);gl.uniformMatrix4fv(pp.u.uM,false,IDM);gl.colorMask(false,false,false,false);
   if(!SK.pre){drawMesh(TOWN.mesh);drawMesh(TOWN.glass);}gl.colorMask(true,true,true,true);PM('prepass');
-  {const pw=PG.world;gl.useProgram(pw.p);worldU(pw);setLightU(pw);bindT(2,TOWN.gtex,pw.u.uGround);bindT(3,TOWN.aotex,pw.u.uAO);
+  {const pw=SL?PG.worldS:PG.world;gl.useProgram(pw.p);worldU(pw);setLightU(pw);bindT(2,TOWN.gtex,pw.u.uGround);bindT(3,TOWN.aotex,pw.u.uAO);
+  if(SL){gl.uniform4fv(pw.u.uLM,TX.LM);gl.uniform4f(pw.u.uSQ,QS[R3.q].refl,1,0,0);gl.uniform4f(pw.u.uOrg,0,0,0,0);}
   gl.uniformMatrix4fv(pw.u.uM,false,IDM);gl.uniform3f(pw.u.uTint,1,1,1);gl.uniform3f(pw.u.uEmis,0,0,0);gl.uniform4fv(pw.u.uLampG,LU.lampG);
-  gl.depthMask(!!SK.pre);if(!SK.world){drawMesh(TOWN.mesh);drawMesh(TOWN.glass);}gl.depthMask(true);}}const pw=PG.world;
+  gl.depthMask(!!SK.pre);if(!SK.world){drawMesh(TOWN.mesh);drawMesh(TOWN.glass);}gl.depthMask(true);}}const pw=SL?PG.worldS:PG.world;
   PM('town');
   if(!SK.solids){gl.useProgram(pw.p);drawSolids(pw);}
   PM('solids');
@@ -239,7 +254,8 @@ function render3D(dt){
   /* the finish, then the dots */
   const toLdr=R3.dots;const dest=toLdr?TG.ldr:null;
   const flash=S.flash>0&&!reduce?S.flash*.35:0,dark=S.mode==='dying'?clamp((S.t-.4)/2.2,0,1)*.88:S.mode==='over'?.5:0,hurt=P.hurt>0?P.hurt*1.6:0,gutter=TOWN.kind==='night'&&!P.dead&&P.oil<22&&S.mode==='play'?(1-P.oil/22)*.5:0;
-  fsPass(PG.comp,dest,u=>{bindT(0,sc.t,u.uScene);bindT(1,fg.t,u.uFogT);bindT(2,TG.u0.t,u.uBloom);gl.uniform4f(u.uC1,2.15*(1+dawn*.2),HDR?.55:.4,flash,dark);gl.uniform4f(u.uC2,hurt,gutter,S.paused?.6:0,R3.t);gl.uniform2f(u.uRes,cv.width,cv.height);});
+  const gr=GRADE[S.night]||GRADE[0],gk=TOWN.kind==='night'?1-dawn*.7:.4;
+  fsPass(SL?PG.compS:PG.comp,dest,u=>{if(SL){gl.uniform4f(u.uGa,lerp(1,gr[0][0],gk),lerp(1,gr[0][1],gk),lerp(1,gr[0][2],gk),lerp(1,gr[0][3],gk));gl.uniform4f(u.uGb,lerp(1,gr[1][0],gk),lerp(1,gr[1][1],gk),lerp(1,gr[1][2],gk),gr[1][3]*gk);gl.uniform1f(u.uCA,R3.q==='high'?.014:0);}bindT(0,sc.t,u.uScene);bindT(1,fg.t,u.uFogT);bindT(2,TG.u0.t,u.uBloom);gl.uniform4f(u.uC1,2.15*(1+dawn*.2),HDR?.55:.4,flash,dark);gl.uniform4f(u.uC2,hurt,gutter,S.paused?.6:0,R3.t);gl.uniform2f(u.uRes,cv.width,cv.height);});
   hudUpload();
   const pd=PG.dots,ud=pd.u,G=GLASS3[GI3];gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,cv.width,cv.height);gl.useProgram(pd.p);
   bindT(0,HUDT,ud.uHud);if(toLdr)bindT(1,TG.ldr.t,ud.uImg);gl.uniform4f(ud.uGrid,HUD.pitch*R3.dpr,HUD.pitch*R3.dpr,HUD.ox*R3.dpr,HUD.oy*R3.dpr);gl.uniform2f(ud.uRes,cv.width,cv.height);

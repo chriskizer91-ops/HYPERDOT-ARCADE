@@ -53,7 +53,7 @@ body.land #pad{opacity:.85}
 #err{position:fixed;inset:0;display:none;place-items:center;padding:24px;text-align:center;font:500 14px/1.6 var(--f);color:var(--ink-2)}
 /* the story cards and the title, set in type over the town */
 .story{position:fixed;inset:0;display:grid;place-items:center;pointer-events:none;opacity:0;transition:opacity .9s ease;
-  background:radial-gradient(ellipse at 50% 45%,rgba(5,3,2,.25),rgba(5,3,2,.72) 70%)}
+  background:radial-gradient(ellipse at 50% 45%,rgba(5,3,2,.25),rgba(5,3,2,.72) 70%);background-size:cover;background-position:center}
 .story.on,.logo.on{opacity:1}
 .sc{max-width:min(620px,86vw);text-align:center;transform:translateY(-4vh);padding:0 6vw}
 .ch{font:600 clamp(11px,1.6vw,14px)/1 var(--f);letter-spacing:.42em;text-transform:uppercase;color:var(--accent);text-shadow:0 0 14px rgba(255,138,42,.6);margin-bottom:14px}
@@ -73,13 +73,13 @@ body.embed .bar,body.embed .keys{display:none!important}
 <div id="logo" class="logo" hidden><div class="l1">LANTERN</div><div class="l2">THE LONG NIGHT</div></div>
 <div id="story" class="story" hidden><div class="sc"><div class="ch" id="stCh"></div><h1 id="stT"></h1><p id="stP"></p></div></div>
 <div class="bar">
-  <div class="opts"><button class="chip" id="res" type="button"><span class="lbl">Dots </span><span id="resv">OFF</span></button><button class="chip" id="snd" type="button">Sound on</button><button class="chip" id="pauseBtn" type="button">Pause</button></div>
+  <div class="opts"><button class="chip" id="look" type="button"><span class="lbl">Look </span><span id="lookv">STUDIO</span></button><button class="chip" id="res" type="button"><span class="lbl">Dots </span><span id="resv">OFF</span></button><button class="chip" id="snd" type="button">Sound on</button><button class="chip" id="pauseBtn" type="button">Pause</button></div>
 </div>
 <div id="pad" hidden>
   <div class="stk" id="stL" aria-label="Stick"><div class="kn" id="knL"></div></div>
   <div class="acts"><button class="ab" id="bB" type="button">FLARE</button><button class="ab" id="bA" type="button">BEAM</button></div>
 </div>
-<p class="keys" id="keys"><b>WASD</b> walk · <b>mouse</b> looks · hold <b>click</b> or <b>Space</b> for the beam · <b>right click</b> or <b>X</b> flare · <b>Q E</b> turn · <b>G</b> dots · <b>Esc</b> pause · <b>M</b> mute</p>
+<p class="keys" id="keys"><b>WASD</b> walk · <b>mouse</b> looks · hold <b>click</b> or <b>Space</b> for the beam · <b>right click</b> or <b>X</b> flare · <b>Q E</b> turn · <b>L</b> look · <b>G</b> dots · <b>Esc</b> pause · <b>M</b> mute</p>
 <div id="err">LANTERN: THE LONG NIGHT draws its town with WebGL2, which this browser has turned off.</div>
 <script>
 (()=>{
@@ -1812,21 +1812,45 @@ void main(){vec2 uv=gl_FragCoord.xy/uRes;float dz=texture(uDepth,uv).r;
 /* ---------- REMAKE: the night sky. Stars, the moon and its halo, slow clouds, the roofs and spires of the rest of
    the town on the horizon, and at dawn a sunrise in the east ---------- */
 const FS_SKY=GL_COMMON+`in vec2 vT;out vec4 o;uniform mat4 uInvVP;uniform vec3 uCamP;uniform vec3 uMoonD;uniform vec3 uSunD;uniform vec4 uSk;
+#ifdef STUDIO
+uniform vec4 uSkF;uniform sampler2D uSkyI;uniform sampler2D uMoonI;uniform sampler2D uSkylI;uniform sampler2D uDawnI;
+#endif
 void main(){vec4 a=uInvVP*vec4(vT*2.-1.,1.,1.);vec3 d=normalize(a.xyz/a.w-uCamP);float el=d.y,t=uSk.x,dawn=uSk.y,mk=uSk.z;
   vec3 c=mix(vec3(.016,.021,.036),vec3(.0022,.0035,.010),smoothstep(-.02,.6,el));
   c+=vec3(.045,.026,.013)*exp(-max(el,0.)*13.)*(1.-uSk.w*.7);
   if(el>0.){vec3 q=d*230.;vec3 ci=floor(q);float hs=fract(sin(dot(ci,vec3(12.9898,78.233,37.719)))*43758.5453);
-    if(hs>.9962){vec3 f=fract(q)-.5;float s=smoothstep(.24,0.,length(f))*(.55+.45*sin(t*2.3+hs*97.));c+=vec3(.82,.86,1.)*s*(hs-.9962)*240.*smoothstep(0.,.22,el)*(1.-dawn);}}
+    if(hs>.9962){vec3 f=fract(q)-.5;float s=smoothstep(.24,0.,length(f))*(.55+.45*sin(t*2.3+hs*97.));vec3 sc=vec3(.82,.86,1.);
+#ifdef STUDIO
+      sc=mix(vec3(1.,.8,.62),vec3(.7,.8,1.),fract(hs*731.));if(uSkF.x>.5)s=0.;
+#endif
+      c+=sc*s*(hs-.9962)*240.*smoothstep(0.,.22,el)*(1.-dawn);}}
+#ifdef STUDIO
+  /* the Milky Way: a faint river of light across the sky, or the night-sky picture */
+  if(uSkF.x>.5){vec3 im=texture(uSkyI,vec2(atan(d.z,d.x)*.15915+.5,asin(clamp(el,-1.,1.))*.3183+.5)).rgb;c+=im*im*.05*(1.-dawn)*smoothstep(-.05,.2,el);}
+  else if(el>0.){vec3 mw=normalize(vec3(.42,.5,.76));float dm=dot(d,mw),bd=exp(-dm*dm*16.),n=fbm(vec2(d.x*6.+d.z*3.1,d.y*6.-d.z*2.3)*1.7),k=fbm(vec2(d.x*14.-d.z*5.,d.y*14.+d.x*3.));
+    c+=vec3(.55,.6,.8)*bd*(.35+.9*n)*(1.-.7*smoothstep(.45,.75,k)*bd)*.011*(1.-dawn)*smoothstep(0.,.3,el);}
+#endif
   float md=dot(d,uMoonD),ang=acos(clamp(md,-1.,1.));
   vec3 mt=normalize(cross(uMoonD,vec3(0.,1.,0.))),mb=cross(mt,uMoonD);vec2 mp=vec2(dot(d,mt),dot(d,mb))/.032;
-  float disc=smoothstep(1.,.93,length(mp));c+=vec3(1.,.96,.88)*disc*(1.25-.45*fbm(mp*2.3+4.))*1.4*mk*(1.-dawn*.6)*(.75+.25*sqrt(max(0.,1.-dot(mp,mp))));
+  float disc=smoothstep(1.,.93,length(mp));vec3 mface=vec3(1.,.96,.88)*(1.25-.45*fbm(mp*2.3+4.));
+#ifdef STUDIO
+  if(uSkF.y>.5){vec3 mi=texture(uMoonI,mp*.4+.5).rgb;mface=mi*mi*1.6;}else{vec2 cq=mp*3.1;vec2 ci2=floor(cq);vec2 cf=fract(cq)-.5;float cr=length(cf-(vec2(h21(ci2),h21(ci2+5.))-.5)*.4);mface*=1.-.12*smoothstep(.18,.12,cr)*step(.4,h21(ci2+9.))+.06*smoothstep(.2,.17,cr)*smoothstep(.1,.15,cr);}
+#endif
+  c+=mface*disc*1.4*mk*(1.-dawn*.6)*(.75+.25*sqrt(max(0.,1.-dot(mp,mp))));
   c+=vec3(.22,.27,.42)*exp(-ang*7.)*.2*mk+vec3(.4,.45,.6)*exp(-ang*34.)*.3*mk;
   if(el>.005){vec2 p=d.xz/el*520.;float n=fbm(p*.0011+vec2(t*.0045,t*.002))*.7+fbm(p*.0031-vec2(t*.003,0.))*.3;float cl=smoothstep(.46,.8,n);
     vec3 cc=mix(vec3(.010,.012,.019),vec3(.07,.075,.095),exp(-ang*2.6)*mk)+vec3(.32,.15,.07)*dawn;c=mix(c,cc,cl*smoothstep(.005,.14,el)*.88);}
-  if(dawn>0.){float sd=dot(d,uSunD);vec3 dc=mix(vec3(.42,.2,.1),vec3(.12,.2,.38),smoothstep(-.05,.5,el));c=mix(c,dc*.75,dawn*.8);
+  if(dawn>0.){float sd=dot(d,uSunD);vec3 dc=mix(vec3(.42,.2,.1),vec3(.12,.2,.38),smoothstep(-.05,.5,el));
+#ifdef STUDIO
+    if(uSkF.w>.5){float az=atan(d.z,d.x)-atan(uSunD.z,uSunD.x);vec3 di=texture(uDawnI,vec2(fract(az*.15915+.5),asin(clamp(el,-1.,1.))*.3183+.5)).rgb;dc=di*di*1.3;}
+#endif
+    c=mix(c,dc*.75,dawn*.8);
     c+=vec3(1.,.5,.22)*exp(-max(1.-sd,0.)*16.)*dawn*.7;c+=vec3(1.,.8,.55)*smoothstep(.9986,.9993,sd)*dawn*5.;}
   if(uSk.w<.5){float az=atan(d.z,d.x),b=floor(az*44.),fb=fract(az*44.);float hh=.012+.03*fract(sin(b*91.7)*4373.1),spire=step(.92,fract(sin(b*13.3)*913.7));
     float hgt=hh+spire*.07*max(0.,1.-abs(fb-.5)*4.)+.004*step(.5,fract(sin(b*7.1)*43.7))*step(.3,abs(fb-.5));
+#ifdef STUDIO
+    if(uSkF.z>.5){float m=texture(uSkylI,vec2(fract(az*.4775),clamp(el/.12,0.,1.))).r;hgt=m<.5?1.:-1.;}
+#endif
     if(el<hgt){c=vec3(.0035,.0045,.008)+dawn*vec3(.05,.04,.05);float win=step(.975,h21(floor(vec2(az*1100.,el*1100.))))*step(.006,hgt-el);c+=vec3(1.,.58,.24)*win*.22*(1.-dawn);}}
   o=vec4(c,1.);}`;
 /* ---------- the glow: a bright pass, then a ladder of blurs down and back up ---------- */
@@ -1841,12 +1865,24 @@ void main(){vec3 c=texture(uTex,vT+uPx*vec2(-2,0)).rgb+texture(uTex,vT+uPx*vec2(
   +(texture(uTex,vT+uPx*vec2(-1,-1)).rgb+texture(uTex,vT+uPx*vec2(1,-1)).rgb+texture(uTex,vT+uPx*vec2(-1,1)).rgb+texture(uTex,vT+uPx*vec2(1,1)).rgb)*2.;o=vec4(c/12.,1.);}`;
 /* ---------- the finish: exposure, filmic curve, a cold-warm grade, vignette, grain ---------- */
 const FS_COMP=GL_COMMON+`in vec2 vT;out vec4 o;uniform sampler2D uScene;uniform sampler2D uFogT;uniform sampler2D uBloom;uniform vec4 uC1;uniform vec4 uC2;uniform vec2 uRes;
+#ifdef STUDIO
+uniform vec4 uGa;uniform vec4 uGb;uniform float uCA;
+#endif
 vec3 aces(vec3 x){return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.);}
-void main(){vec4 f=texture(uFogT,vT),sc=texture(uScene,vT);vec3 c=sc.rgb*f.a+f.rgb;c+=texture(uBloom,vT).rgb*uC1.y;c*=mix(1.,clamp(sc.a,0.,1.),.94);
+vec3 pic(vec2 t){vec4 f=texture(uFogT,t),sc=texture(uScene,t);vec3 c=sc.rgb*f.a+f.rgb;c+=texture(uBloom,t).rgb*uC1.y;return c*mix(1.,clamp(sc.a,0.,1.),.94);}
+void main(){vec2 q=vT-.5;
+#ifdef STUDIO
+  vec3 c;if(uCA>0.){vec2 ca=q*dot(q,q)*uCA;c=vec3(pic(vT+ca).r,pic(vT).g,pic(vT-ca).b);}else c=pic(vT);
+#else
+  vec3 c=pic(vT);
+#endif
   c*=uC1.x;c=max(c,vec3(0.));
-  vec2 q=vT-.5;float vg=1.-dot(q*vec2(1.,.8),q*vec2(1.,.8))*(1.15+uC2.y*2.);c*=max(vg,0.);
+float vg=1.-dot(q*vec2(1.,.8),q*vec2(1.,.8))*(1.15+uC2.y*2.);c*=max(vg,0.);
   c+=vec3(.9,.12,.05)*uC2.x*smoothstep(.12,.5,length(q))*.5;
   c=aces(c);c=pow(c,vec3(1./2.2));
+#ifdef STUDIO
+  {float l2=dot(c,vec3(.299,.587,.114));c=mix(vec3(l2),c,uGa.w);c*=mix(uGa.rgb,uGb.rgb,smoothstep(.04,.55,l2));c=mix(c,c*c*(3.-2.*c),uGb.w);}
+#endif
   float lu=dot(c,vec3(.299,.587,.114));c=mix(c,vec3(lu),uC2.z*.7);
   c=mix(c,c*vec3(.92,.97,1.08)+vec3(.0,.004,.012),1.-smoothstep(.0,.4,lu));
   c=mix(c,vec3(1.,.9,.75),uC1.z);c*=1.-uC1.w;
@@ -1868,36 +1904,303 @@ void main(){vec2 px=vec2(gl_FragCoord.x,uRes.y-gl_FragCoord.y);vec2 cell=(px-uGr
     float L=pow(v,2.1);vec3 c=(uTint*L+uHot*smoothstep(.62,1.,v)*L)*dm*(.62+.6*core)*1.6+vec3(.04,.016,.006)*dm;o=vec4(c,1.);}}`;
 
 /* =====================================================================================
+   21b. 3D — THE STUDIO LOOK. A second way of painting the same town, switched with the Look
+        button (Classic is the look the remake shipped with, untouched). Studio paints every
+        surface from a pack of textures: twenty layers of albedo and bumps, made on the GPU by
+        code when the game starts. A picture in IMGS (the image list's numbers, e.g. '1.1')
+        replaces its layer: it is scaled to the same brightness and given bumps from its shading.
+   ===================================================================================== */
+/* the layers, in order: name, the image list's number, tile size in dots, bump strength */
+const TXL=[['cobble','1.1',24,4],['grass','1.2',32,1.3],['dirt','1.3',32,1.6],['sand','1.4',32,.9],['plaster','2.1',24,1.3],['brick','2.2',16,2.6],
+  ['oak','2.3',8,1.6],['planks','4.1',12,2.2],['clay','3.1',16,3],['slate','3.2',16,2.6],['stone','2.4',16,2.6],['paint','2.5',24,1.6],['iron','4.2',8,1.1],
+  ['canvas','4.3',12,.9],['bark','4.4',12,3],['leaves','4.5',16,2.2],['rock','4.6',32,3],['wool','4.7',4,.7],['leather','4.8',4,1.1],['brass','',4,.4]];
+const IMGS={};
+const TXN=TXL.length,TXI={};TXL.forEach((l,i)=>TXI[l[0]]=i);
+const TXS=+((/[?&]tex=(\d+)/.exec(location.search)||[])[1])||512;
+const TX={ready:false,A:null,N:null,LM:new Float32Array(TXN*4),from:{}};
+/* ---------- the code-painted surfaces. Every pattern repeats exactly over the tile, so nothing shows a seam ---------- */
+const FS_GEN=GL_COMMON+`layout(location=0) out vec4 oA;layout(location=1) out vec4 oH;uniform int uL;uniform float uS;
+float hp(vec2 q,int s){return ihf(int(q.x),int(q.y),s);}
+float pv(vec2 p,vec2 F,int s){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);vec2 j=mod(i+1.,F);i=mod(i,F);
+  return mix(mix(hp(i,s),hp(vec2(j.x,i.y),s),f.x),mix(hp(vec2(i.x,j.y),s),hp(j,s),f.x),f.y);}
+float pf(vec2 u,vec2 F,int s){float a=.5,t=0.,n=0.;for(int i=0;i<5;i++){t+=a*pv(u*F,F,s+i*31);n+=a;a*=.5;F*=2.;}return t/n;}
+float pn(vec2 u,float F,int s){return pf(u,vec2(F),s);}
+/* cells: nearest and second distance, two hashes of the nearest cell */
+vec4 vor(vec2 u,vec2 N,int s,float jt){vec2 p=u*N,i=floor(p),f=fract(p);float d1=9.,d2=9.;vec2 id=vec2(0.);
+  for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){vec2 g=vec2(x,y),c=mod(i+g,N);vec2 o=.5+(vec2(hp(c,s),hp(c,s+7))-.5)*jt;vec2 r=g+o-f;float d=dot(r,r);
+    if(d<d1){d2=d1;d1=d;id=c;}else if(d<d2)d2=d;}
+  return vec4(sqrt(d1),sqrt(d2),hp(id,s+13),hp(id,s+29));}
+/* leaves: an ellipse in each cell at its own angle; the highest one wins */
+float leafs(vec2 u,float N,int s,out float id,out float vein){vec2 p=u*N,i=floor(p),f=fract(p);float best=-1.;id=0.;vein=0.;
+  for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){vec2 g=vec2(x,y),c=mod(i+g,N);vec2 o=.5+(vec2(hp(c,s),hp(c,s+7))-.5)*.8,r=f-(g+o);float an=hp(c,s+3)*6.2832,ca=cos(an),sa=sin(an);
+    vec2 q=vec2(ca*r.x+sa*r.y,-sa*r.x+ca*r.y);float sz=.62+.4*hp(c,s+5),d=length(q/vec2(sz,sz*.48));
+    if(d<1.){float hh=(1.-d*d)*.5+hp(c,s+11);if(hh>best){best=hh;id=hp(c,s+13);vein=1.-smoothstep(0.,.035,abs(q.y));}}}
+  return best;}
+void main(){vec2 u=gl_FragCoord.xy/uS;vec3 a=vec3(.5);float g=.1,h=.5,c=1.;
+  if(uL==0){/* cobbles: small rounded stones, each a little domed, set in dark grit */vec4 v=vor(u,vec2(21.,19.),11,.85);float sh=pn(u,48.,3),e=min(v.y-v.x,(.66-v.x)*1.15)+(sh-.5)*.06,dome=smoothstep(.0,.42,e);
+    float gap=1.-smoothstep(.06,.16,e);h=pow(dome,.8)*(.62+.38*v.z)+sh*.1*dome;
+    vec3 st=mix(vec3(.4,.39,.38),vec3(.46,.41,.35),v.w)*(.76+.32*v.z)*(.86+.22*pn(u,24.,5));st*=.86+.2*smoothstep(.5,.95,dome);
+    a=mix(st,vec3(.19,.17,.14)*(.8+.4*pn(u,64.,9)),gap);g=mix(.22,.04,gap)*(.7+.6*smoothstep(.6,1.,dome));c=1.-gap*.9;}
+  else if(uL==1){/* grass */float n1=pn(u,4.,21),n2=pn(u,16.,23),bl=pf(u,vec2(160.,40.),25)*.5+pf(u,vec2(40.,160.),27)*.5;
+    float yel=smoothstep(.55,.75,n1),bare=smoothstep(.72,.8,pn(u,6.,29));vec3 gr=mix(vec3(.24,.33,.17),vec3(.38,.37,.2),yel)*(.66+.56*bl)*(.85+.25*n2);
+    vec4 cl=vor(u,vec2(48.),31,.9);gr=mix(gr,vec3(.22,.38,.18),step(cl.x,.2)*step(.8,cl.z)*.8);
+    a=mix(gr,vec3(.34,.28,.21)*(.8+.3*n2),bare*(1.-bl*.5));h=bl*.7+n2*.3-bare*.3;g=.06;c=.55+.45*bl;}
+  else if(uL==2){/* dirt */float n=pn(u,8.,41),f=pn(u,64.,43);vec4 pb=vor(u,vec2(28.),45,.9);float peb=(1.-smoothstep(.06+.1*pb.w,.12+.1*pb.w,pb.x))*step(.72,pb.z);
+    float rut=(1.-smoothstep(0.,.07,abs(fract(u.x*2.+.12*pv(u*vec2(2.,4.),vec2(2.,4.),48))-.5)))*.35;
+    a=mix(vec3(.4,.33,.26)*(.72+.45*n)*(.9+.2*f)*(1.-rut*.4),vec3(.36,.33,.29)*(.75+.4*pb.w),peb*.85);h=n*.4+f*.25+peb*.4-rut;g=.07+peb*.1;c=.6+.4*clamp(h,0.,1.);}
+  else if(uL==3){/* sand */float rp=sin((u.y*7.+pn(u,3.,51)*.6)*6.2832),gn=pn(u,96.,53);vec4 sh=vor(u,vec2(20.),55,.9);float shell=(1.-smoothstep(.05,.1,sh.x))*step(.85,sh.z);
+    a=mix(vec3(.47,.43,.36)*(.9+.12*rp)*(.85+.25*gn),vec3(.63,.6,.55),shell);h=.5+rp*.25+gn*.25+shell*.3;g=.1;c=.8+.2*rp;}
+  else if(uL==4){/* plaster */float lump=pn(u,6.,61)*.6+pn(u,24.,63)*.4,fine=pn(u,96.,65),stain=smoothstep(.55,.8,pf(u,vec2(10.,2.),67))*.28;
+    vec3 p=vec3(.68,.65,.6)*(.92+.12*pn(u,3.,69))*(1.-stain)*(.94+.08*fine);float fp=pn(u,6.,71)*.7+pn(u,24.,72)*.3,fall=smoothstep(.75,.77,fp),rim=smoothstep(.72,.75,fp)*(1.-fall);
+    vec4 sv=vor(u,vec2(10.,8.),73,.8);vec3 stn=vec3(.5,.46,.41)*(.8+.3*sv.z)*(1.-.6*(1.-smoothstep(.02,.07,sv.y-sv.x)));
+    vec4 cr=vor(u,vec2(5.),75,1.);float crack=(1.-smoothstep(0.,.014,cr.y-cr.x))*smoothstep(.55,.7,pn(u,8.,77));
+    a=mix(p,stn,fall)*(1.-crack*.5);h=mix(.55+lump*.35+rim*.1,.18+.15*sv.z,fall)-crack*.3;g=.05;c=1.-crack*.7-fall*.35;}
+  else if(uL==5){/* brick */vec2 b=u*vec2(8.,24.);float r=floor(b.y);b.x+=mod(r,2.)*.5;vec2 id=vec2(mod(floor(b.x),8.),r),f=fract(b);
+    float e=min(min(f.x,1.-f.x)*2.,min(f.y,1.-f.y)*.667)+(pn(u,64.,81)-.5)*.03,mort=1.-smoothstep(.04,.075,e),hs=hp(id,83),hs2=hp(id,85);
+    vec3 bc=mix(vec3(.47,.25,.18),vec3(.38,.22,.17),hs)*(.8+.3*hs2)*(.88+.24*pn(u,48.,87));if(hs2>.9)bc*=.6;bc*=1.-smoothstep(.5,.85,pf(u,vec2(4.,8.),89))*.35;
+    a=mix(bc,vec3(.5,.47,.42)*(.8+.3*pn(u,96.,91)),mort);h=mix(.75+.2*smoothstep(0.,.15,e)+.05*pn(u,64.,93),.22,mort);g=mix(.09,.04,mort);c=1.-mort*.6;}
+  else if(uL==6){/* dark oak, the grain running up the beam */float gr=pf(u,vec2(24.,1.),101)*.6+pf(u,vec2(96.,2.),103)*.4,ring=sin((u.x*12.+gr*3.)*6.2832)*.5+.5;
+    float crack=smoothstep(.82,.9,pf(u,vec2(48.,3.),105));a=vec3(.26,.2,.15)*(.65+.45*gr)*(.9+.15*ring)*(1.-crack*.7);h=.5+gr*.3+ring*.1-crack*.4;g=.1;c=1.-crack*.8;}
+  else if(uL==7){/* planks: eight boards up the tile */float pk=floor(u.x*8.),fx=fract(u.x*8.),hs=hp(vec2(pk,0.),111),off=hp(vec2(pk,1.),113);vec2 w=vec2(u.x,u.y+off);
+    float gr=pf(w,vec2(64.,2.),115)*.6+pf(w,vec2(16.,1.),117)*.4,edge=min(fx,1.-fx)*1.5,gap=1.-smoothstep(.03,.08,edge);
+    vec4 kn=vor(u,vec2(8.,3.),119,.6);float knot=(1.-smoothstep(.05,.14,kn.x))*step(.7,kn.z);
+    vec3 c3=mix(vec3(.42,.37,.31),vec3(.36,.31,.25),hs)*(.7+.45*gr);c3=mix(c3,vec3(.2,.15,.11),knot*.8);
+    a=mix(c3,vec3(.06,.05,.04),gap);h=mix(.7+.2*smoothstep(0.,.2,edge)+.1*gr,.1,gap)-knot*.1;g=mix(.1,.02,gap);c=1.-gap;}
+  else if(uL==8||uL==9){/* roof tiles, clay or slate: the lower edge of each row lies over the row below */bool cl=uL==8;vec2 b=u*vec2(cl?8.:6.,12.);float r=floor(b.y);b.x+=mod(r,2.)*.5;
+    vec2 id=vec2(mod(floor(b.x),cl?8.:6.),r),f=fract(b);float barrel=cl?sin(f.x*3.1416):.8,edge=smoothstep(0.,cl?.06:.035,f.x)*smoothstep(1.,cl?.94:.965,f.x),lap=1.-f.y;
+    h=(.35+.45*barrel*edge)*(.5+.5*lap)+.08*pn(u,64.,121);float hs=hp(id,123),moss=smoothstep(.58,.8,pn(u,4.,cl?129:153)+(1.-barrel)*.12);
+    vec3 tc=cl?mix(vec3(.56,.3,.2),vec3(.47,.28,.21),hs):vec3(.27,.29,.32)*(.75+.3*hs);tc*=(.8+.35*hp(id,125))*(.85+.2*pn(u,32.,127));
+    a=mix(tc,vec3(.21,.26,.15)*(.7+.4*pn(u,48.,131)),moss*.85)*(.58+.42*smoothstep(1.,.8,f.y))*(.65+.35*edge);g=mix(cl?.13:.22,.04,moss);c=edge*(.45+.55*smoothstep(1.,.82,f.y));}
+  else if(uL==10){/* dressed stone: five courses, three blocks each, the joints set off course by course */float r=floor(u.y*5.),fy=fract(u.y*5.),bx=u.x*3.+hp(vec2(r,0.),161),fx=fract(bx);
+    float e=min(min(fx,1.-fx)*5.33,min(fy,1.-fy)*3.2)+(pn(u,32.,163)-.5)*.12,j=1.-smoothstep(.06,.14,e),hs=hp(vec2(mod(floor(bx),3.),r),165);
+    vec3 sc=mix(vec3(.46,.44,.4),vec3(.42,.39,.34),hs)*(.85+.25*pn(u,16.,167))*(.9+.15*pn(u,64.,169));sc=mix(sc,vec3(.3,.34,.2),smoothstep(.6,.8,pn(u,8.,171))*(1.-smoothstep(.1,.6,e))*.7);
+    a=mix(sc,vec3(.25,.23,.2),j);h=mix(.6+.25*smoothstep(0.,.4,e)+.12*pn(u,48.,173),.15,j);g=mix(.1,.04,j);c=1.-j*.8;}
+  else if(uL==11){/* old paint over stone */float fl=pn(u,6.,181)*.7+pn(u,24.,183)*.3,peel=smoothstep(.66,.69,fl),rim=smoothstep(.62,.66,fl)*(1.-peel),rust=smoothstep(.6,.9,pf(u,vec2(12.,1.),185))*.5;
+    vec3 pc=mix(vec3(.8,.79,.75)*(.93+.08*pn(u,48.,187)),vec3(.55,.4,.3),rust*(1.-peel)*.6);a=mix(pc,vec3(.42,.41,.39)*(.8+.3*pn(u,32.,189)),peel);
+    h=mix(.7+.05*pn(u,64.,191),.35,peel)+rim*.15;g=mix(.25,.08,peel);c=1.-peel*.4;}
+  else if(uL==12){/* wrought iron */vec4 hm=vor(u,vec2(14.),201,.9);float rust=smoothstep(.62,.8,pn(u,4.,203)+pn(u,32.,205)*.2),chip=step(.86,pn(u,48.,207));
+    a=mix(vec3(.16,.16,.17)*(.85+.25*pn(u,24.,209)),vec3(.34,.19,.11)*(.7+.5*pn(u,64.,211)),rust);a=mix(a,vec3(.28,.28,.29),chip*(1.-rust));
+    h=.5+smoothstep(0.,.5,hm.x)*.25-rust*.15+.1*pn(u,64.,213);g=mix(.5,.12,rust);c=1.-rust*.3;}
+  else if(uL==13){/* canvas */vec2 w=u*192.;float wv=sin(w.x*6.2832)*sin(w.y*6.2832),th=pn(u,96.,221),st=smoothstep(.6,.85,pn(u,4.,223))*.2;
+    a=vec3(.66,.62,.53)*(.9+.1*wv)*(1.-st)*(.92+.12*th);h=.5+wv*.3+th*.2;g=.03;c=.85+.15*wv;}
+  else if(uL==14){/* bark: ridges up the trunk */float rd=pf(u,vec2(10.,1.),231)*.65+pf(u,vec2(30.,3.),233)*.35,ridge=smoothstep(.35,.65,rd);vec4 pl=vor(u,vec2(8.,3.),235,.8);
+    float plate=smoothstep(0.,.15,pl.y-pl.x),moss=smoothstep(.6,.8,pn(u,4.,237));a=mix(vec3(.3,.27,.24)*(.6+.5*ridge)*(.85+.2*pl.z),vec3(.24,.3,.16),moss*.8*ridge);
+    h=ridge*.7*plate+.15+.1*pn(u,64.,239);g=.05;c=.35+.65*ridge;}
+  else if(uL==15){/* leaves */float i1,v1,i2,v2,l1=leafs(u,10.,241,i1,v1),l2=leafs(u+.31,17.,251,i2,v2)-.25;bool sec=l2>l1;float L=max(l1,l2),id=sec?i2:i1,vn_=sec?v2:v1;
+    vec3 lc=mix(vec3(.18,.27,.12),vec3(.24,.33,.15),id)*(.8+.3*pn(u,32.,259));if(id>.93)lc=vec3(.42,.38,.16);lc*=1.-vn_*.25;
+    a=L<0.?vec3(.05,.08,.04):lc*(sec?.85:1.);h=L<0.?0.:clamp(L,0.,1.)*.8-vn_*.08;g=L<0.?.02:.16;c=L<0.?.2:1.;}
+  else if(uL==16){/* coastal rock */float st=pf(u,vec2(2.,8.),261)*.6+pn(u,16.,263)*.4,lay=sin((u.y*6.+st*1.5)*6.2832)*.5+.5;vec4 cr=vor(u,vec2(6.),265,1.);
+    float crack=1.-smoothstep(0.,.05,cr.y-cr.x),lich=smoothstep(.65,.8,pn(u,8.,267));vec3 r=mix(vec3(.38,.38,.37)*(.75+.35*st)*(.9+.15*lay),vec3(.5,.46,.25),lich*.7);
+    a=r*(1.-crack*.6);h=st*.6+lay*.2+smoothstep(0.,.3,cr.y-cr.x)*.2-crack*.3;g=.12;c=1.-crack*.8;}
+  else if(uL==17){/* wool twill */float tw=sin((u.x+u.y)*6.2832*48.)*.5+.5,fz=pn(u,64.,271),pill=pn(u,8.,273);
+    a=vec3(.62,.62,.62)*(.85+.15*tw)*(.85+.25*fz)*(.9+.1*pill);h=.5+tw*.3+fz*.2;g=.03;c=.8+.2*tw;}
+  else if(uL==18){/* worn leather */vec4 cr=vor(u,vec2(9.),281,1.);float crease=1.-smoothstep(0.,.08,cr.y-cr.x),n=pn(u,16.,283),scuff=smoothstep(.6,.85,pn(u,4.,285));
+    a=mix(vec3(.3,.2,.14)*(.8+.3*n)*(1.-crease*.35),vec3(.42,.32,.24),scuff*.6);h=.6-crease*.4+n*.15;g=mix(.35,.15,scuff);c=1.-crease*.5;}
+  else{/* brass, brushed and tarnished */float sc=pf(u,vec2(128.,4.),291),tar=smoothstep(.55,.8,pn(u,4.,293));a=mix(vec3(.72,.56,.3)*(.85+.2*sc),vec3(.3,.25,.15),tar*.7);h=.5+sc*.1;g=mix(.7,.25,tar);c=1.;}
+  oA=vec4(clamp(a,0.,1.),g);oH=vec4(clamp(h,0.,1.),clamp(c,0.,1.),0.,1.);}`;
+/* a picture becomes a layer: its colour brought to the code layer's brightness, bumps from its fine shading */
+const FS_GENIMG=`layout(location=0) out vec4 oA;layout(location=1) out vec4 oH;uniform sampler2D uImg;uniform float uS;uniform vec4 uTgt;
+void main(){vec2 u=gl_FragCoord.xy/uS;vec3 c=texture(uImg,u).rgb,m=textureLod(uImg,vec2(.5),20.).rgb;float lm=dot(m,vec3(.3,.59,.11)),lc=dot(c,vec3(.3,.59,.11)),lb=dot(textureLod(uImg,u,3.5).rgb,vec3(.3,.59,.11));
+  oA=vec4(clamp(c*(uTgt.x/max(lm,.02)),0.,1.),clamp(uTgt.y*(.75+.5*clamp(lc/max(lm,.02),0.,2.)*.5),0.,1.));float h=clamp(.5+(lc-lb)/max(lm,.05)*.9,0.,1.);oH=vec4(h,smoothstep(.2,.55,h),0.,1.);}`;
+/* the bumps: the slope of the height, wrapped round the tile's edges */
+const FS_GENN=`out vec4 o;uniform sampler2D uH;uniform float uK;
+void main(){ivec2 p=ivec2(gl_FragCoord.xy);int S=textureSize(uH,0).x;
+  #define HT(dx,dy) texelFetch(uH,ivec2((p.x+dx+S)%S,(p.y+dy+S)%S),0).r
+  float gx=(HT(-1,-1)+2.*HT(-1,0)+HT(-1,1))-(HT(1,-1)+2.*HT(1,0)+HT(1,1)),gy=(HT(-1,-1)+2.*HT(0,-1)+HT(1,-1))-(HT(-1,1)+2.*HT(0,1)+HT(1,1));
+  vec4 c=texelFetch(uH,p,0);o=vec4(clamp(vec2(gx,gy)*.25*uK*float(S)/256.,-1.,1.)*.5+.5,c.r,c.g);}`;
+function texGen(){
+  if(TX.ready)return;const t0=performance.now(),S=TXS,lv=Math.log2(S)+1|0;
+  const mkA=()=>{const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D_ARRAY,t);gl.texStorage3D(gl.TEXTURE_2D_ARRAY,lv,gl.RGBA8,S,S,TXN);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_WRAP_S,gl.REPEAT);gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_WRAP_T,gl.REPEAT);
+    const af=gl.getExtension('EXT_texture_filter_anisotropic');if(af)gl.texParameterf(gl.TEXTURE_2D_ARRAY,af.TEXTURE_MAX_ANISOTROPY_EXT,Math.min(8,gl.getParameter(af.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));return t;};
+  TX.A=mkA();TX.N=mkA();
+  const pg=prog(VS_FS,FS_GEN),pi=prog(VS_FS,FS_GENIMG),pn=prog(VS_FS,FS_GENN);for(const p of [pg]){gl.useProgram(p.p);if(p.u.uNT)gl.uniform1i(p.u.uNT,7);}
+  const tmp=mkTex(S,S,gl.RGBA8,gl.RGBA,gl.UNSIGNED_BYTE,null,gl.NEAREST,gl.REPEAT),f1=gl.createFramebuffer(),f2=gl.createFramebuffer();
+  gl.disable(gl.BLEND);gl.disable(gl.DEPTH_TEST);gl.viewport(0,0,S,S);gl.bindVertexArray(VAO0);
+  const imgs=[];
+  for(let L=0;L<TXN;L++){
+    gl.bindFramebuffer(gl.FRAMEBUFFER,f1);gl.framebufferTextureLayer(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,TX.A,0,L);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT1,gl.TEXTURE_2D,tmp,0);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]);gl.useProgram(pg.p);gl.uniform1i(pg.u.uL,L);gl.uniform1f(pg.u.uS,S);gl.drawArrays(gl.TRIANGLES,0,3);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,f2);gl.framebufferTextureLayer(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,TX.N,0,L);gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+    gl.useProgram(pn.p);bindT(0,tmp,pn.u.uH);gl.uniform1f(pn.u.uK,TXL[L][3]);gl.drawArrays(gl.TRIANGLES,0,3);
+    const key=TXL[L][1];if(key&&IMGS[key])imgs.push(L);}
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.drawBuffers([gl.BACK]);
+  for(const T of [TX.A,TX.N]){gl.bindTexture(gl.TEXTURE_2D_ARRAY,T);gl.generateMipmap(gl.TEXTURE_2D_ARRAY);}
+  texMeans();
+  gl.activeTexture(gl.TEXTURE8);gl.bindTexture(gl.TEXTURE_2D_ARRAY,TX.A);gl.activeTexture(gl.TEXTURE9);gl.bindTexture(gl.TEXTURE_2D_ARRAY,TX.N);gl.activeTexture(gl.TEXTURE0);
+  TX.ready=true;TX.ms=Math.round(performance.now()-t0);
+  /* pictures arrive after their decode; each one repaints its layer and the mips again */
+  for(const L of imgs){const im=new Image();im.onload=()=>{texFromImage(L,im,pi,pn,tmp,f1,f2);};im.src=IMGS[TXL[L][1]];}
+}
+/* the average colour of each layer, from its smallest mip: lets the shader keep the town as bright as Classic */
+function texMeans(){const f=gl.createFramebuffer(),lv=Math.max(0,(Math.log2(TXS)|0)-4),n=TXS>>lv,px=new Uint8Array(n*n*4);gl.bindFramebuffer(gl.FRAMEBUFFER,f);
+  /* the mean of the squared colour (the shader squares it), from a 16 x 16 mip */
+  for(let L=0;L<TXN;L++){gl.framebufferTextureLayer(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,TX.A,lv,L);gl.readPixels(0,0,n,n,gl.RGBA,gl.UNSIGNED_BYTE,px);
+    const m=[0,0,0,0];for(let i=0;i<n*n;i++){for(let k=0;k<3;k++){const v=px[i*4+k]/255;m[k]+=v*v;}m[3]+=px[i*4+3]/255;}for(let k=0;k<4;k++)TX.LM[L*4+k]=m[k]/(n*n);}
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.deleteFramebuffer(f);}
+function texFromImage(L,im,pi,pn,tmp,f1,f2){
+  const S=TXS,it=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,it);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,gl.RGBA,gl.UNSIGNED_BYTE,im);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+  gl.generateMipmap(gl.TEXTURE_2D);texParams(gl.LINEAR_MIPMAP_LINEAR,gl.REPEAT);
+  const lm=TX.LM[L*4]*.3+TX.LM[L*4+1]*.59+TX.LM[L*4+2]*.11;
+  gl.disable(gl.BLEND);gl.disable(gl.DEPTH_TEST);gl.viewport(0,0,S,S);gl.bindVertexArray(VAO0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,f1);gl.framebufferTextureLayer(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,TX.A,0,L);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT1,gl.TEXTURE_2D,tmp,0);
+  gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]);gl.useProgram(pi.p);bindT(0,it,pi.u.uImg);gl.uniform1f(pi.u.uS,S);gl.uniform4f(pi.u.uTgt,Math.sqrt(lm),TX.LM[L*4+3],0,0);gl.drawArrays(gl.TRIANGLES,0,3);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,f2);gl.framebufferTextureLayer(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,TX.N,0,L);gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+  gl.useProgram(pn.p);bindT(0,tmp,pn.u.uH);gl.uniform1f(pn.u.uK,TXL[L][3]);gl.drawArrays(gl.TRIANGLES,0,3);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.drawBuffers([gl.BACK]);gl.deleteTexture(it);
+  for(const [T,u] of [[TX.A,8],[TX.N,9]]){gl.activeTexture(gl.TEXTURE0+u);gl.bindTexture(gl.TEXTURE_2D_ARRAY,T);gl.generateMipmap(gl.TEXTURE_2D_ARRAY);}gl.activeTexture(gl.TEXTURE0);
+  texMeans();TX.from[TXL[L][0]]='picture';
+}
+/* ---------- the Studio town: the same plan and the same lights, painted from the pack ---------- */
+const FS_WORLDS=GL_COMMON+GL_LIGHT+`precision highp sampler2DArray;
+in vec3 vP;in vec3 vN;in vec4 vC;in vec4 vM;out vec4 o;
+uniform vec3 uCam;uniform vec4 uWorld;uniform sampler2D uGround;uniform sampler2D uAO;uniform vec4 uLampG[16];uniform vec3 uTint;uniform vec3 uEmis;
+uniform sampler2DArray uTA,uTN;uniform vec4 uOrg;uniform vec4 uSQ;uniform vec4 uLM[${TXN}];
+vec4 TA,TN;
+void tx(vec2 uv,int L){TA=texture(uTA,vec3(uv,float(L)));TN=texture(uTN,vec3(uv,float(L)));}
+float lum(vec3 c){return dot(c,vec3(.3,.59,.11));}
+/* the layer's colour at a set brightness, or the layer as a pattern over a colour of the thing's own */
+vec3 tcol(int L,float tg){return TA.rgb*TA.rgb*(tg/max(lum(uLM[L].rgb),.004));}
+vec3 tpat(int L,vec3 base){vec3 t=TA.rgb*TA.rgb,m=max(uLM[L].rgb,vec3(.004));return base*mix(vec3(lum(t)/lum(m)),t/m,.35);}
+vec3 bmp(vec3 N,vec3 T,vec3 B,float k){vec2 g=(TN.xy*2.-1.)*k*uSQ.y;return normalize(N+T*g.x+B*g.y);}
+vec2 dax(vec3 P,vec3 N,out vec3 T,out vec3 B){vec3 a=abs(N);if(a.y>a.x&&a.y>a.z){T=vec3(1,0,0);B=vec3(0,0,1);return P.xz;}if(a.x>a.z){T=vec3(0,0,1);B=vec3(0,1,0);return P.zy;}T=vec3(1,0,0);B=vec3(0,1,0);return P.xy;}
+void main(){
+  vec3 P=vP,N=normalize(vN),V=normalize(uCam-P);int id=int(vM.x+.5);float sd=vM.z;
+  vec3 alb=vC.rgb*vC.rgb;float gl=vC.a,aa=clamp(1.-length(fwidth(P))*.5,0.,1.);vec3 em=vec3(0.);float wet=uWorld.z,refl=0.,cav=1.;TN=vec4(.5,.5,.5,1.);
+  if(id==1){/* the ground: cobbles, grass, dirt and sand from the pack, blended by the plan */
+    vec2 q=P.xz,wq=q+(vec2(vn(q*.3),vn(q*.3+17.))-.5)*2.4;vec4 w=texture(uGround,wq/uWorld.xy);w/=max(w.r+w.g+w.b+w.a,.001);
+    vec3 a=vec3(0.);float g=0.,cv=0.;vec2 gg=vec2(0.);float mv=.8+.4*fbm(q*.019+3.);
+    if(w.r>.01){tx(q/24.,0);a+=tcol(0,.17)*w.r;g+=TA.a*w.r;gg+=(TN.xy*2.-1.)*w.r;cv+=TN.w*w.r;}
+    if(w.g>.01){tx(q/32.+.37,1);a+=tcol(1,.075)*w.g;g+=TA.a*w.g;gg+=(TN.xy*2.-1.)*w.g;cv+=TN.w*w.g;}
+    if(w.b>.01){tx(q/32.+.61,2);a+=tcol(2,.12)*w.b;g+=TA.a*w.b;gg+=(TN.xy*2.-1.)*w.b;cv+=TN.w*w.b;}
+    if(w.a>.01){tx(q/32.+.13,3);a+=tcol(3,.17)*w.a;g+=TA.a*w.a;gg+=(TN.xy*2.-1.)*w.a;cv+=TN.w*w.a;}
+    alb=a*mv;gl=g;cav=cv;gg*=uSQ.y;N=normalize(vec3(gg.x,1.,gg.y));
+    if(wet>0.){/* rain: water in the gaps between the stones, puddles in the hollows, a dark sheen on everything */
+      float pud=smoothstep(.5,.64,fbm(q*.055+vec2(3.,7.)))*(w.r+w.b),seep=(1.-cv)*w.r,wt=max(pud,seep*.8);
+      alb*=1.-.35*(w.r+w.b)-.25*pud;gl=mix(gl,.62,(w.r+w.b)*.75);gl=mix(gl,1.,wt);N=normalize(mix(N,vec3(0.,1.,0.),pud*.93));cav=mix(cav,1.,pud);
+      refl=uSQ.x*(pud*.95+seep*.4+(w.r+w.b)*.1);}}
+  else if(id==2){/* walls: Classic's plan of windows, doors and beams, over plaster, oak and stone from the pack */
+    float hw=vM.y,v=P.y,ph=h21(vec2(sd,1.7));vec4 cr=floor(vC*255.+.5);float u0=cr.r+cr.g*256.-64.,L=max(cr.b+cr.a*256.,1.);
+    bool xf=abs(N.x)>abs(N.z);float ux=xf?P.z:P.x;vec3 T=xf?vec3(0,0,1):vec3(1,0,0),B=vec3(0,1,0);int face=xf?(N.x>0.?0:1):(N.z>0.?2:3),isd=int(sd+.5);
+    vec3 base=ph<.2?vec3(.36,.31,.25):ph<.4?vec3(.30,.27,.24):ph<.6?vec3(.34,.25,.17):ph<.8?vec3(.24,.25,.27):vec3(.32,.2,.15);
+    float n=max(1.,floor(L/10.)),spc=L/n,rel=ux-u0,ci=clamp(floor(rel/spc),0.,n-1.),fu=rel-ci*spc-spc*.5;int iw=int(ci);
+    float fl=v<18.?0.:1.,fv=v-(fl<.5?7.:21.);int dI=ihf(isd,face,5)<.6?int(ih(isd,face,3)%uint(n)):-1;
+    bool tim=h21(vec2(sd,7.))>.6,door=fl<.5&&iw==dI,hasW=!door&&ihf(isd,face*8+iw,int(fl))>.25&&(fl<.5||hw>=31.)&&v<hw-1.;
+    /* first decide what this point of the wall is, then read the pack once for it */
+    int k=0;bool hz=false;
+    if(tim&&v>2.5&&v<hw-1.&&(abs(v-18.)<.7||abs(abs(fu)-spc*.5)<.45||(v>18.7&&abs(fract((fu+v*.8)/10.)-.5)<.04))){k=1;hz=abs(v-18.)<.7;}
+    if(hasW&&abs(fu)<2.4&&fv>-.6&&fv<8.4)k=abs(fu)<2.&&fv>0.&&fv<8.?2:fv<0.?3:4;
+    else if(door&&abs(fu)<2.35&&v<11.4&&length(vec2(fu,max(v-9.,0.)))<2.3)k=5;
+    if(v<2.4)k=6;
+    if(k==0){tx(vec2(ux+sd*13.7,v)/24.,4);alb=tpat(4,base*base*1.6);alb*=.72+.28*smoothstep(0.,7.,v);alb*=1.-.22*smoothstep(hw-5.,hw,v);gl=TA.a+wet*.06;N=bmp(N,T,B,1.);cav=TN.w;
+      /* rain marks run down from each window sill */
+      if(abs(fu)<2.2&&fv<0.&&fv>-7.&&ihf(isd,face*8+iw,int(fl))>.25&&(fl<.5||hw>=31.))alb*=1.-.18*smoothstep(-7.,0.,fv)*smoothstep(.6,.2,fract(fu*1.7+.3));}
+    else if(k==1){tx(hz?vec2(v,ux)/8.:vec2(ux,v)/8.,6);alb=tcol(6,.028);gl=TA.a;N=bmp(N,hz?B:T,hz?T:B,1.);cav=TN.w;}
+    else if(k==2){bool bar=abs(fu)<.12||abs(fv-4.)<.12;alb=bar?vec3(.03,.025,.02):vec3(.012,.014,.017);gl=bar?.1:.95;
+      N=normalize(N+vec3(vn(P.xz*3.)-.5,0.,vn(P.zx*3.)-.5)*.04);float lw=ihf(isd*3+iw,int(fl),face+17);if(!bar)refl=uSQ.x*.55;
+      if(lw>.9&&!bar){/* a lit room: warm light through curtains drawn to the sides */vec2 cu=vec2(fu,fv-4.);float cur=smoothstep(.95,1.35,abs(fu))*(.7+.3*sin(fu*9.+fv*.3));
+        em=vec3(1.,.52,.2)*(.035+.015*sin(uWorld.w*2.3+ci))*(.6+.4*smoothstep(2.6,0.,length(cu*vec2(1.,.6))));em=mix(em*1.25,em*vec3(.9,.45,.25)*.55,cur);refl*=.3;}}
+    else if(k==3){tx(vec2(ux,v)/16.,10);alb=tcol(10,.07);gl=TA.a+wet*.2;N=bmp(N,T,B,1.);cav=TN.w;}
+    else if(k==4){tx(vec2(ux,v)/8.,6);alb=tcol(6,.05);gl=.1;N=bmp(N,T,B,1.);cav=TN.w;}
+    else if(k==5){uint dk=ih(isd,face,9)%4u;vec3 dc=dk==0u?vec3(.075,.045,.03):dk==1u?vec3(.03,.06,.04):dk==2u?vec3(.09,.025,.02):vec3(.025,.035,.06);
+      tx(vec2(fu/12.4+.5,v/24.),7);alb=tpat(7,dc);gl=.14+wet*.2;N=bmp(N,T,B,1.);cav=TN.w;if(abs(fu)<.06||abs(fract(v/2.8)-.5)<.03)alb*=.45;
+      if(abs(fu-1.5)<.18&&abs(v-5.2)<.18){alb=vec3(.4,.3,.12);gl=.7;}}
+    else{tx(vec2(ux,v)/16.,10);alb=tcol(10,.085);gl=TA.a+wet*.2;N=bmp(N,T,B,1.);cav=TN.w;}}
+  else if(id==3){/* roofs: clay or slate from the pack, with moss where the rain sits */
+    bool clay=h21(vec2(sd,3.))>.42,xf=abs(N.x)>abs(N.z);float u=xf?P.z:P.x;vec3 T=xf?vec3(0,0,1):vec3(1,0,0),B=normalize(vec3(0,1,0)-N*N.y);int L=clay?8:9;
+    tx(vec2(u/16.+sd*.37,P.y/12.),L);alb=tcol(L,clay?.075:.045);alb=mix(alb,vec3(.03,.045,.02),smoothstep(.62,.82,fbm(P.xz*.13+sd))*.5);gl=TA.a+wet*.16;N=bmp(N,T,B,1.);cav=TN.w;}
+  else if(id>=18){/* the lamplighter's clothes: the pack laid on in his own frame, so it moves with him */
+    vec3 d=P-uOrg.xyz;float c=cos(uOrg.w),s=sin(uOrg.w);vec3 lp=vec3(d.x*c+d.z*s,d.y,-d.x*s+d.z*c),ln=vec3(N.x*c+N.z*s,N.y,-N.x*s+N.z*c),T,B;vec2 uv=dax(lp,ln,T,B);
+    T=vec3(T.x*c-T.z*s,T.y,T.x*s+T.z*c);B=vec3(B.x*c-B.z*s,B.y,B.x*s+B.z*c);int L=id==18||id==22?17:id==19?18:id==21?19:-1;
+    if(L>=0){tx(uv/(id==22?2.2:4.),L);alb=tpat(L,alb);gl=mix(gl,TA.a,.6);N=bmp(N,T,B,id==22?1.6:.8);cav=mix(1.,TN.w,.6);}
+    float rim=pow(1.-max(dot(N,V),0.),3.);em+=(uMoonC*1.2+uSky*1.6)*rim*alb*9.;}
+  else if(id==13){vec4 g=uLampG[int(sd+.5)];alb=vec3(.02,.022,.025);gl=.95;em=g.rgb+vec3(1.,.5,.2)*g.w*(.7+.3*sin(uWorld.w*5.+sd));}
+  else if(id==12){alb=vec3(.008,.01,.01);gl=.5;}
+  else if(id==10){/* the lighthouse: its bands, painted over stone */vec3 T,B;vec2 uv=dax(P,N,T,B);float b=mod(floor((P.y-3.)/16.),2.);tx(vec2(atan(P.z-uGrP.z,P.x-uGrP.x)*4.,P.y)/24.,11);
+    alb=tpat(11,b>.5?vec3(.16,.012,.01):vec3(.6,.58,.54));gl=TA.a+.1;N=bmp(N,normalize(cross(vec3(0,1,0),N)),vec3(0,1,0),1.);cav=TN.w;
+    float a=atan(P.z-uGrP.z,P.x-uGrP.x);if(fract(P.y/23.)>.86&&abs(fract(a*1.2732)-.5)<.12&&P.y<80.){alb=vec3(.01);gl=.9;}}
+  else if(id>0){vec3 T,B;vec2 uv=dax(P,N,T,B);
+    if(id==4){bool ax=sd<.5;vec2 pu;if(abs(N.y)>.5){pu=ax?vec2(P.z,P.x):vec2(P.x,P.z);T=ax?vec3(0,0,1):vec3(1,0,0);B=ax?vec3(1,0,0):vec3(0,0,1);}else{pu=vec2(P.y,dot(P,T));B=T;T=vec3(0,1,0);}
+      tx(pu/vec2(12.4,24.),7);alb=tpat(7,alb);gl=TA.a+wet*.3;N=bmp(N,T,B,1.);cav=TN.w;if(wet>0.&&abs(N.y)>.5)refl=uSQ.x*.15;}
+    else if(id==5){tx(uv/16.,10);alb=tpat(10,alb);gl=TA.a+wet*.3;N=bmp(N,T,B,1.);cav=TN.w;}
+    else if(id==6||id==17){tx(uv/8.,12);alb=tpat(12,alb);gl=id==17?.6:TA.a;N=bmp(N,T,B,.8);cav=TN.w;}
+    else if(id==7){float n=fbm(P.xz*.8+P.y*.6+sd);tx(uv/16.,15);alb=tpat(15,alb*(.6+.8*n));gl=TA.a;N=normalize(bmp(N,T,B,1.)+(vec3(vn(P.xz*1.3),vn(P.zy*1.3),vn(P.yx*1.3))-.5)*.5);cav=TN.w;}
+    else if(id==8){tx(uv/24.,11);alb=tpat(11,alb);gl=TA.a;N=bmp(N,T,B,.8);cav=TN.w;}
+    else if(id==9){tx(uv/32.,16);alb=tpat(16,alb);gl=TA.a+wet*.3;N=bmp(N,T,B,1.2);cav=TN.w;}
+    else if(id==11){float s=step(.5,fract(P.x/1.6)),ph=h21(vec2(sd,9.));vec3 c1=ph<.33?vec3(.4,.05,.04):ph<.66?vec3(.06,.2,.08):vec3(.05,.1,.3);tx(uv/12.,13);alb=tpat(13,mix(c1,vec3(.55,.5,.4),s));gl=.03;N=bmp(N,T,B,1.);cav=TN.w;}
+    else if(id==14){tx(uv/16.,5);alb=tpat(5,alb);gl=TA.a+wet*.15;N=bmp(N,T,B,1.);cav=TN.w;}
+    else if(id==15){vec2 q=fract(P.xz*.7);float bar=step(.55,q.x);tx(uv/8.,12);alb=mix(vec3(.004),tpat(12,alb),bar);gl=bar*.6;}
+    else if(id==16){tx(uv/12.,14);alb=tpat(14,alb);gl=TA.a;N=bmp(N,T,B,1.2);cav=TN.w;}}
+  alb*=uTint;alb*=.45+.55*cav;
+  vec3 D,Sp;lights(P,N,V,gl,D,Sp);
+  /* wet stone and glass mirror the lamps, the lantern, the moon and the sky */
+  if(refl>.001){vec3 R=reflect(-V,N);float fr=.04+.96*pow(1.-max(dot(N,V),0.),5.);vec3 rc=uSky*2.2;
+    if(uLanH.w>0.){vec3 l=uLanP.xyz-P;float dl=length(l);rc+=C_LAN*(uLanI.x*.7+uLanI.y)*pow(max(dot(R,l/dl),0.),160.)*12./(1.+dl*.03);}
+    for(int i=0;i<MAXL;i++){if(i>=uNL)break;vec3 l=uLmP[i].xyz-P;float dl=length(l);rc+=C_LAMP*uLmI[i].x*pow(max(dot(R,l/dl),0.),220.)*30./(1.+dl*.015);}
+    rc+=uMoonC*pow(max(dot(R,uMoonD),0.),110.)*16.;Sp+=rc*fr*refl;}
+  float ao=vM.w/255.;if(P.y<14.){float a=texture(uAO,P.xz/uWorld.xy).r;ao*=1.-.62*a*(1.-smoothstep(0.,14.,P.y))*(id==1?1.:.6);}
+  o=vec4((alb*D+Sp)*ao+em+uEmis,1.);}`;
+/* ---------- Studio darkness: smoke that curls up through the body and frays at the edges ----------
+   It is blended, not stamped: the edge thins to nothing, and the darkness it leaves (the alpha the finish
+   multiplies in) is taken off what was there, so a shade in front of a lit wall fades into it */
+const FS_VOIDS=GL_COMMON+`in vec3 vP;in vec3 vN;in float vH;out vec4 o;uniform vec3 uCam;uniform vec4 uVoid;uniform vec4 uVw;uniform vec3 uVoidC;
+void main(){if(vH>uVoid.z+.02)discard;vec3 V=normalize(uCam-vP),N=normalize(vN);float fr=pow(1.-abs(dot(N,V)),2.);
+  float t=uVw.x,sw=fbm(vec2(vP.x*.33+vP.z*.21,vP.y*.24-t*1.2)+uVw.y),sw2=vn(vec2(vP.z*.55-vP.x*.31,vP.y*.5-t*1.9)*1.3+uVw.y*3.);
+  vec3 c=vec3(.0012,.001,.002)+fr*mix(vec3(.004,.003,.01),vec3(.05,.05,.07),uVoid.x)+uVoidC*fr;
+  c+=vec3(.012,.008,.03)*smoothstep(.55,.85,sw*.7+sw2*.5)*(1.-uVoid.x);
+  float fl=vn(vP.xz*.9+vec2(vP.y*.6,t*9.));c+=pow(fr,.7)*uVoid.y*vec3(2.6,.95,.26)*(.35+.9*fl*fl);
+  c+=smoothstep(uVoid.z-.12,uVoid.z+.02,vH)*vec3(.5,.18,.05)*uVoid.y*2.;
+  float keep=clamp(.03+fr*.32+uVoid.x*.22+uVoid.y*.55,0.,1.);
+  /* how solid the smoke is here: thin at the rim, ragged at the foot, thinner still as it burns */
+  float sol=min(uVoid.w,1.),cov=1.-smoothstep(.42+sol*.3,.94+sol*.05,fr+(sw-.5)*.8+(sw2-.5)*.3);if(uVoid.w<1.5)cov*=smoothstep(.0,.3-sol*.24,vH+(sw2-.5)*.25);else cov=1.-.6*smoothstep(.85,1.15,fr+(sw-.5)*.5);cov*=1.-uVoid.y*.25*fl;cov=clamp(cov,0.,1.);
+  /* solid things (a snuffer's robe, the Long Night) let less of what is behind them through */
+  o=vec4(c*cov,cov*(1.-keep*mix(1.,.4,sol)));}`;
+
+/* =====================================================================================
    22. 3D — THE FRAME. A scene pass into a half-float target (the town, the water, the people,
        the darkness, the sprites), the night air at a fraction of the size, a glow ladder, then
        the finish and the dot matrix on top. Quality steps down by itself if the frame rate can't
        hold: first the resolution, then the mist, the rain and the soft shadows.
    ===================================================================================== */
 const QS={
-  high:{scale:1,fogDiv:2,steps:18,rain:1400,lanTaps:3,lampSh:1,fogSh:2,moonPcf:2,moonSz:2048},
-  med:{scale:.5,fogDiv:3,steps:12,rain:800,lanTaps:3,lampSh:1,fogSh:1,moonPcf:1,moonSz:2048},
-  low:{scale:.5,fogDiv:4,steps:8,rain:350,lanTaps:1,lampSh:1,fogSh:1,moonPcf:1,moonSz:1024}
+  high:{scale:1,fogDiv:2,steps:18,rain:1400,lanTaps:3,lampSh:1,fogSh:2,moonPcf:2,moonSz:2048,refl:1},
+  med:{scale:.5,fogDiv:3,steps:12,rain:800,lanTaps:3,lampSh:1,fogSh:1,moonPcf:1,moonSz:2048,refl:1},
+  low:{scale:.5,fogDiv:4,steps:8,rain:350,lanTaps:1,lampSh:1,fogSh:1,moonPcf:1,moonSz:1024,refl:0}
 };
 const QPIN=(/[?&]q=(low|med|high)/.exec(location.search)||[])[1];
 const R3={ts:1,q:QPIN||(touchy?'med':'high'),scale:1,auto:!QPIN,ft:16,slow:0,fast:0,cssW:1,cssH:1,dpr:1,VP:M4.id(),V:M4.id(),PR:M4.id(),IVP:M4.id(),cam:[0,0,0],cr:[1,0,0],cu:[0,1,0],
-  dots:store.get('hd-lanternr-dots','0')==='1',t:0,frames:0,tgt:{x:192,y:128},camD:180,pitch:1.0,fov:.66,shake:[0,0],moonVP:M4.id(),built:false};
+  dots:store.get('hd-lanternr-dots','0')==='1',look:store.get('hd-lanternr-look','studio')==='classic'?'classic':'studio',t:0,frames:0,tgt:{x:192,y:128},camD:180,pitch:1.0,fov:.66,shake:[0,0],moonVP:M4.id(),built:false};
 R3.scale=QS[R3.q].scale;
 const PG={},TG={};let VAO0=null,SPRVAO=null,SPRBUF=null,FOGNT=null,HUDT=null,HUDW=0,HUDH=0,MOONT=null;
 function r3Init(){
   PG.world=prog(VS_WORLD,FS_WORLD);PG.pre=prog(VS_WORLD,FS_PRE);PG.depth=prog(VS_DEPTH,FS_DEPTH);PG.voidp=prog(VS_VOID,FS_VOID);PG.water=prog(VS_WORLD,FS_WATER);
   PG.spr=prog(VS_SPR,FS_SPR);PG.rain=prog(VS_RAIN,FS_RAIN);PG.fog=prog(VS_FS,FS_FOG);PG.bright=prog(VS_FS,FS_BRIGHT);PG.down=prog(VS_FS,FS_DOWN);PG.up=prog(VS_FS,FS_UP);
   PG.comp=prog(VS_FS,FS_COMP);PG.sky=prog(VS_FS,FS_SKY);PG.dots=prog(VS_FS,FS_DOTS);
+  /* STUDIO: its own town, darkness, sky and finish; Classic's programs above are left exactly as they were */
+  PG.worldS=prog(VS_WORLD,FS_WORLDS);PG.voidS=prog(VS_VOID,FS_VOIDS);PG.skyS=prog(VS_FS,FS_SKY,'#define STUDIO\n');PG.compS=prog(VS_FS,FS_COMP,'#define STUDIO\n');
+  gl.useProgram(PG.worldS.p);gl.uniform1i(PG.worldS.u.uTA,8);gl.uniform1i(PG.worldS.u.uTN,9);
   VAO0=gl.createVertexArray();
   SPRVAO=gl.createVertexArray();gl.bindVertexArray(SPRVAO);SPRBUF=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,SPRBUF);gl.bufferData(gl.ARRAY_BUFFER,SPR.cap*48,gl.DYNAMIC_DRAW);
   for(let k=0;k<3;k++){gl.enableVertexAttribArray(4+k);gl.vertexAttribPointer(4+k,4,gl.FLOAT,false,48,k*16);gl.vertexAttribDivisor(4+k,1);}gl.bindVertexArray(null);
   const fn=new Uint8Array(FOGS*FOGS);for(let i=0;i<fn.length;i++)fn[i]=Math.round(FOGT[i]*255);FOGNT=mkTex(FOGS,FOGS,gl.R8,gl.RED,gl.UNSIGNED_BYTE,fn,gl.LINEAR,gl.REPEAT);
-  hzInit();actorMeshes();
+  hzInit();actorMeshes();actorMeshes2();
   /* the noise tile every shader reads (unit 7, bound once for good) */
   const nt=new Uint8Array(256*256);for(let y=0;y<256;y++)for(let x=0;x<256;x++){let q=[(x*.1031)%1,(y*.1031)%1,(x*.1031)%1];const dd=q[0]*(q[1]+33.33)+q[1]*(q[2]+33.33)+q[2]*(q[0]+33.33);q=q.map(v=>v+dd);nt[y*256+x]=Math.floor((((q[0]+q[1])*q[2])%1+1)%1*255.99);}
   gl.activeTexture(gl.TEXTURE7);const NTX=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,NTX);gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);gl.texImage2D(gl.TEXTURE_2D,0,gl.R8,256,256,0,gl.RED,gl.UNSIGNED_BYTE,nt);
   gl.generateMipmap(gl.TEXTURE_2D);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.REPEAT);
   for(const k in PG){const p=PG[k];if(p.u.uNT){gl.useProgram(p.p);gl.uniform1i(p.u.uNT,7);}}gl.activeTexture(gl.TEXTURE0);
+  if(R3.look==='studio')texGen();skyImages();
 }
+/* STUDIO: the look in use, and the switch between the two */
+const studio=()=>R3.look==='studio'&&TX.ready;
+function setLook(k){R3.look=k==='classic'?'classic':'studio';store.set('hd-lanternr-look',R3.look);if(R3.look==='studio'&&gl&&!GLERR)texGen();lookLabel();}
+/* the sky's pictures, when the image list's 5.1 to 5.4 have been added */
+const SKYI={};function skyImages(){for(const [k,key] of [['sky','5.1'],['moon','5.2'],['dawn','5.3'],['skyl','5.4']])if(IMGS[key]){const im=new Image();im.onload=()=>{const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,gl.RGBA,gl.UNSIGNED_BYTE,im);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);gl.generateMipmap(gl.TEXTURE_2D);
+  texParams(gl.LINEAR_MIPMAP_LINEAR,k==='moon'?gl.CLAMP_TO_EDGE:gl.REPEAT);SKYI[k]=t;};im.src=IMGS[key];}}
+/* STUDIO: a grade for each night (shadow tint, saturation; highlight tint, contrast) */
+const GRADE=[[[.95,1,1.08,1],[1.04,1,.94,.15]],[[.9,1.02,1.07,.92],[1.02,1,.95,.12]],[[.92,1.04,1,.85],[1,1.02,.95,.18]],[[1.02,1,.96,.88],[1.05,1,.9,.1]],[[.9,.98,1.12,1],[1.05,.99,.92,.2]]];
 function r3Resize(){
   const dpr=Math.min(window.devicePixelRatio||1,2),cw=Math.max(2,innerWidth),ch=Math.max(2,innerHeight);R3.cssW=cw;R3.cssH=ch;R3.dpr=dpr;
   cv.width=Math.round(cw*dpr);cv.height=Math.round(ch*dpr);r3Targets();layoutHud();
@@ -2065,7 +2368,8 @@ function render3D(dt){
   const dawn=R3.dawn||0;gl.clearColor(lerp(.004,.12,dawn),lerp(.005,.1,dawn),lerp(.01,.12,dawn),1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   gl.disable(gl.BLEND);gl.disable(gl.CULL_FACE);
   PM('pre');
-  const SK=R3.skip||{};if(!SK.sky){const p=PG.sky,u=p.u;gl.useProgram(p.p);gl.disable(gl.DEPTH_TEST);gl.depthMask(false);gl.uniformMatrix4fv(u.uInvVP,false,R3.IVP);gl.uniform3fv(u.uCamP,R3.cam);
+  const SK=R3.skip||{},SL=studio();if(!SK.sky){const p=SL?PG.skyS:PG.sky,u=p.u;gl.useProgram(p.p);
+    if(SL){gl.uniform4f(u.uSkF,SKYI.sky?1:0,SKYI.moon?1:0,SKYI.skyl?1:0,SKYI.dawn?1:0);bindT(2,SKYI.sky||null,u.uSkyI);bindT(3,SKYI.moon||null,u.uMoonI);bindT(4,SKYI.skyl||null,u.uSkylI);bindT(5,SKYI.dawn||null,u.uDawnI);}gl.disable(gl.DEPTH_TEST);gl.depthMask(false);gl.uniformMatrix4fv(u.uInvVP,false,R3.IVP);gl.uniform3fv(u.uCamP,R3.cam);
     gl.uniform3fv(u.uMoonD,moonSky());gl.uniform3fv(u.uSunD,SUN);gl.uniform4f(u.uSk,R3.t,dawn,(TOWN.kind==='title'?1:ST.moon)*(1-dawn*.5),TOWN.sea?1:0);gl.bindVertexArray(VAO0);gl.drawArrays(gl.TRIANGLES,0,3);}
   gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.depthMask(true);
   /* the cutaway circle round the lamplighter: houses between him and the camera open up */
@@ -2074,9 +2378,10 @@ function render3D(dt){
   PM('sky');
   if(!SK.town){const pp=PG.pre;gl.useProgram(pp.p);gl.uniformMatrix4fv(pp.u.uVP,false,R3.VP);gl.uniformMatrix4fv(pp.u.uM,false,IDM);gl.colorMask(false,false,false,false);
   if(!SK.pre){drawMesh(TOWN.mesh);drawMesh(TOWN.glass);}gl.colorMask(true,true,true,true);PM('prepass');
-  {const pw=PG.world;gl.useProgram(pw.p);worldU(pw);setLightU(pw);bindT(2,TOWN.gtex,pw.u.uGround);bindT(3,TOWN.aotex,pw.u.uAO);
+  {const pw=SL?PG.worldS:PG.world;gl.useProgram(pw.p);worldU(pw);setLightU(pw);bindT(2,TOWN.gtex,pw.u.uGround);bindT(3,TOWN.aotex,pw.u.uAO);
+  if(SL){gl.uniform4fv(pw.u.uLM,TX.LM);gl.uniform4f(pw.u.uSQ,QS[R3.q].refl,1,0,0);gl.uniform4f(pw.u.uOrg,0,0,0,0);}
   gl.uniformMatrix4fv(pw.u.uM,false,IDM);gl.uniform3f(pw.u.uTint,1,1,1);gl.uniform3f(pw.u.uEmis,0,0,0);gl.uniform4fv(pw.u.uLampG,LU.lampG);
-  gl.depthMask(!!SK.pre);if(!SK.world){drawMesh(TOWN.mesh);drawMesh(TOWN.glass);}gl.depthMask(true);}}const pw=PG.world;
+  gl.depthMask(!!SK.pre);if(!SK.world){drawMesh(TOWN.mesh);drawMesh(TOWN.glass);}gl.depthMask(true);}}const pw=SL?PG.worldS:PG.world;
   PM('town');
   if(!SK.solids){gl.useProgram(pw.p);drawSolids(pw);}
   PM('solids');
@@ -2108,7 +2413,8 @@ function render3D(dt){
   /* the finish, then the dots */
   const toLdr=R3.dots;const dest=toLdr?TG.ldr:null;
   const flash=S.flash>0&&!reduce?S.flash*.35:0,dark=S.mode==='dying'?clamp((S.t-.4)/2.2,0,1)*.88:S.mode==='over'?.5:0,hurt=P.hurt>0?P.hurt*1.6:0,gutter=TOWN.kind==='night'&&!P.dead&&P.oil<22&&S.mode==='play'?(1-P.oil/22)*.5:0;
-  fsPass(PG.comp,dest,u=>{bindT(0,sc.t,u.uScene);bindT(1,fg.t,u.uFogT);bindT(2,TG.u0.t,u.uBloom);gl.uniform4f(u.uC1,2.15*(1+dawn*.2),HDR?.55:.4,flash,dark);gl.uniform4f(u.uC2,hurt,gutter,S.paused?.6:0,R3.t);gl.uniform2f(u.uRes,cv.width,cv.height);});
+  const gr=GRADE[S.night]||GRADE[0],gk=TOWN.kind==='night'?1-dawn*.7:.4;
+  fsPass(SL?PG.compS:PG.comp,dest,u=>{if(SL){gl.uniform4f(u.uGa,lerp(1,gr[0][0],gk),lerp(1,gr[0][1],gk),lerp(1,gr[0][2],gk),lerp(1,gr[0][3],gk));gl.uniform4f(u.uGb,lerp(1,gr[1][0],gk),lerp(1,gr[1][1],gk),lerp(1,gr[1][2],gk),gr[1][3]*gk);gl.uniform1f(u.uCA,R3.q==='high'?.014:0);}bindT(0,sc.t,u.uScene);bindT(1,fg.t,u.uFogT);bindT(2,TG.u0.t,u.uBloom);gl.uniform4f(u.uC1,2.15*(1+dawn*.2),HDR?.55:.4,flash,dark);gl.uniform4f(u.uC2,hurt,gutter,S.paused?.6:0,R3.t);gl.uniform2f(u.uRes,cv.width,cv.height);});
   hudUpload();
   const pd=PG.dots,ud=pd.u,G=GLASS3[GI3];gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,cv.width,cv.height);gl.useProgram(pd.p);
   bindT(0,HUDT,ud.uHud);if(toLdr)bindT(1,TG.ldr.t,ud.uImg);gl.uniform4f(ud.uGrid,HUD.pitch*R3.dpr,HUD.pitch*R3.dpr,HUD.ox*R3.dpr,HUD.oy*R3.dpr);gl.uniform2f(ud.uRes,cv.width,cv.height);
@@ -2176,7 +2482,7 @@ function actorMeshes(){
   mb=new MB();mb.cyl(0,0,0,3.2,.42,.42,8,[.62,.08,.05,.3],pl);mb.cyl(0,0,3.2,3.6,.44,.3,8,[.85,.82,.75,.2],pl);AM.flare=mb.build();
 }
 const MX=new Float32Array(16);
-function drawPart(pw,mesh,m,tint,emis){gl.uniformMatrix4fv(pw.u.uM,false,m);gl.uniform3fv(pw.u.uTint,tint||ONE3);gl.uniform3fv(pw.u.uEmis,emis||ZERO3);drawMesh(mesh);}
+function drawPart(pw,mesh,m,tint,emis){gl.uniformMatrix4fv(pw.u.uM,false,m);if(pw.u.uOrg)gl.uniform4f(pw.u.uOrg,m[12],m[13],m[14],Math.atan2(m[2],m[0]));gl.uniform3fv(pw.u.uTint,tint||ONE3);gl.uniform3fv(pw.u.uEmis,emis||ZERO3);drawMesh(mesh);}
 const ONE3=new Float32Array([1,1,1]),ZERO3=new Float32Array([0,0,0]);
 /* GL point from a point of the town */
 const GLP=(x,y,z)=>[x,z,y];
@@ -2195,7 +2501,7 @@ function drawSolids(pw){
       if(p.k==='oil')drawPart(pw,AM.oil,M4.trs(p.x,p.y,bob,p.t*1.1,1,1,1,MX));else drawPart(pw,AM.flare,M4.trs(p.x,p.y,bob,p.t,1,1,1,MX),ONE3,new Float32Array([.25,.03,.02]));}
     for(const f of FLARES)drawPart(pw,AM.flare,M4.trs(f.x,f.y,0,f.t,.9,.9,.8,MX),ONE3,new Float32Array([1.5,.4,.25]));
   }
-  gl.uniformMatrix4fv(pw.u.uM,false,IDM);gl.uniform3fv(pw.u.uTint,ONE3);gl.uniform3fv(pw.u.uEmis,ZERO3);
+  gl.uniformMatrix4fv(pw.u.uM,false,IDM);gl.uniform3fv(pw.u.uTint,ONE3);gl.uniform3fv(pw.u.uEmis,ZERO3);if(pw.u.uOrg)gl.uniform4f(pw.u.uOrg,0,0,0,0);
 }
 const C3L=[1,.55,.22];
 /* ---------- REMAKE: the lamplighter's rig ---------- */
@@ -2210,26 +2516,32 @@ function drawLamplighter(pw){
   const bob=Math.abs(Math.cos(ph))*.32*ks-dk*2.6,lean=.07*ks*fwdV+dk*.85-P.hurt*.5,sway=Math.sin(ph)*.05*ks;
   const tint=P.hurt>0?new Float32Array([1+P.hurt*3,1-P.hurt*.6,1-P.hurt*.6]):ONE3;
   const root=M4.trs(P.x,P.y,0,a,1,1,1);const J=(...ms)=>ms.reduce((p,q)=>M4.mul(p,q));
+  /* STUDIO swaps in the rebuilt parts and adds the coat's skirts, the scarf's end and the pole's hook */
+  const SL=studio(),A=SL?AM2:AM,swS={};
   /* legs */
-  for(const side of [-1,1]){const p2=ph+(side>0?Math.PI:0),sw=Math.sin(p2)*.62*ks-dk*.6,knee=Math.max(0,Math.sin(p2+1.25))*.95*ks+dk*1.4;
-    const hip=J(root,M4.t(0,6.2+bob,side*.72),M4.rz(sw));drawPart(pw,AM.thigh,hip,tint);drawPart(pw,AM.shin,J(hip,M4.t(0,-3,0),M4.rz(-knee)),tint);}
+  for(const side of [-1,1]){const p2=ph+(side>0?Math.PI:0),sw=Math.sin(p2)*.62*ks-dk*.6,knee=Math.max(0,Math.sin(p2+1.25))*.95*ks+dk*1.4;swS[side]=sw;
+    const hip=J(root,M4.t(0,6.2+bob,side*.72),M4.rz(sw));drawPart(pw,A.thigh,hip,tint);drawPart(pw,A.shin,J(hip,M4.t(0,-3,0),M4.rz(-knee)),tint);}
   /* the coat and the body */
-  const torso=J(root,M4.t(0,6.2+bob,0),M4.rz(-lean),M4.rx(sway));drawPart(pw,AM.torso,torso,tint);
-  const neck=J(torso,M4.t(.05,5.0,0));drawPart(pw,AM.head,J(neck,M4.rz(.12+dk*.4)),tint);
+  const torso=J(root,M4.t(0,6.2+bob,0),M4.rz(-lean),M4.rx(sway));drawPart(pw,A.torso,torso,tint);
+  if(SL){drawPart(pw,AM2.skirtR,J(torso,M4.rz(swS[1]*.5+lean*.6)),tint);drawPart(pw,AM2.skirtL,J(torso,M4.rz(swS[-1]*.5+lean*.6)),tint);
+    drawPart(pw,AM2.scarfEnd,J(torso,M4.t(-1.02,4.5,.38),M4.rz(-(.18+ks*.75+Math.sin(ph*2)*.07*ks)-dk*.5),M4.rx(.12+sway)),tint);}
+  const neck=J(torso,M4.t(.05,5.0,0));drawPart(pw,A.head,J(neck,M4.rz(.12+dk*.4)),tint);
   const xf=(m,x,y,z)=>{const q=M4.xf(m,x,y,z);return [q[0],q[1],q[2]];};
   /* the lantern arm: from the right shoulder to the hand that holds the lantern out */
   const sR=xf(torso,.15,4.25,1.55),hand=[P.lx+rx*.05,10.25-dk*6,P.ly+ry*.05],eR=[(sR[0]+hand[0])/2+rx*.5,(sR[1]+hand[1])/2-1.1,(sR[2]+hand[2])/2+ry*.5];
-  drawPart(pw,AM.sleeve,M4.seg(sR,eR,.72),tint);drawPart(pw,AM.sleeve,M4.seg(eR,hand,.62),tint);drawPart(pw,AM.hand,M4.t(hand[0],hand[1],hand[2]),tint);
+  const handM=h=>SL?M4.trs(h[0],h[2],h[1],a,1,1,1):M4.t(h[0],h[1],h[2]);
+  drawPart(pw,SL?AM2.sleeveU:AM.sleeve,M4.seg(sR,eR,.72),tint);drawPart(pw,SL?AM2.sleeveF:AM.sleeve,M4.seg(eR,hand,.62),tint);drawPart(pw,A.hand,handM(hand),tint);
   const g=LU.lanI[0],em=new Float32Array([C3L[0]*g*2.6,C3L[1]*g*2.6,C3L[2]*g*2.6]),lz=7.1-dk*6;
-  drawPart(pw,AM.lant,M4.trs(P.lx,P.ly,lz,a,1,1,1,MX));drawPart(pw,AM.lglass,M4.trs(P.lx,P.ly,lz,a,1,1,1,MX),ZERO3,em);
+  drawPart(pw,A.lant,M4.trs(P.lx,P.ly,lz,a,1,1,1,MX));drawPart(pw,A.lglass,M4.trs(P.lx,P.ly,lz,a,1,1,1,MX),ZERO3,em);
   /* the lighting pole in the other hand: carried slanting forward, raised to a lamp's cage while it kindles */
   const kL=P.kl&&P.kindle>0&&!P.kl.lit?P.kl:null;RIG.kpole+=((kL?1:0)-RIG.kpole)*Math.min(1,dt*5);const kp=RIG.kpole;
   const sL=xf(torso,.15,4.25,-1.55),hL=xf(root,1.1+Math.sin(ph)*.5*ks,7.6+bob+kp*3.2,-1.95);
-  const eL=[(sL[0]+hL[0])/2-rx*.4,(sL[1]+hL[1])/2-.9,(sL[2]+hL[2])/2-ry*.4];drawPart(pw,AM.sleeve,M4.seg(sL,eL,.72),tint);drawPart(pw,AM.sleeve,M4.seg(eL,hL,.62),tint);drawPart(pw,AM.hand,M4.t(hL[0],hL[1],hL[2]),tint);
+  const eL=[(sL[0]+hL[0])/2-rx*.4,(sL[1]+hL[1])/2-.9,(sL[2]+hL[2])/2-ry*.4];drawPart(pw,SL?AM2.sleeveU:AM.sleeve,M4.seg(sL,eL,.72),tint);drawPart(pw,SL?AM2.sleeveF:AM.sleeve,M4.seg(eL,hL,.62),tint);drawPart(pw,A.hand,handM(hL),tint);
   let tip=xf(root,5.4,19.5-dk*13,-2.3+Math.sin(ph)*.3*ks);if(RIG.lampTip&&kp>0){const T=RIG.lampTip;tip=[lerp(tip[0],T[0],kp),lerp(tip[1],T[1],kp),lerp(tip[2],T[2],kp)];}
   if(kL)RIG.lampTip=[kL.x-ca*1.5,TOWN.lampsZ-1.5,kL.y-sa*1.5];
   const dv=[tip[0]-hL[0],tip[1]-hL[1],tip[2]-hL[2]],dl=Math.hypot(...dv)||1,bot=[hL[0]-dv[0]/dl*4,hL[1]-dv[1]/dl*4,hL[2]-dv[2]/dl*4];
-  drawPart(pw,AM.pole,M4.seg(bot,tip,.2),tint);RIG.tip=tip;RIG.kp=kp;
+  drawPart(pw,A.pole,M4.seg(bot,tip,.2),tint);RIG.tip=tip;RIG.kp=kp;
+  if(SL){const ts=[tip[0]-dv[0]/dl*1.4,tip[1]-dv[1]/dl*1.4,tip[2]-dv[2]/dl*1.4];drawPart(pw,AM2.ptip,M4.seg(ts,tip,1),tint);}
 }
 /* ---------- REMAKE: smoke that trails off the darkness, dust that shows only in the beam ---------- */
 const VFX=[],DUST=[];for(let i=0;i<150;i++)DUST.push({x:Math.random()*90-45,y:Math.random()*90-45,z:Math.random()*22+1,ph:Math.random()*TAU,s:Math.random()});
@@ -2237,7 +2549,7 @@ function vfxEmit(x,y,z,n,spr,up,life,sz){for(let k=0;k<n&&VFX.length<600;k++){co
 function vfxStep(dt){let n=0;for(const p of VFX){p.t+=dt;if(p.t>=p.life)continue;p.x+=p.vx*dt;p.y+=p.vy*dt;p.z+=p.vz*dt;p.vx*=.98;p.vy*=.98;VFX[n++]=p;}VFX.length=n;}
 
 function drawVoids(){
-  if(TOWN.kind!=='night')return;const p=PG.voidp,u=p.u;gl.useProgram(p.p);gl.uniformMatrix4fv(u.uVP,false,R3.VP);gl.uniform3fv(u.uCam,R3.cam);const dt=1/60;
+  if(TOWN.kind!=='night')return;if(studio())return drawVoidsS();const p=PG.voidp,u=p.u;gl.useProgram(p.p);gl.uniformMatrix4fv(u.uVP,false,R3.VP);gl.uniform3fv(u.uCam,R3.cam);const dt=1/60;
   for(const s of SH){s.t3=(s.t3||0)+dt*(s.fz>.5?.08:1);const sc=.55+.45*clamp(s.hp,0,1),a=Math.hypot(s.vx,s.vy)>1?Math.atan2(s.vy,s.vx):Math.atan2(P.y-s.y,P.x-s.x);s.a3=a;
     gl.uniformMatrix4fv(u.uM,false,M4.trs(s.x,s.y,0,a,sc,sc,sc*(.9+.1*Math.sin(s.t3*3)),MX));gl.uniform4f(u.uVw,s.t3,s.id*1.7,s.burn>0?1.5:.85,13.6);
     gl.uniform4f(u.uVoid,s.fz,s.burn>0?1:0,s.in,0);gl.uniform3f(u.uVoidC,.008,.004,.02);drawMesh(AM.shade);}
@@ -2245,6 +2557,19 @@ function drawVoids(){
     gl.uniform4f(u.uVoid,z.fz,z.burn>0?1:0,1,0);gl.uniform3f(u.uVoidC,.01,.006,.016);drawMesh(AM.snuf);}
   const B=BOSS;if(B.on){const rs=.35+.65*B.rise,r=Math.max(.01,B.r);gl.uniformMatrix4fv(u.uM,false,M4.trs(B.x,B.y,-r*.45+r*1.05*rs,Math.atan2(P.y-B.y,P.x-B.x),r*1.15,r*1.15,r*1.75*rs,MX));
     gl.uniform4f(u.uVw,B.t,3.1,.22,1);gl.uniform4f(u.uVoid,0,B.hurt>0?.9:0,2,0);gl.uniform3f(u.uVoidC,.004,.001,.008);drawMesh(AM.boss);}
+}
+/* STUDIO: the same darkness in its new shapes, drawn twice: depth first, then blended, so only its front shows */
+const VQ=[];
+function drawVoidsS(){
+  const p=PG.voidS,u=p.u,dt=1/60;gl.useProgram(p.p);gl.uniformMatrix4fv(u.uVP,false,R3.VP);gl.uniform3fv(u.uCam,R3.cam);VQ.length=0;
+  for(const s of SH){s.t3=(s.t3||0)+dt*(s.fz>.5?.08:1);const sc=.55+.45*clamp(s.hp,0,1),a=Math.hypot(s.vx,s.vy)>1?Math.atan2(s.vy,s.vx):Math.atan2(P.y-s.y,P.x-s.x);s.a3=a;
+    VQ.push([M4.trs(s.x,s.y,0,a,sc,sc,sc*(.9+.1*Math.sin(s.t3*3))),[s.t3,s.id*1.7,s.burn>0?1.5:.85,13.6],[s.fz,s.burn>0?1:0,s.in,0],[.008,.004,.02],AM2.shade]);}
+  for(const z of SNUF){z.t3=(z.t3||0)+dt*(z.fz>.5?.1:1);VQ.push([M4.trs(z.x,z.y,0,z.a3||0,1,1,1),[z.t3,7.3,.55,22.2],[z.fz,z.burn>0?1:0,1,1],[.01,.006,.016],AM2.snuf]);}
+  const B=BOSS;if(B.on){const rs=.35+.65*B.rise,r=Math.max(.01,B.r);VQ.push([M4.trs(B.x,B.y,-r*.45+r*1.05*rs,Math.atan2(P.y-B.y,P.x-B.x),r*1.15,r*1.15,r*1.75*rs),[B.t,3.1,.22,1],[0,B.hurt>0?.9:0,2,2],[.004,.001,.008],AM2.boss]);}
+  if(!VQ.length)return;
+  const pass=()=>{for(const q of VQ){gl.uniformMatrix4fv(u.uM,false,q[0]);gl.uniform4fv(u.uVw,q[1]);gl.uniform4fv(u.uVoid,q[2]);gl.uniform3fv(u.uVoidC,q[3]);drawMesh(q[4]);}};
+  gl.colorMask(false,false,false,false);pass();gl.colorMask(true,true,true,true);
+  gl.enable(gl.BLEND);gl.blendFuncSeparate(gl.ONE,gl.ONE_MINUS_SRC_ALPHA,gl.ZERO,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);pass();gl.depthMask(true);gl.disable(gl.BLEND);
 }
 /* ---------- sprites: four batches (darkness, smoke, light, eyes seen through walls) ---------- */
 const SPR={cap:6000,b:[[],[],[],[]],n:[0,0,0,0],data:null};SPR.data=new Float32Array(SPR.cap*12);
@@ -2280,14 +2605,19 @@ function fillSprites(dt){
   if(LAN3.on){const ca=Math.cos(P.aim),sa=Math.sin(P.aim),ch=Math.cos(BEAM.half+.04);for(const d of DUST){d.ph+=dt*.4;let x=P.x+((d.x+Math.sin(d.ph)*2-P.x%90+135)%90-45),y=P.y+((d.y+Math.cos(d.ph*.8)*2-P.y%90+135)%90-45),z=d.z+Math.sin(d.ph*1.3)*.8;
       const dx=x-LAN3.x,dy=y-LAN3.y,dh=Math.hypot(dx,dy);let I=0;if(dh<BEAM.R&&dh>1&&P.beamK>.05){const cs=(dx*ca+dy*sa)/dh,el=Math.abs((z-8)/dh);if(cs>ch&&el<.5)I=P.beamK*oilK()*(1-dh/BEAM.R)*smooth(ch,ch+.05,cs)*(1-el*2);}
       const dc=Math.hypot(x-CAM3.e[0],y-CAM3.e[1],z-CAM3.e[2]);I*=smooth(10,22,dc);if(I>.03&&hzLit(HZL.r0,HZL.nr,HZL.st,LAN3.x,LAN3.y,8,x,y,z))sp(2,x,y,z,.07+d.s*.06,1,.8,.55,I*1.3,1);}}
+  /* STUDIO: the lamplighter's shadows on the street, away from his lantern and from each lamp near him */
+  if(studio()&&(!P.dead||S.mode==='dying')){sp(0,P.x,P.y,.1,3.4,0,0,0,.42,0,1);const lk=LU.lanI[0];
+    if(LAN3.on&&lk>.05){let dx=P.x-P.lx,dy=P.y-P.ly;const dl=Math.hypot(dx,dy)||1;dx/=dl;dy/=dl;sp(0,P.x+dx*4.8,P.y+dy*4.8,.11,4.2,0,0,0,Math.min(.5,.36*lk),0,1,Math.atan2(dy,dx),2.1);}
+    for(const L of LAMPS){if(!(L.vis>.05))continue;const dx=P.x-L.x,dy=P.y-L.y,d=Math.hypot(dx,dy),R=L.R*.85;if(d>R||d<2)continue;
+      const k=L.vis*(1-d/R),len=Math.min(26,3+14*d/Math.max(4,TOWN.lampsZ-14)),w=2.4+len*.08;sp(0,P.x+dx/d*len*.5,P.y+dy/d*len*.5,.12,w,0,0,0,.42*k,0,1,Math.atan2(dy,dx),len*.5/w);}}
   /* the wells breathe darkness */
   for(const w of WELLS)for(let k=0;k<3;k++){const q=((t*.25+k/3)%1);sp(0,w.x+Math.sin(t+k*2)*1.5,w.y+Math.cos(t*.7+k)*1.5,1+q*9,3+q*4,0,0,0,.3*(1-q)*Math.min(1,q*4),0);}
   /* shades: a pool of darkness on the ground, a haze round the body, two eyes */
   for(const s of SH){const k=s.in,a=s.a3||0,ca=Math.cos(a),sa=Math.sin(a),rx=-sa,ry=ca,sc=.55+.45*clamp(s.hp,0,1);
     sp(0,s.x,s.y,.2,10*sc,0,0,0,.62*k,0,1);sp(0,s.x,s.y,7*sc,8*sc,0,0,0,.42*k*(1-.4*s.fz),0);
-    const open=((s.eye+s.id)%4.3)>.18,eb=(s.fz>.5?.35:.8)*k;if(open)for(const sd of [-1,1]){const ex=s.x+ca*1.5*sc+rx*.55*sd*sc,ey=s.y+sa*1.5*sc+ry*.55*sd*sc,ez=11.5*sc;sp(2,ex,ey,ez,.42,1,.86,.6,2.6*eb,9,0,0,1.5);sp(3,ex,ey,ez,.6,1,.8,.5,.9*eb,9,0,0,1.5);}}
+    const open=((s.eye+s.id)%4.3)>.18,eb=(s.fz>.5?.35:.8)*k;if(open)for(const sd of [-1,1]){const fe=studio()?1.9:1.5,ex=s.x+ca*fe*sc+rx*.55*sd*sc,ey=s.y+sa*fe*sc+ry*.55*sd*sc,ez=11.5*sc;sp(2,ex,ey,ez,.42,1,.86,.6,2.6*eb,9,0,0,1.5);sp(3,ex,ey,ez,.6,1,.8,.5,.9*eb,9,0,0,1.5);}}
   for(const z of SNUF){const a=z.a3||0,ca=Math.cos(a),sa=Math.sin(a),rx=-sa,ry=ca;sp(0,z.x,z.y,.2,12,0,0,0,.6,0,1);sp(0,z.x,z.y,12,11,0,0,0,.35,0);
-    const eb=z.fz>.5?.4:.9;for(const sd of [-1,1]){const ex=z.x+ca*1.4+rx*.5*sd,ey=z.y+sa*1.4+ry*.5*sd;sp(2,ex,ey,19.6,.45,1,.8,.55,2.4*eb,9,0,0,1.5);sp(3,ex,ey,19.6,.65,1,.8,.5,.9*eb,9,0,0,1.5);}}
+    const eb=z.fz>.5?.4:.9,fe=studio()?1.65:1.4;for(const sd of [-1,1]){const ex=z.x+ca*fe+rx*.5*sd,ey=z.y+sa*fe+ry*.5*sd;sp(2,ex,ey,19.6,.45,1,.8,.55,2.4*eb,9,0,0,1.5);sp(3,ex,ey,19.6,.65,1,.8,.5,.9*eb,9,0,0,1.5);}}
   const B=BOSS;if(B.on){const r=B.r,rs=.35+.65*B.rise;sp(0,B.x,B.y,.3,r*2.8,0,0,0,.75*rs,0,1);sp(0,B.x,B.y,r*1.2*rs,r*2.4,0,0,0,.55*rs,0);
     const e=B.eye>0?Math.min(1,B.eye*2):0,glow=(B.hurt>0?2.2:1.4)*(B.dead?Math.max(0,1-B.dead):1),ez=-r*.45+r*1.05*rs+r*1.75*rs*.35,ey=B.y+r*1.05;
     if(e>0){sp(2,B.x,ey,ez,3.2*e+.4,1,.9,.7,3.5*glow,9,0,0,2.4);sp(2,B.x,ey,ez,12*e,1,.75,.45,.5*glow*e,0);sp(3,B.x,ey,ez,4*e,1,.85,.6,1.2*glow,9,0,0,2.4);}
@@ -2317,6 +2647,112 @@ function drawSprites(){
   for(let b=0;b<4;b++){const n=counts[b];if(n){for(let k=0;k<3;k++)gl.vertexAttribPointer(4+k,4,gl.FLOAT,false,48,off*48+k*16);gl.blendFuncSeparate(...modes[b]);gl.uniform1i(u.uBatch,b);
       if(b===3)gl.depthFunc(gl.GREATER);gl.drawArraysInstanced(gl.TRIANGLES,0,6,n);if(b===3)gl.depthFunc(gl.LEQUAL);}off+=n;}
   gl.depthMask(true);gl.disable(gl.BLEND);gl.bindVertexArray(null);
+}
+
+/* =====================================================================================
+   23b. 3D — STUDIO MODELS. The lamplighter rebuilt piece by piece (a caped greatcoat whose
+        skirts swing with his legs, a satchel, a scarf that trails, a top hat, gloves, a brass
+        lantern, a lighting pole with a hook), and new shapes for the things in the dark: a
+        hunched shade that reaches with clawed hands, a hooded snuffer in a torn robe holding
+        its pole in both hands, and the Long Night with a crown of spines and reaching arms.
+        Same joints, same sizes, same rules: only the shapes change.
+   ===================================================================================== */
+const AM2={};
+/* a tube between two points of the town, tapering from r0 to r1 */
+MB.prototype.tube=function(a,b,r0,r1,seg,c,m,caps){const d=[b[0]-a[0],b[1]-a[1],b[2]-a[2]],L=Math.hypot(...d)||1;d[0]/=L;d[1]/=L;d[2]/=L;
+  const rf=Math.abs(d[2])<.9?[0,0,1]:[1,0,0];let u=[d[1]*rf[2]-d[2]*rf[1],d[2]*rf[0]-d[0]*rf[2],d[0]*rf[1]-d[1]*rf[0]];const ul=Math.hypot(...u);u=u.map(x=>x/ul);
+  const v=[d[1]*u[2]-d[2]*u[1],d[2]*u[0]-d[0]*u[2],d[0]*u[1]-d[1]*u[0]],base=this.n;
+  for(let i=0;i<=seg;i++){const t=i/seg*TAU,ca=Math.cos(t),sa=Math.sin(t),n=[u[0]*ca+v[0]*sa,u[1]*ca+v[1]*sa,u[2]*ca+v[2]*sa];
+    this.v(a[0]+n[0]*r0,a[1]+n[1]*r0,a[2]+n[2]*r0,n[0],n[1],n[2],c,m);this.v(b[0]+n[0]*r1,b[1]+n[1]*r1,b[2]+n[2]*r1,n[0],n[1],n[2],c,m);}
+  for(let i=0;i<seg;i++){const k=base+i*2;this.I.push(k,k+3,k+2,k,k+1,k+3);}
+  if(caps&&r1>0)this.blob(b[0],b[1],b[2],r1,r1,r1,1,c,m,0,1);};
+/* a chain of tubes through a list of points, with a radius at each */
+MB.prototype.chain=function(pts,rs,seg,c,m){for(let i=0;i<pts.length-1;i++){this.tube(pts[i],pts[i+1],rs[i],rs[i+1],seg,c,m);if(i>0&&rs[i]>.05)this.blob(...pts[i],rs[i],rs[i],rs[i],1,c,m,0,1);}};
+/* part of a solid of revolution, from angle a0 to a1 (0 is forward, toward +y is to the right) */
+MB.prototype.latheArc=function(prof,seg,a0,a1,c,m){const base=this.n;
+  for(let j=0;j<prof.length;j++){const [r,z]=prof[j],p=prof[Math.max(0,j-1)],q=prof[Math.min(prof.length-1,j+1)],dr=q[0]-p[0],dz=q[1]-p[1],l=Math.hypot(dr,dz)||1,nr=dz/l,nz=-dr/l;
+    for(let i=0;i<=seg;i++){const a=a0+(a1-a0)*i/seg,ca=Math.cos(a),sa=Math.sin(a);this.v(ca*r,sa*r,z,ca*nr,sa*nr,nz,c,m);}}
+  for(let j=0;j<prof.length-1;j++)for(let i=0;i<seg;i++){const a=base+j*(seg+1)+i,b=a+seg+1;this.I.push(a,b+1,a+1,a,b,b+1);}};
+/* move every point made since `from` (town coordinates in and out) */
+MB.prototype.warp=function(from,fn){for(let i=from;i<this.n;i++){const o=i*3,q=fn(this.P[o],this.P[o+2],this.P[o+1]);this.P[o]=q[0];this.P[o+2]=q[1];this.P[o+1]=q[2];}};
+function actorMeshes2(){
+  const WOOL=18,LEA=19,SKIN=20,BRASS=21,KNIT=22,M=(id,ao)=>[id,0,0,ao==null?1:ao],pl=[MT.plain,0,0,1];let mb;
+  const coat=[.21,.24,.21,.06],coatD=[.15,.17,.15,.05],trou=[.15,.12,.1,.05],boot=[.09,.065,.05,.38],belt=[.25,.16,.1,.3],brass=[.64,.5,.28,.62],scarf=[.52,.11,.075,.05],
+    hat=[.075,.07,.07,.3],band=[.32,.08,.06,.3],skin=[.47,.34,.27,.18],hair=[.1,.075,.06,.08],glove=[.2,.14,.1,.25],wood=[.34,.23,.15,.15];
+  /* legs: trousers to the knee, then the boot */
+  mb=new MB();mb.tube([0,0,.1],[0,0,-3],.64,.52,12,trou,M(WOOL));mb.blob(0,0,-3,.52,.52,.5,1,trou,M(WOOL),0,1);AM2.thigh=mb.build();
+  mb=new MB();mb.tube([0,0,0],[0,0,-2.1],.52,.44,12,trou,M(WOOL));mb.tube([0,0,-1.75],[.04,0,-3.05],.55,.52,12,boot,M(LEA));
+  mb.blob(.5,0,-3.08,.98,.52,.4,2,boot,M(LEA),0,1);mb.box(-.55,-.5,-3.47,1.45,.5,-3.26,[.04,.035,.03,.2],M(LEA),31);mb.box(-.55,-.46,-3.47,-.05,.46,-3.1,[.05,.04,.035,.2],M(LEA),31);AM2.shin=mb.build();
+  /* the body: a caped greatcoat buttoned down the front, a belt, a satchel at the left hip and its strap across the chest */
+  mb=new MB();let b0=mb.n;
+  mb.lathe(0,0,[[1.44,-.75],[1.38,.3],[1.48,1.8],[1.64,3.1],[1.62,3.85],[1.28,4.42],[.82,4.8],[0,4.9]],18,coat,M(WOOL));
+  mb.lathe(0,0,[[2.02,2.68],[2.18,2.7],[2.14,2.95],[1.92,3.9],[1.3,4.48]],18,coat,M(WOOL,.9));
+  mb.lathe(0,0,[[.92,4.3],[1.07,5.12],[1.16,5.32],[.98,5.3]],14,coat,M(WOOL));
+  mb.lathe(0,0,[[1.47,-.42],[1.5,-.3],[1.5,.12],[1.46,.22]],18,belt,M(LEA));
+  mb.box(1.46,-.26,-.4,1.6,.26,.2,brass,M(BRASS),31);
+  mb.box(1.4,-.1,-.7,1.52,.1,2.75,coatD,M(WOOL),31);
+  for(let k=0;k<4;k++)for(const sy of [-.42,.42])mb.blob(1.56,sy,.6+k*.78,.12,.12,.12,1,brass,M(BRASS),0,1);
+  mb.warp(b0,(x,y,z)=>[x*.84,y,z]);
+  mb.box(-.62,-2.02,-1.85,.6,-1.5,-.25,belt,M(LEA,.85),63);mb.box(-.66,-2.08,-.75,.64,-1.46,-.18,[.22,.14,.09,.3],M(LEA),63);mb.box(-.12,-2.1,-1.1,.12,-2.06,-.7,brass,M(BRASS),31);
+  {const R=z=>{const p=[[-.75,1.44],[.3,1.38],[1.8,1.48],[3.1,1.64],[3.85,1.62],[4.42,1.28]];for(let i=0;i<p.length-1;i++)if(z<=p[i+1][0]){const k=(z-p[i][0])/(p[i+1][0]-p[i][0]);return p[i][1]+(p[i+1][1]-p[i][1])*k;}return 1.28;};
+    const pts=[];for(let i=0;i<=8;i++){const t=i/8,z=lerp(3.4,-.3,t),y=lerp(.95,-1.62,t),r=R(z)+.06,x=Math.sqrt(Math.max(0,r*r-y*y))*.84+.04;pts.push([x,y,z]);}
+    pts.unshift([.1,1.1,4.5]);mb.chain(pts,pts.map(()=>.11),6,belt,M(LEA));}
+  AM2.torso=mb.build();
+  /* the coat's skirts: two halves, split at the front and the back, swung by the legs */
+  for(const [k,s] of [['skirtR',1],['skirtL',-1]]){mb=new MB();b0=mb.n;const a0=s*.1,a1=s*(Math.PI-.06);
+    mb.latheArc([[1.98,-3.95],[2.0,-3.8],[1.8,-2.9],[1.6,-1.8],[1.44,-.7]],12,a0,a1,coat,M(WOOL,.85));mb.latheArc([[2.03,-3.95],[2.01,-3.65]],12,a0,a1,coatD,M(WOOL,.85));
+    mb.warp(b0,(x,y,z)=>[x*.88,y,z]);AM2[k]=mb.build();}
+  /* the head: a face with a nose, ears and sideburns; the scarf; the top hat with its band */
+  mb=new MB();
+  mb.lathe(0,0,[[1.12,-1.32],[1.3,-.98],[1.27,-.58],[1.08,-.32],[.9,-.26]],14,scarf,M(KNIT));mb.blob(.86,.48,-.88,.46,.42,.4,1,scarf,M(KNIT),.08,3);
+  mb.blob(.05,0,.55,.88,.82,1.02,3,skin,M(SKIN),.02,4);mb.blob(.26,0,.06,.64,.66,.5,2,skin,M(SKIN),0,5);mb.blob(.82,0,.36,.26,.18,.3,1,skin,M(SKIN),0,6);
+  for(const s of [-1,1]){mb.blob(.02,s*.86,.5,.16,.1,.26,1,skin,M(SKIN),0,7);mb.box(-.05,s>0?.66:-.86,.02,.42,s>0?.86:-.66,.72,hair,M(WOOL),31);mb.blob(.8,s*.3,.64,.075,.075,.075,1,[.03,.025,.025,.8],pl,0,1);}
+  mb.blob(-.32,0,.82,.76,.88,.74,2,hair,M(WOOL),.05,8);mb.box(.66,-.42,.82,.86,.42,.92,hair,M(WOOL),31);
+  b0=mb.n;mb.lathe(0,0,[[0,1.18],[1.15,1.18],[1.95,1.2],[2.13,1.33],[2.08,1.41],[1.9,1.35],[1.12,1.37]],18,hat,M(WOOL));
+  mb.lathe(0,0,[[1.1,1.3],[1.04,2.1],[1.06,2.9],[1.13,3.36],[1.09,3.46],[0,3.49]],18,hat,M(WOOL));mb.lathe(0,0,[[1.12,1.4],[1.12,1.88]],18,band,M(WOOL));
+  mb.warp(b0,(x,y,z)=>[x*.92,y,z]);AM2.head=mb.build();
+  mb=new MB();mb.box(-.06,-.36,-2.5,.06,.36,0,scarf,M(KNIT),63);mb.box(-.07,-.38,-2.62,.07,.38,-2.42,[.62,.5,.4,.05],M(KNIT),63);AM2.scarfEnd=mb.build();
+  /* arms (one unit long, stretched to fit), a cuff on the forearm, gloved hands */
+  mb=new MB();mb.tube([0,0,0],[1,0,0],.52,.48,12,coat,M(WOOL));AM2.sleeveU=mb.build();
+  mb=new MB();mb.tube([0,0,0],[1,0,0],.48,.46,12,coat,M(WOOL));mb.tube([.8,0,0],[1.02,0,0],.58,.56,12,coatD,M(WOOL));AM2.sleeveF=mb.build();
+  mb=new MB();mb.blob(0,0,0,.42,.32,.46,2,glove,M(LEA),0,2);mb.blob(.14,.3,.06,.17,.17,.2,1,glove,M(LEA),0,3);mb.blob(.26,0,-.3,.3,.3,.26,1,glove,M(LEA),0,4);AM2.hand=mb.build();
+  /* the lantern: a brass base, four posts, a cap with a chimney and a vent, a handle */
+  mb=new MB();mb.lathe(0,0,[[0,-.12],[.96,-.12],[1.0,.06],[.92,.2],[.9,.32]],14,brass,M(BRASS));
+  for(let k=0;k<4;k++){const a=k/4*TAU+Math.PI/4;mb.tube([Math.cos(a)*.86,Math.sin(a)*.86,.28],[Math.cos(a)*.86,Math.sin(a)*.86,1.64],.075,.075,6,brass,M(BRASS));}
+  mb.lathe(0,0,[[.92,1.6],[1.06,1.72],[1.0,1.84],[.62,2.2],[.36,2.45],[.3,2.5]],14,brass,M(BRASS));mb.cyl(0,0,2.48,2.86,.26,.22,10,brass,M(BRASS));
+  mb.lathe(0,0,[[.4,2.8],[.44,2.87],[.2,3.06],[0,3.09]],10,brass,M(BRASS));
+  mb.chain([[0,-.46,2.9],[0,-.42,3.32],[0,0,3.56],[0,.42,3.32],[0,.46,2.9]],[.06,.06,.06,.06,.06],6,COL.iron,[MT.iron,0,0,1]);AM2.lant=mb.build();
+  mb=new MB();mb.cyl(0,0,.3,1.62,.8,.8,14,[.9,.8,.6,.2],pl,false);mb.blob(.86,0,.96,.08,.4,.4,1,[1,1,1,0],pl,0,1);AM2.lglass=mb.build();
+  /* the lighting pole and the brass hook at its end */
+  mb=new MB();mb.tube([0,0,0],[1,0,0],.5,.42,8,wood,M(MT.wood));AM2.pole=mb.build();
+  mb=new MB();mb.tube([0,0,0],[.3,0,0],.17,.15,8,brass,M(BRASS));mb.tube([.3,0,0],[1,0,0],.075,.06,6,brass,M(BRASS));mb.chain([[.55,0,0],[.72,0,.36],[.95,0,.44],[1.08,0,.26]],[.055,.05,.045,.04],5,COL.iron,[MT.iron,0,0,1]);AM2.ptip=mb.build();
+  /* ---------- the shade: a hunched figure of smoke with long clawed arms, trailing away at the foot ---------- */
+  mb=new MB();b0=mb.n;
+  mb.lathe(0,0,[[.3,0],[.8,.8],[1.4,2.2],[2.0,4],[2.4,6],[2.55,7.8],[2.5,9],[2.0,10],[1.3,10.6],[.6,10.95],[0,11.05]],16,COL.plain,pl);
+  mb.warp(b0,(x,y,z)=>[x+.75*Math.pow(z/11,2)-.5*Math.pow(Math.max(0,z-6)/5,2)*Math.max(0,-x)/2.5,y*(1+.12*Math.sin(z*.6)),z]);
+  mb.blob(.38,0,11.35,1.18,1.08,1.25,2,COL.plain,pl,.1,3);mb.blob(-.4,0,12.0,1.12,1.05,1.12,2,COL.plain,pl,.14,4);mb.blob(-1.15,0,12.35,.6,.55,.55,1,COL.plain,pl,.1,5);
+  for(const s of [-1,1]){mb.chain([[.7,s*2.15,8.9],[2.5,s*2.6,7.7],[4.3,s*2.2,7.1]],[.78,.58,.4],8,COL.plain,pl);
+    for(let k=-1;k<=1;k++)mb.chain([[4.3,s*2.2,7.1],[5.4,s*(2.2+k*.42),6.8+k*.14],[6.2,s*(2.25+k*.58),6.1+k*.12]],[.24,.13,.025],5,COL.plain,pl);}
+  for(const s of [-.7,0,.7])mb.chain([[-.2,s,2.2],[-1.2,s*1.3,1.1],[-2.4,s*1.5,.3]],[.55,.3,.04],6,COL.plain,pl);
+  AM2.shade=mb.build();
+  /* ---------- the snuffer: a tall hooded robe, torn at the hem, both hands on the pole ---------- */
+  mb=new MB();b0=mb.n;
+  mb.lathe(0,0,[[2.5,0],[3.2,.6],[3.0,2],[2.6,5],[2.25,9],[2.0,13],[2.15,15.5],[2.45,16.8],[2.3,17.6],[1.6,18.1],[1.1,18.3],[0,18.4]],20,COL.plain,pl);
+  mb.warp(b0,(x,y,z)=>{if(z>2.6)return [x,y,z];const a=Math.atan2(y,x),jag=Math.max(0,Math.sin(a*9)*.6+Math.sin(a*5+1)*.4)*2.1;return [x,y,z+jag*(1-z/2.6)];});
+  b0=mb.n;mb.lathe(0,0,[[1.38,17.5],[1.66,18.6],[1.62,20],[1.4,21.2],[.92,22],[.32,22.5],[0,22.65]],14,COL.plain,pl);
+  mb.warp(b0,(x,y,z)=>[x-.45+.55*Math.pow((z-17.5)/5.2,2),y,z]);
+  mb.chain([[.3,1.95,16.7],[1.35,2.5,15.4],[1.1,1.85,14.6]],[.62,.62,.78],10,COL.plain,pl);
+  mb.chain([[.3,-1.95,16.7],[1.7,-.5,15.6],[1.25,1.55,16.7]],[.62,.62,.78],10,COL.plain,pl);
+  AM2.snuf=mb.build();
+  /* ---------- the Long Night: a cowled mass with a crown of spines and long reaching arms (unit size) ---------- */
+  mb=new MB();mb.blob(0,0,0,1,1,1,4,COL.plain,pl,.2,5);mb.blob(-.15,0,.55,.85,.9,.6,3,COL.plain,pl,.15,6);mb.blob(.72,0,.47,.3,.78,.14,2,COL.plain,pl,.1,9);
+  for(const s of [-1,1])mb.blob(-.1,s*.78,.05,.55,.5,.5,2,COL.plain,pl,.15,7+s);
+  for(let k=0;k<9;k++){const a=(k/8-.5)*3.4+Math.PI,h=vnoise(k*1.7,3.1,4);mb.tube([Math.cos(a)*.5-.2,Math.sin(a)*.62,.82],[Math.cos(a)*.78-.35,Math.sin(a)*1.02,1.5+.22*h],.13,.012,6,COL.plain,pl);}
+  /* the arms: each curls out of the water and up, with a twist of its own */
+  for(const a of [.95,-.95,1.65,-1.65,2.35,-2.35,Math.PI]){const z0=-.45+.25*Math.abs(Math.sin(a*2.3)),tw=Math.sin(a*3.7)*.5,pts=[],rs=[];
+    for(let i=0;i<=7;i++){const t=i/7,r=.75+t*1.65,ang=a+tw*t*t,z=z0+t*t*1.25+Math.sin(t*3.1)*.12;pts.push([Math.cos(ang)*r,Math.sin(ang)*r*1.1,z]);rs.push(.24*(1-t)+.012);}
+    mb.chain(pts,rs,7,COL.plain,pl);}
+  AM2.boss=mb.build();
 }
 
 /* =====================================================================================
@@ -2421,8 +2857,8 @@ function renderHud(dt){
   if(S.paused){dimRect(0,0,W,H,.45);const y0=Math.round(H*.24);otxt5f('PAUSED',W/2,y0,15,2,'c');
     pauseItems().forEach((t,i)=>{const y=pauseRowY(i),sel=i===S.pauseI;otxt5f((sel?'> ':'  ')+t+(sel?' <':'  '),W/2,y,sel?15:7,1,'c');});}
 }
-const pauseRowY=i=>Math.round(H*.5)+i*11;
-function pauseItems(){return ['RESUME',R3.dots?'DOTS: ON':'DOTS: OFF',EMBED?'EXIT':'QUIT TO TITLE'];}
+const pauseRowY=i=>Math.round(H*.46)+i*11;
+function pauseItems(){return ['RESUME',R3.look==='studio'?'LOOK: STUDIO':'LOOK: CLASSIC',R3.dots?'DOTS: ON':'DOTS: OFF',EMBED?'EXIT':'QUIT TO TITLE'];}
 
 /* =====================================================================================
    25. THE FRAME LOOP — the original's fixed 60 Hz simulation and its flow between screens,
@@ -2454,7 +2890,7 @@ const FADE={};
 function fade(id,on){const el=$(id);if(FADE[id]===on)return;FADE[id]=on;
   if(on){el.hidden=false;requestAnimationFrame(()=>requestAnimationFrame(()=>{if(FADE[id])el.classList.add('on');}));}
   else{el.classList.remove('on');setTimeout(()=>{if(!FADE[id])el.hidden=true;},950);}}
-function storyShow(i){const c=CHAPTERS[i];if(!c)return;$('stCh').textContent=c[0];$('stT').textContent=c[1];$('stP').textContent=c[2];fade('story',true);}
+function storyShow(i){const c=CHAPTERS[i];if(!c)return;const art=studio()&&IMGS['7.'+(i+1)];$('story').style.backgroundImage=art?'linear-gradient(rgba(4,4,8,.45),rgba(4,4,8,.7)),url('+art+')':'';$('stCh').textContent=c[0];$('stT').textContent=c[1];$('stP').textContent=c[2];fade('story',true);}
 function storyHide(){fade('story',false);}
 function logoShow(on){fade('logo',on);}
 /* ---------- looking round: the mouse (held still by pointer lock), a drag on the screen, the BEAM button dragged ---------- */
@@ -2470,7 +2906,7 @@ const DRAG={};function dragLook(el,k){el.addEventListener('pointerdown',e=>{if(e
   const end=e=>{delete DRAG[e.pointerId];};el.addEventListener('pointerup',end);el.addEventListener('pointercancel',end);}
 dragLook(cv,1.7);dragLook($('bA'),1.7);
 const UIP={};
-function edges(c){c.m=K('KeyM');c.g=K('KeyG');const e={};for(const k of ['ok','back','pause','a','b','u','d','l','r','m','g']){e[k]=c[k]&&!UIP[k];UIP[k]=c[k];}if(e.m)toggleSound();if(e.g)toggleDots();return e;}
+function edges(c){c.m=K('KeyM');c.g=K('KeyG');c.lk=K('KeyL');const e={};for(const k of ['ok','back','pause','a','b','u','d','l','r','m','g','lk']){e[k]=c[k]&&!UIP[k];UIP[k]=c[k];}if(e.m)toggleSound();if(e.g)toggleDots();if(e.lk)toggleLook();return e;}
 const IDLE={x:0,y:0,a:false,b:false,ax:0,ay:0,aim:null};
 const ATT=[9,7,9.5,34];
 /* a tap on the screen, in HUD dots */
@@ -2483,7 +2919,7 @@ function tick(dt){
   if(S.paused){
     const n=pauseItems().length;if(e.u){S.pauseI=(S.pauseI+n-1)%n;SFX.move();}if(e.d){S.pauseI=(S.pauseI+1)%n;SFX.move();}
     let ti=-1;if(tap){const [,ty]=tapHud();for(let i=0;i<n;i++){const y=pauseRowY(i);if(ty>=y-3&&ty<y+9)ti=i;}}
-    if(e.ok||ti>=0){const i=ti>=0?ti:S.pauseI;if(i===0)setPause(false);else if(i===1){toggleDots();SFX.confirm();}else{setPause(false);if(EMBED)ARC.exit();APP_attract();}}
+    if(e.ok||ti>=0){const i=ti>=0?ti:S.pauseI;if(i===0)setPause(false);else if(i===1){toggleLook();SFX.confirm();}else if(i===2){toggleDots();SFX.confirm();}else{setPause(false);if(EMBED)ARC.exit();APP_attract();}}
     return;
   }
   const m=S.mode;
@@ -2552,6 +2988,10 @@ function frame(ts){
 /* ---------- chrome + boot ---------- */
 function toggleSound(){AU.muted=!AU.muted;store.set('hd-lanternr-mute',AU.muted?'1':'0');setVolume();$('snd').textContent=AU.muted?'Sound off':'Sound on';}
 function toggleDots(){R3.dots=!R3.dots;store.set('hd-lanternr-dots',R3.dots?'1':'0');$('resv').textContent=R3.dots?'ON':'OFF';}
+/* the Look switch: Studio (the new paint, models and grade) or Classic (as the remake first shipped) */
+function toggleLook(){setLook(R3.look==='studio'?'classic':'studio');}
+function lookLabel(){$('lookv').textContent=R3.look==='studio'?'STUDIO':'CLASSIC';}
+$('look').addEventListener('click',e=>{toggleLook();e.currentTarget.blur();});
 $('snd').addEventListener('click',e=>{audioInit();toggleSound();e.currentTarget.blur();});
 $('res').addEventListener('click',e=>{toggleDots();e.currentTarget.blur();});
 $('pauseBtn').addEventListener('click',e=>{audioInit();setPause(!S.paused);e.currentTarget.blur();});
@@ -2562,7 +3002,7 @@ function layoutChrome(){const portrait=touchy&&innerHeight>innerWidth*1.05,bs=do
   if(touchy){const v=Math.min(innerWidth,innerHeight);bs.setProperty('--stick',Math.min(150,v*(portrait?.36:.34))+'px');bs.setProperty('--b',Math.min(62,v*(portrait?.15:.13))+'px');}}
 addEventListener('resize',()=>{layoutChrome();if(gl&&!GLERR)r3Resize();});
 if(AU.muted)$('snd').textContent='Sound off';
-$('resv').textContent=R3.dots?'ON':'OFF';
+$('resv').textContent=R3.dots?'ON':'OFF';lookLabel();
 if(gl){try{r3Init();}catch(e){GLERR=String(e&&e.message||e);console.error(e);}}
 if(!gl||GLERR){$('err').style.display='grid';if(GLERR)$('err').textContent='LANTERN: THE LONG NIGHT could not build its shaders on this graphics card. '+GLERR.slice(0,400);}
 else{layoutChrome();r3Resize();APP_attract();ARC.post('ready',{title:CAB.title,tickets:CAB.tickets});requestAnimationFrame(frame);}

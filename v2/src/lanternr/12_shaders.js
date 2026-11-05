@@ -221,21 +221,45 @@ void main(){vec2 uv=gl_FragCoord.xy/uRes;float dz=texture(uDepth,uv).r;
 /* ---------- REMAKE: the night sky. Stars, the moon and its halo, slow clouds, the roofs and spires of the rest of
    the town on the horizon, and at dawn a sunrise in the east ---------- */
 const FS_SKY=GL_COMMON+`in vec2 vT;out vec4 o;uniform mat4 uInvVP;uniform vec3 uCamP;uniform vec3 uMoonD;uniform vec3 uSunD;uniform vec4 uSk;
+#ifdef STUDIO
+uniform vec4 uSkF;uniform sampler2D uSkyI;uniform sampler2D uMoonI;uniform sampler2D uSkylI;uniform sampler2D uDawnI;
+#endif
 void main(){vec4 a=uInvVP*vec4(vT*2.-1.,1.,1.);vec3 d=normalize(a.xyz/a.w-uCamP);float el=d.y,t=uSk.x,dawn=uSk.y,mk=uSk.z;
   vec3 c=mix(vec3(.016,.021,.036),vec3(.0022,.0035,.010),smoothstep(-.02,.6,el));
   c+=vec3(.045,.026,.013)*exp(-max(el,0.)*13.)*(1.-uSk.w*.7);
   if(el>0.){vec3 q=d*230.;vec3 ci=floor(q);float hs=fract(sin(dot(ci,vec3(12.9898,78.233,37.719)))*43758.5453);
-    if(hs>.9962){vec3 f=fract(q)-.5;float s=smoothstep(.24,0.,length(f))*(.55+.45*sin(t*2.3+hs*97.));c+=vec3(.82,.86,1.)*s*(hs-.9962)*240.*smoothstep(0.,.22,el)*(1.-dawn);}}
+    if(hs>.9962){vec3 f=fract(q)-.5;float s=smoothstep(.24,0.,length(f))*(.55+.45*sin(t*2.3+hs*97.));vec3 sc=vec3(.82,.86,1.);
+#ifdef STUDIO
+      sc=mix(vec3(1.,.8,.62),vec3(.7,.8,1.),fract(hs*731.));if(uSkF.x>.5)s=0.;
+#endif
+      c+=sc*s*(hs-.9962)*240.*smoothstep(0.,.22,el)*(1.-dawn);}}
+#ifdef STUDIO
+  /* the Milky Way: a faint river of light across the sky, or the night-sky picture */
+  if(uSkF.x>.5){vec3 im=texture(uSkyI,vec2(atan(d.z,d.x)*.15915+.5,asin(clamp(el,-1.,1.))*.3183+.5)).rgb;c+=im*im*.05*(1.-dawn)*smoothstep(-.05,.2,el);}
+  else if(el>0.){vec3 mw=normalize(vec3(.42,.5,.76));float dm=dot(d,mw),bd=exp(-dm*dm*16.),n=fbm(vec2(d.x*6.+d.z*3.1,d.y*6.-d.z*2.3)*1.7),k=fbm(vec2(d.x*14.-d.z*5.,d.y*14.+d.x*3.));
+    c+=vec3(.55,.6,.8)*bd*(.35+.9*n)*(1.-.7*smoothstep(.45,.75,k)*bd)*.011*(1.-dawn)*smoothstep(0.,.3,el);}
+#endif
   float md=dot(d,uMoonD),ang=acos(clamp(md,-1.,1.));
   vec3 mt=normalize(cross(uMoonD,vec3(0.,1.,0.))),mb=cross(mt,uMoonD);vec2 mp=vec2(dot(d,mt),dot(d,mb))/.032;
-  float disc=smoothstep(1.,.93,length(mp));c+=vec3(1.,.96,.88)*disc*(1.25-.45*fbm(mp*2.3+4.))*1.4*mk*(1.-dawn*.6)*(.75+.25*sqrt(max(0.,1.-dot(mp,mp))));
+  float disc=smoothstep(1.,.93,length(mp));vec3 mface=vec3(1.,.96,.88)*(1.25-.45*fbm(mp*2.3+4.));
+#ifdef STUDIO
+  if(uSkF.y>.5){vec3 mi=texture(uMoonI,mp*.4+.5).rgb;mface=mi*mi*1.6;}else{vec2 cq=mp*3.1;vec2 ci2=floor(cq);vec2 cf=fract(cq)-.5;float cr=length(cf-(vec2(h21(ci2),h21(ci2+5.))-.5)*.4);mface*=1.-.12*smoothstep(.18,.12,cr)*step(.4,h21(ci2+9.))+.06*smoothstep(.2,.17,cr)*smoothstep(.1,.15,cr);}
+#endif
+  c+=mface*disc*1.4*mk*(1.-dawn*.6)*(.75+.25*sqrt(max(0.,1.-dot(mp,mp))));
   c+=vec3(.22,.27,.42)*exp(-ang*7.)*.2*mk+vec3(.4,.45,.6)*exp(-ang*34.)*.3*mk;
   if(el>.005){vec2 p=d.xz/el*520.;float n=fbm(p*.0011+vec2(t*.0045,t*.002))*.7+fbm(p*.0031-vec2(t*.003,0.))*.3;float cl=smoothstep(.46,.8,n);
     vec3 cc=mix(vec3(.010,.012,.019),vec3(.07,.075,.095),exp(-ang*2.6)*mk)+vec3(.32,.15,.07)*dawn;c=mix(c,cc,cl*smoothstep(.005,.14,el)*.88);}
-  if(dawn>0.){float sd=dot(d,uSunD);vec3 dc=mix(vec3(.42,.2,.1),vec3(.12,.2,.38),smoothstep(-.05,.5,el));c=mix(c,dc*.75,dawn*.8);
+  if(dawn>0.){float sd=dot(d,uSunD);vec3 dc=mix(vec3(.42,.2,.1),vec3(.12,.2,.38),smoothstep(-.05,.5,el));
+#ifdef STUDIO
+    if(uSkF.w>.5){float az=atan(d.z,d.x)-atan(uSunD.z,uSunD.x);vec3 di=texture(uDawnI,vec2(fract(az*.15915+.5),asin(clamp(el,-1.,1.))*.3183+.5)).rgb;dc=di*di*1.3;}
+#endif
+    c=mix(c,dc*.75,dawn*.8);
     c+=vec3(1.,.5,.22)*exp(-max(1.-sd,0.)*16.)*dawn*.7;c+=vec3(1.,.8,.55)*smoothstep(.9986,.9993,sd)*dawn*5.;}
   if(uSk.w<.5){float az=atan(d.z,d.x),b=floor(az*44.),fb=fract(az*44.);float hh=.012+.03*fract(sin(b*91.7)*4373.1),spire=step(.92,fract(sin(b*13.3)*913.7));
     float hgt=hh+spire*.07*max(0.,1.-abs(fb-.5)*4.)+.004*step(.5,fract(sin(b*7.1)*43.7))*step(.3,abs(fb-.5));
+#ifdef STUDIO
+    if(uSkF.z>.5){float m=texture(uSkylI,vec2(fract(az*.4775),clamp(el/.12,0.,1.))).r;hgt=m<.5?1.:-1.;}
+#endif
     if(el<hgt){c=vec3(.0035,.0045,.008)+dawn*vec3(.05,.04,.05);float win=step(.975,h21(floor(vec2(az*1100.,el*1100.))))*step(.006,hgt-el);c+=vec3(1.,.58,.24)*win*.22*(1.-dawn);}}
   o=vec4(c,1.);}`;
 /* ---------- the glow: a bright pass, then a ladder of blurs down and back up ---------- */
@@ -250,12 +274,24 @@ void main(){vec3 c=texture(uTex,vT+uPx*vec2(-2,0)).rgb+texture(uTex,vT+uPx*vec2(
   +(texture(uTex,vT+uPx*vec2(-1,-1)).rgb+texture(uTex,vT+uPx*vec2(1,-1)).rgb+texture(uTex,vT+uPx*vec2(-1,1)).rgb+texture(uTex,vT+uPx*vec2(1,1)).rgb)*2.;o=vec4(c/12.,1.);}`;
 /* ---------- the finish: exposure, filmic curve, a cold-warm grade, vignette, grain ---------- */
 const FS_COMP=GL_COMMON+`in vec2 vT;out vec4 o;uniform sampler2D uScene;uniform sampler2D uFogT;uniform sampler2D uBloom;uniform vec4 uC1;uniform vec4 uC2;uniform vec2 uRes;
+#ifdef STUDIO
+uniform vec4 uGa;uniform vec4 uGb;uniform float uCA;
+#endif
 vec3 aces(vec3 x){return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.);}
-void main(){vec4 f=texture(uFogT,vT),sc=texture(uScene,vT);vec3 c=sc.rgb*f.a+f.rgb;c+=texture(uBloom,vT).rgb*uC1.y;c*=mix(1.,clamp(sc.a,0.,1.),.94);
+vec3 pic(vec2 t){vec4 f=texture(uFogT,t),sc=texture(uScene,t);vec3 c=sc.rgb*f.a+f.rgb;c+=texture(uBloom,t).rgb*uC1.y;return c*mix(1.,clamp(sc.a,0.,1.),.94);}
+void main(){vec2 q=vT-.5;
+#ifdef STUDIO
+  vec3 c;if(uCA>0.){vec2 ca=q*dot(q,q)*uCA;c=vec3(pic(vT+ca).r,pic(vT).g,pic(vT-ca).b);}else c=pic(vT);
+#else
+  vec3 c=pic(vT);
+#endif
   c*=uC1.x;c=max(c,vec3(0.));
-  vec2 q=vT-.5;float vg=1.-dot(q*vec2(1.,.8),q*vec2(1.,.8))*(1.15+uC2.y*2.);c*=max(vg,0.);
+float vg=1.-dot(q*vec2(1.,.8),q*vec2(1.,.8))*(1.15+uC2.y*2.);c*=max(vg,0.);
   c+=vec3(.9,.12,.05)*uC2.x*smoothstep(.12,.5,length(q))*.5;
   c=aces(c);c=pow(c,vec3(1./2.2));
+#ifdef STUDIO
+  {float l2=dot(c,vec3(.299,.587,.114));c=mix(vec3(l2),c,uGa.w);c*=mix(uGa.rgb,uGb.rgb,smoothstep(.04,.55,l2));c=mix(c,c*c*(3.-2.*c),uGb.w);}
+#endif
   float lu=dot(c,vec3(.299,.587,.114));c=mix(c,vec3(lu),uC2.z*.7);
   c=mix(c,c*vec3(.92,.97,1.08)+vec3(.0,.004,.012),1.-smoothstep(.0,.4,lu));
   c=mix(c,vec3(1.,.9,.75),uC1.z);c*=1.-uC1.w;

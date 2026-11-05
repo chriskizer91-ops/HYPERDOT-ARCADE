@@ -53,7 +53,7 @@ body.land #pad{opacity:.85}
 #err{position:fixed;inset:0;display:none;place-items:center;padding:24px;text-align:center;font:500 14px/1.6 var(--f);color:var(--ink-2)}
 /* the story cards and the title, set in type over the town */
 .story{position:fixed;inset:0;display:grid;place-items:center;pointer-events:none;opacity:0;transition:opacity .9s ease;
-  background:radial-gradient(ellipse at 50% 45%,rgba(5,3,2,.25),rgba(5,3,2,.72) 70%)}
+  background:radial-gradient(ellipse at 50% 45%,rgba(5,3,2,.25),rgba(5,3,2,.72) 70%);background-size:cover;background-position:center}
 .story.on,.logo.on{opacity:1}
 .sc{max-width:min(620px,86vw);text-align:center;transform:translateY(-4vh);padding:0 6vw}
 .ch{font:600 clamp(11px,1.6vw,14px)/1 var(--f);letter-spacing:.42em;text-transform:uppercase;color:var(--accent);text-shadow:0 0 14px rgba(255,138,42,.6);margin-bottom:14px}
@@ -73,13 +73,13 @@ body.embed .bar,body.embed .keys{display:none!important}
 <div id="logo" class="logo" hidden><div class="l1">LANTERN</div><div class="l2">THE LONG NIGHT</div></div>
 <div id="story" class="story" hidden><div class="sc"><div class="ch" id="stCh"></div><h1 id="stT"></h1><p id="stP"></p></div></div>
 <div class="bar">
-  <div class="opts"><button class="chip" id="res" type="button"><span class="lbl">Dots </span><span id="resv">OFF</span></button><button class="chip" id="snd" type="button">Sound on</button><button class="chip" id="pauseBtn" type="button">Pause</button></div>
+  <div class="opts"><button class="chip" id="look" type="button"><span class="lbl">Look </span><span id="lookv">STUDIO</span></button><button class="chip" id="res" type="button"><span class="lbl">Dots </span><span id="resv">OFF</span></button><button class="chip" id="snd" type="button">Sound on</button><button class="chip" id="pauseBtn" type="button">Pause</button></div>
 </div>
 <div id="pad" hidden>
   <div class="stk" id="stL" aria-label="Stick"><div class="kn" id="knL"></div></div>
   <div class="acts"><button class="ab" id="bB" type="button">FLARE</button><button class="ab" id="bA" type="button">BEAM</button></div>
 </div>
-<p class="keys" id="keys"><b>WASD</b> walk · <b>mouse</b> looks · hold <b>click</b> or <b>Space</b> for the beam · <b>right click</b> or <b>X</b> flare · <b>Q E</b> turn · <b>G</b> dots · <b>Esc</b> pause · <b>M</b> mute</p>
+<p class="keys" id="keys"><b>WASD</b> walk · <b>mouse</b> looks · hold <b>click</b> or <b>Space</b> for the beam · <b>right click</b> or <b>X</b> flare · <b>Q E</b> turn · <b>L</b> look · <b>G</b> dots · <b>Esc</b> pause · <b>M</b> mute</p>
 <div id="err">LANTERN: THE LONG NIGHT draws its town with WebGL2, which this browser has turned off.</div>
 <script>
 (()=>{

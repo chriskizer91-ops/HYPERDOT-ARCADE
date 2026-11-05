@@ -2,7 +2,7 @@
 
 A remake of Lantern, played at street level. It is a separate game from the original (`games/lantern.html`) and from Lantern 3D (`v2/games/lantern3d.html`); neither is touched.
 
-Build: `python3 build.py` here writes `v2/games/lanternr.html` (one self-contained file, about 230 KB). `python3 build.py --dev OUT.html` also writes a copy with the test hooks (`window.__la`, the autopilot switch `window.__auto`).
+Build: `python3 build.py` here writes `v2/games/lanternr.html` (one self-contained file, about 280 KB with no pictures added). `python3 build.py --dev OUT.html` also writes a copy with the test hooks (`window.__la`, the autopilot switch `window.__auto`).
 
 ## What is the same
 
@@ -19,10 +19,26 @@ The rules are the original's code (modules `01`–`07`, copied through Lantern 3
 - **Effects:** smoke trailing off the shades, and dust that shows only inside the beam.
 - **HUD:** oil, flares and wicks, a compass strip with every lamp on it, and marks at the screen edge for shades out of sight (`15_hud.js`).
 
+## The Look switch: Classic and Studio
+
+The **Look** chip (also the pause menu and the L key) switches how the same game is drawn, saved as `hd-lanternr-look` (default `studio`). The rules never change.
+
+- **Classic** is the remake as it first shipped: its programs (`FS_WORLD`, `FS_VOID`, `FS_SKY`, `FS_COMP`) and models (`AM`) are unchanged.
+- **Studio** (`12_studio.js`, `14_models.js`) adds:
+  - **Texture pack:** 20 layers (cobbles, grass, dirt, sand, plaster, brick, oak, planks, clay and slate tiles, stone, paint, iron, canvas, bark, leaves, rock, wool, leather, brass). Each is painted by code on the GPU at start-up into two texture arrays: albedo + gloss, and slope + height + cavity. Every pattern repeats exactly over its tile.
+  - **Studio town shader (`FS_WORLDS`):** the same plan of windows, doors and beams as Classic, read from the pack, kept at Classic's brightness by each layer's measured mean. Wet stone and glass mirror the lamps, the lantern, the moon and the sky. Lit rooms have curtains.
+  - **Models (`AM2`):** the lamplighter rebuilt (caped greatcoat whose skirts swing with the legs, satchel and strap, scarf with a trailing end, face, top hat, gloves, brass lantern, pole with a hook). The shade is hunched with clawed arms, the snuffer is a hooded robe with a torn hem and both hands on its pole, and the Long Night has a crown of spines and curling arms. The same joints and sizes are used.
+  - **Darkness (`FS_VOIDS`):** smoke curling up through the body. It is drawn depth-first and then blended, so its edges fray into the light.
+  - **Also:** the lamplighter's shadows on the street, the Milky Way and coloured stars, a colour grade for each night, and a slight colour fringe at the screen edge (high quality only).
+- **Pictures:** put files in `img/`, named by the image list's numbers (project doc `claude/lantern-long-night-image-list.md`), e.g. `img/1.1.jpg` for the cobbles. The build embeds them.
+  - Surfaces `1.1`–`4.8` replace their code layer. The colour is brought to the same mean brightness, and the bumps come from the picture's fine shading.
+  - The sky takes `5.1` night sky, `5.2` moon, `5.3` dawn and `5.4` skyline. The chapter cards take `7.1`–`7.5`.
+  - Prepare surfaces as 512 × 512 seamless JPEGs.
+
 ## Cabinet contract
 
-Id `lanternr`. Sends `ready`, `score`, `over` (score, tickets), and `exit` (EXIT in its pause menu when embedded). Obeys `start`, `pause`, `resume`, `attract`, `mute`, `unmute`. Saves only `hd-lanternr-*` keys (`-table`, `-mute`, `-dots`).
+Id `lanternr`. Sends `ready`, `score`, `over` (score, tickets), and `exit` (EXIT in its pause menu when embedded). Obeys `start`, `pause`, `resume`, `attract`, `mute`, `unmute`. Saves only `hd-lanternr-*` keys (`-table`, `-mute`, `-dots`, `-look`).
 
 ## Quality
 
-High on a desktop, medium on a phone (half the screen's pixel density). If the frame rate can't hold, it lowers the resolution, then the quality. `?q=low`, `?q=med` or `?q=high` pins a level.
+High on a desktop, medium on a phone (half the screen's pixel density). If the frame rate can't hold, it lowers the resolution, then the quality. `?q=low`, `?q=med` or `?q=high` pins a level. Studio's wet reflections are off at low. `?tex=256` makes the texture pack smaller (for slow test machines).

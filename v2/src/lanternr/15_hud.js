@@ -100,5 +100,5 @@ function renderHud(dt){
   if(S.paused){dimRect(0,0,W,H,.45);const y0=Math.round(H*.24);otxt5f('PAUSED',W/2,y0,15,2,'c');
     pauseItems().forEach((t,i)=>{const y=pauseRowY(i),sel=i===S.pauseI;otxt5f((sel?'> ':'  ')+t+(sel?' <':'  '),W/2,y,sel?15:7,1,'c');});}
 }
-const pauseRowY=i=>Math.round(H*.5)+i*11;
-function pauseItems(){return ['RESUME',R3.dots?'DOTS: ON':'DOTS: OFF',EMBED?'EXIT':'QUIT TO TITLE'];}
+const pauseRowY=i=>Math.round(H*.46)+i*11;
+function pauseItems(){return ['RESUME',R3.look==='studio'?'LOOK: STUDIO':'LOOK: CLASSIC',R3.dots?'DOTS: ON':'DOTS: OFF',EMBED?'EXIT':'QUIT TO TITLE'];}
