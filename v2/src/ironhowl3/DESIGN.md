@@ -1,6 +1,6 @@
 # IRONHOWL 3 — design plan
 
-*Version 1.1 · 5 Nov 2026 · designer: Claude, for Christopher (Hyperdot Arcade)*
+*Version 1.2 · 5 Nov 2026 · designer: Claude, for Christopher (Hyperdot Arcade)*
 
 Ironhowl 3 is a new game in the Ironhowl series, not a patch on Ironhowl 3D. You pilot one big mech, seen from behind, across 12 missions with checkpoints, upgrades between missions, and three kinds of places that take turns: **open fields**, **crowded docks**, and **woods**.
 
@@ -22,7 +22,7 @@ The campaign is a road trip toward the factory: out of the farm fields, through 
 
 ## 2. The mech
 
-Howler 07 stands about **5 m tall** to the tips of its sensor ears. It walks on wolf-like legs whose knees bend backwards, and it has a wolf-head sensor. It is taller than a truck and about a third the height of a pine tree. That scale makes the woods feel tall and the docks feel crowded, and it keeps the trees from the forest pack at their real size.
+Howler 07 stands about **6 m tall** to the tips of its ears. It is built after Christopher's turnaround sheet (image 47), with dog-like legs in three parts: the knee points forward, the shin runs back to a hock, and a long foot bone ends in steel claws. It has a long-snouted wolf head. It is taller than a truck and about a third the height of a pine tree. That scale makes the woods feel tall and the docks feel crowded, and it keeps the trees from the forest pack at their real size.
 
 | Part | What it does |
 |---|---|
@@ -38,7 +38,7 @@ Howler 07 stands about **5 m tall** to the tips of its sensor ears. It walks on 
 Two follow cameras, both behind the mech's neck, never above the field like the top-down game.
 
 - **Close follow** — just behind and slightly above the head, over the shoulder. You see the back of the head and the gun barrels. Feels like first person. Best for aiming and for the woods.
-- **Far follow (3/4)** — lifted about one mech height higher (eye about 9.6 m off the ground) and further back (about 13 m), still looking forward over the mech's neck. You see more of the ground around you. Best for the fields and big fights.
+- **Far follow (3/4)** — lifted about one mech height higher (eye about 11 m off the ground) and further back (about 14 m), a little to the right, still looking forward over the mech's neck. You see more of the ground around you. Best for the fields and big fights.
 
 Switch with **V** (laptop), a small camera button (phone), or in the pause menu. The game remembers your choice.
 
