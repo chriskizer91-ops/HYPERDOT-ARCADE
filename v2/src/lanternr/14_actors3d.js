@@ -59,7 +59,8 @@ function drawSolids(pw){
     /* the snuffers' poles and bells */
     for(const z of SNUF){const tg=z.tgt||P,a=Math.atan2(tg.y-z.y,tg.x-z.x),ca=Math.cos(a),sa=Math.sin(a),rx=-sa,ry=ca;z.a3=a;
       const reach=z.wait>0?1:0,h=GLP(z.x+ca*.9+rx*1.7,z.y+sa*.9+ry*1.7,11.5),top=GLP(z.x+ca*(1.6+reach*1.5)+rx*2.1,z.y+sa*(1.6+reach*1.5)+ry*2.1,27.5+reach);
-      drawPart(pw,AM.unitI,M4.seg(h,top,.36,MX));drawPart(pw,AM.bell,M4.trs(top[0],top[2],top[1],a,1,1,1,MX));}
+      if(studio()){const k=(h[1]-.4)/(top[1]-h[1]),bot=[h[0]-(top[0]-h[0])*k,.4,h[2]-(top[2]-h[2])*k];drawPart(pw,AM2.spole,M4.seg(bot,top,.36,MX));}else drawPart(pw,AM.unitI,M4.seg(h,top,.36,MX));
+      drawPart(pw,AM.bell,M4.trs(top[0],top[2],top[1],a,1,1,1,MX));}
     /* oil and flares waiting in the street */
     for(const p of PICKS){if(!p.on)continue;const bob=1.2+Math.sin(p.t*3)*.5;
       if(p.k==='oil')drawPart(pw,AM.oil,M4.trs(p.x,p.y,bob,p.t*1.1,1,1,1,MX));else drawPart(pw,AM.flare,M4.trs(p.x,p.y,bob,p.t,1,1,1,MX),ONE3,new Float32Array([.25,.03,.02]));}
@@ -88,7 +89,8 @@ function drawLamplighter(pw){
   /* the coat and the body */
   const torso=J(root,M4.t(0,6.2+bob,0),M4.rz(-lean),M4.rx(sway));drawPart(pw,A.torso,torso,tint);
   if(SL){drawPart(pw,AM2.skirtR,J(torso,M4.rz(swS[1]*.5+lean*.6)),tint);drawPart(pw,AM2.skirtL,J(torso,M4.rz(swS[-1]*.5+lean*.6)),tint);
-    drawPart(pw,AM2.scarfEnd,J(torso,M4.t(-1.02,4.5,.38),M4.rz(-(.18+ks*.75+Math.sin(ph*2)*.07*ks)-dk*.5),M4.rx(.12+sway)),tint);}
+    const sf=.07+ks*.1+Math.sin(ph*2)*.05*ks;drawPart(pw,AM2.scarfEnd,J(torso,M4.t(1.38,4.4,-.3),M4.rz(sf),M4.rx(-.06)),tint);
+    drawPart(pw,AM2.scarfEnd,J(torso,M4.t(1.3,4.25,-.6),M4.rz(sf*.8+.04),M4.rx(-.12),M4.trs(0,0,0,0,1,1,.85)),tint);}
   const neck=J(torso,M4.t(.05,5.0,0));drawPart(pw,A.head,J(neck,M4.rz(.12+dk*.4)),tint);
   const xf=(m,x,y,z)=>{const q=M4.xf(m,x,y,z);return [q[0],q[1],q[2]];};
   /* the lantern arm: from the right shoulder to the hand that holds the lantern out */
@@ -179,7 +181,7 @@ function fillSprites(dt){
   /* shades: a pool of darkness on the ground, a haze round the body, two eyes */
   for(const s of SH){const k=s.in,a=s.a3||0,ca=Math.cos(a),sa=Math.sin(a),rx=-sa,ry=ca,sc=.55+.45*clamp(s.hp,0,1);
     sp(0,s.x,s.y,.2,10*sc,0,0,0,.62*k,0,1);sp(0,s.x,s.y,7*sc,8*sc,0,0,0,.42*k*(1-.4*s.fz),0);
-    const open=((s.eye+s.id)%4.3)>.18,eb=(s.fz>.5?.35:.8)*k;if(open)for(const sd of [-1,1]){const fe=studio()?1.9:1.5,ex=s.x+ca*fe*sc+rx*.55*sd*sc,ey=s.y+sa*fe*sc+ry*.55*sd*sc,ez=11.5*sc;sp(2,ex,ey,ez,.42,1,.86,.6,2.6*eb,9,0,0,1.5);sp(3,ex,ey,ez,.6,1,.8,.5,.9*eb,9,0,0,1.5);}}
+    const open=((s.eye+s.id)%4.3)>.18,eb=(s.fz>.5?.35:.8)*k;if(open)for(const sd of [-1,1]){const fe=studio()?1.75:1.5,ex=s.x+ca*fe*sc+rx*.55*sd*sc,ey=s.y+sa*fe*sc+ry*.55*sd*sc,ez=11.5*sc;sp(2,ex,ey,ez,.42,1,.86,.6,2.6*eb,9,0,0,1.5);sp(3,ex,ey,ez,.6,1,.8,.5,.9*eb,9,0,0,1.5);}}
   for(const z of SNUF){const a=z.a3||0,ca=Math.cos(a),sa=Math.sin(a),rx=-sa,ry=ca;sp(0,z.x,z.y,.2,12,0,0,0,.6,0,1);sp(0,z.x,z.y,12,11,0,0,0,.35,0);
     const eb=z.fz>.5?.4:.9,fe=studio()?1.65:1.4;for(const sd of [-1,1]){const ex=z.x+ca*fe+rx*.5*sd,ey=z.y+sa*fe+ry*.5*sd;sp(2,ex,ey,19.6,.45,1,.8,.55,2.4*eb,9,0,0,1.5);sp(3,ex,ey,19.6,.65,1,.8,.5,.9*eb,9,0,0,1.5);}}
   const B=BOSS;if(B.on){const r=B.r,rs=.35+.65*B.rise;sp(0,B.x,B.y,.3,r*2.8,0,0,0,.75*rs,0,1);sp(0,B.x,B.y,r*1.2*rs,r*2.4,0,0,0,.55*rs,0);

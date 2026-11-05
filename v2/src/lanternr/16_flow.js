@@ -28,7 +28,7 @@ const FADE={};
 function fade(id,on){const el=$(id);if(FADE[id]===on)return;FADE[id]=on;
   if(on){el.hidden=false;requestAnimationFrame(()=>requestAnimationFrame(()=>{if(FADE[id])el.classList.add('on');}));}
   else{el.classList.remove('on');setTimeout(()=>{if(!FADE[id])el.hidden=true;},950);}}
-function storyShow(i){const c=CHAPTERS[i];if(!c)return;const art=studio()&&IMGS['7.'+(i+1)];$('story').style.backgroundImage=art?'linear-gradient(rgba(4,4,8,.45),rgba(4,4,8,.7)),url('+art+')':'';$('stCh').textContent=c[0];$('stT').textContent=c[1];$('stP').textContent=c[2];fade('story',true);}
+function storyShow(i){const c=CHAPTERS[i];if(!c)return;const art=studio()&&IMGS['7.'+(i+1)];$('story').style.backgroundImage=art?'radial-gradient(ellipse at 50% 48%,rgba(5,4,6,.72),rgba(5,4,6,.38) 78%),linear-gradient(rgba(5,4,6,.1),rgba(5,4,6,.5)),url('+art+')':'';$('stCh').textContent=c[0];$('stT').textContent=c[1];$('stP').textContent=c[2];fade('story',true);}
 function storyHide(){fade('story',false);}
 function logoShow(on){fade('logo',on);}
 /* ---------- looking round: the mouse (held still by pointer lock), a drag on the screen, the BEAM button dragged ---------- */

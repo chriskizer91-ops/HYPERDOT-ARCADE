@@ -31,15 +31,15 @@ function r3Init(){
   gl.activeTexture(gl.TEXTURE7);const NTX=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,NTX);gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);gl.texImage2D(gl.TEXTURE_2D,0,gl.R8,256,256,0,gl.RED,gl.UNSIGNED_BYTE,nt);
   gl.generateMipmap(gl.TEXTURE_2D);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.REPEAT);
   for(const k in PG){const p=PG[k];if(p.u.uNT){gl.useProgram(p.p);gl.uniform1i(p.u.uNT,7);}}gl.activeTexture(gl.TEXTURE0);
-  if(R3.look==='studio')texGen();skyImages();
+  if(R3.look==='studio')texGen();
 }
 /* STUDIO: the look in use, and the switch between the two */
 const studio=()=>R3.look==='studio'&&TX.ready;
 function setLook(k){R3.look=k==='classic'?'classic':'studio';store.set('hd-lanternr-look',R3.look);if(R3.look==='studio'&&gl&&!GLERR)texGen();lookLabel();}
 /* the sky's pictures, when the image list's 5.1 to 5.4 have been added */
-const SKYI={};function skyImages(){for(const [k,key] of [['sky','5.1'],['moon','5.2'],['dawn','5.3'],['skyl','5.4']])if(IMGS[key]){const im=new Image();im.onload=()=>{const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+const SKYI={};function skyImages(){for(const [k,key] of [['sky','5.1'],['moon','5.2'],['dawn','5.3'],['skyl','5.4'],['art','7.6']])if(IMGS[key]){const im=new Image();im.onload=()=>{const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,gl.RGBA,gl.UNSIGNED_BYTE,im);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);gl.generateMipmap(gl.TEXTURE_2D);
-  texParams(gl.LINEAR_MIPMAP_LINEAR,k==='moon'?gl.CLAMP_TO_EDGE:gl.REPEAT);SKYI[k]=t;};im.src=IMGS[key];}}
+  texParams(gl.LINEAR_MIPMAP_LINEAR,k==='moon'||k==='art'?gl.CLAMP_TO_EDGE:gl.REPEAT);SKYI[k]=t;SKYI[k+'A']=im.width/im.height;};im.src=IMGS[key];}}
 /* STUDIO: a grade for each night (shadow tint, saturation; highlight tint, contrast) */
 const GRADE=[[[.95,1,1.08,1],[1.04,1,.94,.15]],[[.9,1.02,1.07,.92],[1.02,1,.95,.12]],[[.92,1.04,1,.85],[1,1.02,.95,.18]],[[1.02,1,.96,.88],[1.05,1,.9,.1]],[[.9,.98,1.12,1],[1.05,.99,.92,.2]]];
 function r3Resize(){
@@ -255,7 +255,9 @@ function render3D(dt){
   const toLdr=R3.dots;const dest=toLdr?TG.ldr:null;
   const flash=S.flash>0&&!reduce?S.flash*.35:0,dark=S.mode==='dying'?clamp((S.t-.4)/2.2,0,1)*.88:S.mode==='over'?.5:0,hurt=P.hurt>0?P.hurt*1.6:0,gutter=TOWN.kind==='night'&&!P.dead&&P.oil<22&&S.mode==='play'?(1-P.oil/22)*.5:0;
   const gr=GRADE[S.night]||GRADE[0],gk=TOWN.kind==='night'?1-dawn*.7:.4;
-  fsPass(SL?PG.compS:PG.comp,dest,u=>{if(SL){gl.uniform4f(u.uGa,lerp(1,gr[0][0],gk),lerp(1,gr[0][1],gk),lerp(1,gr[0][2],gk),lerp(1,gr[0][3],gk));gl.uniform4f(u.uGb,lerp(1,gr[1][0],gk),lerp(1,gr[1][1],gk),lerp(1,gr[1][2],gk),gr[1][3]*gk);gl.uniform1f(u.uCA,R3.q==='high'?.014:0);}bindT(0,sc.t,u.uScene);bindT(1,fg.t,u.uFogT);bindT(2,TG.u0.t,u.uBloom);gl.uniform4f(u.uC1,2.15*(1+dawn*.2),HDR?.55:.4,flash,dark);gl.uniform4f(u.uC2,hurt,gutter,S.paused?.6:0,R3.t);gl.uniform2f(u.uRes,cv.width,cv.height);});
+  fsPass(SL?PG.compS:PG.comp,dest,u=>{if(SL){gl.uniform4f(u.uGa,lerp(1,gr[0][0],gk),lerp(1,gr[0][1],gk),lerp(1,gr[0][2],gk),lerp(1,gr[0][3],gk));gl.uniform4f(u.uGb,lerp(1,gr[1][0],gk),lerp(1,gr[1][1],gk),lerp(1,gr[1][2],gk),gr[1][3]*gk);gl.uniform1f(u.uCA,R3.q==='high'?.014:0);
+    /* the end of the last night: the sunrise fades into the dawn painting, behind the score */
+    const ak=S.mode==='ending'&&SKYI.art?clamp((S.t-5)/3,0,1)*.88:0;if(ak>0){const sa=R3.cssW/R3.cssH,ia=SKYI.artA,sx=sa<ia?sa/ia:1,sy=sa<ia?1:ia/sa;bindT(3,SKYI.art,u.uArt);gl.uniform4f(u.uArtR,sx,sy,0,ak);}else gl.uniform4f(u.uArtR,1,1,0,0);}bindT(0,sc.t,u.uScene);bindT(1,fg.t,u.uFogT);bindT(2,TG.u0.t,u.uBloom);gl.uniform4f(u.uC1,2.15*(1+dawn*.2),HDR?.55:.4,flash,dark);gl.uniform4f(u.uC2,hurt,gutter,S.paused?.6:0,R3.t);gl.uniform2f(u.uRes,cv.width,cv.height);});
   hudUpload();
   const pd=PG.dots,ud=pd.u,G=GLASS3[GI3];gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,cv.width,cv.height);gl.useProgram(pd.p);
   bindT(0,HUDT,ud.uHud);if(toLdr)bindT(1,TG.ldr.t,ud.uImg);gl.uniform4f(ud.uGrid,HUD.pitch*R3.dpr,HUD.pitch*R3.dpr,HUD.ox*R3.dpr,HUD.oy*R3.dpr);gl.uniform2f(ud.uRes,cv.width,cv.height);

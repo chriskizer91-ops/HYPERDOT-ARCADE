@@ -2,7 +2,7 @@
 
 A remake of Lantern, played at street level. It is a separate game from the original (`games/lantern.html`) and from Lantern 3D (`v2/games/lantern3d.html`); neither is touched.
 
-Build: `python3 build.py` here writes `v2/games/lanternr.html` (one self-contained file, about 280 KB with no pictures added). `python3 build.py --dev OUT.html` also writes a copy with the test hooks (`window.__la`, the autopilot switch `window.__auto`).
+Build: `python3 build.py` here writes `v2/games/lanternr.html` (one self-contained file, about 4.5 MB with Studio's pictures). `python3 build.py --dev OUT.html` also writes a copy with the test hooks (`window.__la`, the autopilot switch `window.__auto`).
 
 ## What is the same
 
@@ -30,10 +30,12 @@ The **Look** chip (also the pause menu and the L key) switches how the same game
   - **Models (`AM2`):** the lamplighter rebuilt (caped greatcoat whose skirts swing with the legs, satchel and strap, scarf with a trailing end, face, top hat, gloves, brass lantern, pole with a hook). The shade is hunched with clawed arms, the snuffer is a hooded robe with a torn hem and both hands on its pole, and the Long Night has a crown of spines and curling arms. The same joints and sizes are used.
   - **Darkness (`FS_VOIDS`):** smoke curling up through the body. It is drawn depth-first and then blended, so its edges fray into the light.
   - **Also:** the lamplighter's shadows on the street, the Milky Way and coloured stars, a colour grade for each night, and a slight colour fringe at the screen edge (high quality only).
-- **Pictures:** put files in `img/`, named by the image list's numbers (project doc `claude/lantern-long-night-image-list.md`), e.g. `img/1.1.jpg` for the cobbles. The build embeds them.
-  - Surfaces `1.1`–`4.8` replace their code layer. The colour is brought to the same mean brightness, and the bumps come from the picture's fine shading.
-  - The sky takes `5.1` night sky, `5.2` moon, `5.3` dawn and `5.4` skyline. The chapter cards take `7.1`–`7.5`.
-  - Prepare surfaces as 512 × 512 seamless JPEGs.
+- **Pictures (in, Nov 2026):** `img/` holds the image list's pictures (project doc `claude/lantern-long-night-image-list.md`), named by number, e.g. `img/1.1.jpg` for the cobbles. `python3 prep_images.py FOLDER` makes them from the generator's originals; the build embeds them (about 4 MB).
+  - Surfaces `1.1`–`4.8` replace their code layer. The colour is brought to the code layer's mean brightness, and the bumps come from the picture's fine shading (inverted for brick, whose mortar is light).
+  - The sky takes `5.1` night sky and `5.3` dawn (mapped from the horizon up), `5.2` moon and `5.4` skyline.
+  - Story cards `7.1`–`7.5` sit behind the chapter text, and `7.6` fades in behind the final score.
+  - The model sheets `6.1`–`6.4` were the blueprints for the Studio models and are not embedded.
+  - Classic uses none of the pictures, and they are only loaded once Studio is on.
 
 ## Cabinet contract
 

@@ -96,7 +96,7 @@ void main(){vec2 u=gl_FragCoord.xy/uS;vec3 a=vec3(.5);float g=.1,h=.5,c=1.;
 /* a picture becomes a layer: its colour brought to the code layer's brightness, bumps from its fine shading */
 const FS_GENIMG=`layout(location=0) out vec4 oA;layout(location=1) out vec4 oH;uniform sampler2D uImg;uniform float uS;uniform vec4 uTgt;
 void main(){vec2 u=gl_FragCoord.xy/uS;vec3 c=texture(uImg,u).rgb,m=textureLod(uImg,vec2(.5),20.).rgb;float lm=dot(m,vec3(.3,.59,.11)),lc=dot(c,vec3(.3,.59,.11)),lb=dot(textureLod(uImg,u,3.5).rgb,vec3(.3,.59,.11));
-  oA=vec4(clamp(c*(uTgt.x/max(lm,.02)),0.,1.),clamp(uTgt.y*(.75+.5*clamp(lc/max(lm,.02),0.,2.)*.5),0.,1.));float h=clamp(.5+(lc-lb)/max(lm,.05)*.9,0.,1.);oH=vec4(h,smoothstep(.2,.55,h),0.,1.);}`;
+  oA=vec4(clamp(c*(uTgt.x/max(lm,.02)),0.,1.),clamp(uTgt.y*(.75+.5*clamp(lc/max(lm,.02),0.,2.)*.5),0.,1.));float h=clamp(.5+(lc-lb)/max(lm,.05)*.9*uTgt.z,0.,1.);oH=vec4(h,smoothstep(.2,.55,h),0.,1.);}`;
 /* the bumps: the slope of the height, wrapped round the tile's edges */
 const FS_GENN=`out vec4 o;uniform sampler2D uH;uniform float uK;
 void main(){ivec2 p=ivec2(gl_FragCoord.xy);int S=textureSize(uH,0).x;
@@ -124,9 +124,10 @@ function texGen(){
   for(const T of [TX.A,TX.N]){gl.bindTexture(gl.TEXTURE_2D_ARRAY,T);gl.generateMipmap(gl.TEXTURE_2D_ARRAY);}
   texMeans();
   gl.activeTexture(gl.TEXTURE8);gl.bindTexture(gl.TEXTURE_2D_ARRAY,TX.A);gl.activeTexture(gl.TEXTURE9);gl.bindTexture(gl.TEXTURE_2D_ARRAY,TX.N);gl.activeTexture(gl.TEXTURE0);
-  TX.ready=true;TX.ms=Math.round(performance.now()-t0);
+  TX.ready=true;TX.ms=Math.round(performance.now()-t0);skyImages();
   /* pictures arrive after their decode; each one repaints its layer and the mips again */
-  for(const L of imgs){const im=new Image();im.onload=()=>{texFromImage(L,im,pi,pn,tmp,f1,f2);};im.src=IMGS[TXL[L][1]];}
+  TX.pend=imgs.length;const done=()=>{if(--TX.pend>0)return;for(const [T,u] of [[TX.A,8],[TX.N,9]]){gl.activeTexture(gl.TEXTURE0+u);gl.bindTexture(gl.TEXTURE_2D_ARRAY,T);gl.generateMipmap(gl.TEXTURE_2D_ARRAY);}gl.activeTexture(gl.TEXTURE0);texMeans();};
+  for(const L of imgs){const im=new Image();im.onload=()=>{texFromImage(L,im,pi,pn,tmp,f1,f2);done();};im.onerror=done;im.src=IMGS[TXL[L][1]];}
 }
 /* the average colour of each layer, from its smallest mip: lets the shader keep the town as bright as Classic */
 function texMeans(){const f=gl.createFramebuffer(),lv=Math.max(0,(Math.log2(TXS)|0)-4),n=TXS>>lv,px=new Uint8Array(n*n*4);gl.bindFramebuffer(gl.FRAMEBUFFER,f);
@@ -140,12 +141,10 @@ function texFromImage(L,im,pi,pn,tmp,f1,f2){
   const lm=TX.LM[L*4]*.3+TX.LM[L*4+1]*.59+TX.LM[L*4+2]*.11;
   gl.disable(gl.BLEND);gl.disable(gl.DEPTH_TEST);gl.viewport(0,0,S,S);gl.bindVertexArray(VAO0);
   gl.bindFramebuffer(gl.FRAMEBUFFER,f1);gl.framebufferTextureLayer(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,TX.A,0,L);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT1,gl.TEXTURE_2D,tmp,0);
-  gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]);gl.useProgram(pi.p);bindT(0,it,pi.u.uImg);gl.uniform1f(pi.u.uS,S);gl.uniform4f(pi.u.uTgt,Math.sqrt(lm),TX.LM[L*4+3],0,0);gl.drawArrays(gl.TRIANGLES,0,3);
+  gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]);gl.useProgram(pi.p);bindT(0,it,pi.u.uImg);gl.uniform1f(pi.u.uS,S);gl.uniform4f(pi.u.uTgt,Math.sqrt(lm),TX.LM[L*4+3],TXL[L][0]==='brick'?-1:1,0);gl.drawArrays(gl.TRIANGLES,0,3);
   gl.bindFramebuffer(gl.FRAMEBUFFER,f2);gl.framebufferTextureLayer(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,TX.N,0,L);gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
   gl.useProgram(pn.p);bindT(0,tmp,pn.u.uH);gl.uniform1f(pn.u.uK,TXL[L][3]);gl.drawArrays(gl.TRIANGLES,0,3);
-  gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.drawBuffers([gl.BACK]);gl.deleteTexture(it);
-  for(const [T,u] of [[TX.A,8],[TX.N,9]]){gl.activeTexture(gl.TEXTURE0+u);gl.bindTexture(gl.TEXTURE_2D_ARRAY,T);gl.generateMipmap(gl.TEXTURE_2D_ARRAY);}gl.activeTexture(gl.TEXTURE0);
-  texMeans();TX.from[TXL[L][0]]='picture';
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.drawBuffers([gl.BACK]);gl.deleteTexture(it);TX.from[TXL[L][0]]='picture';
 }
 /* ---------- the Studio town: the same plan and the same lights, painted from the pack ---------- */
 const FS_WORLDS=GL_COMMON+GL_LIGHT+`precision highp sampler2DArray;
@@ -206,6 +205,7 @@ void main(){
     bool clay=h21(vec2(sd,3.))>.42,xf=abs(N.x)>abs(N.z);float u=xf?P.z:P.x;vec3 T=xf?vec3(0,0,1):vec3(1,0,0),B=normalize(vec3(0,1,0)-N*N.y);int L=clay?8:9;
     tx(vec2(u/16.+sd*.37,P.y/12.),L);alb=tcol(L,clay?.075:.045);alb=mix(alb,vec3(.03,.045,.02),smoothstep(.62,.82,fbm(P.xz*.13+sd))*.5);gl=TA.a+wet*.16;N=bmp(N,T,B,1.);cav=TN.w;}
   else if(id>=18){/* the lamplighter's clothes: the pack laid on in his own frame, so it moves with him */
+    if(dot(N,V)<0.)N=-N;/* the inside of the coat's skirts faces the other way */
     vec3 d=P-uOrg.xyz;float c=cos(uOrg.w),s=sin(uOrg.w);vec3 lp=vec3(d.x*c+d.z*s,d.y,-d.x*s+d.z*c),ln=vec3(N.x*c+N.z*s,N.y,-N.x*s+N.z*c),T,B;vec2 uv=dax(lp,ln,T,B);
     T=vec3(T.x*c-T.z*s,T.y,T.x*s+T.z*c);B=vec3(B.x*c-B.z*s,B.y,B.x*s+B.z*c);int L=id==18||id==22?17:id==19?18:id==21?19:-1;
     if(L>=0){tx(uv/(id==22?2.2:4.),L);alb=tpat(L,alb);gl=mix(gl,TA.a,.6);N=bmp(N,T,B,id==22?1.6:.8);cav=mix(1.,TN.w,.6);}
@@ -242,8 +242,9 @@ void main(){
 const FS_VOIDS=GL_COMMON+`in vec3 vP;in vec3 vN;in float vH;out vec4 o;uniform vec3 uCam;uniform vec4 uVoid;uniform vec4 uVw;uniform vec3 uVoidC;
 void main(){if(vH>uVoid.z+.02)discard;vec3 V=normalize(uCam-vP),N=normalize(vN);float fr=pow(1.-abs(dot(N,V)),2.);
   float t=uVw.x,sw=fbm(vec2(vP.x*.33+vP.z*.21,vP.y*.24-t*1.2)+uVw.y),sw2=vn(vec2(vP.z*.55-vP.x*.31,vP.y*.5-t*1.9)*1.3+uVw.y*3.);
-  vec3 c=vec3(.0012,.001,.002)+fr*mix(vec3(.004,.003,.01),vec3(.05,.05,.07),uVoid.x)+uVoidC*fr;
-  c+=vec3(.012,.008,.03)*smoothstep(.55,.85,sw*.7+sw2*.5)*(1.-uVoid.x);
+  /* smoke, not glass: a near-black body, a grey haze at the rim, paler curls drifting up through it */
+  vec3 c=vec3(.0012,.0011,.0014)+fr*mix(vec3(.006,.0055,.007),vec3(.05,.05,.06),uVoid.x)+uVoidC*fr*.35;
+  c+=vec3(.014,.013,.016)*smoothstep(.5,.85,sw*.7+sw2*.5)*(1.-uVoid.x);
   float fl=vn(vP.xz*.9+vec2(vP.y*.6,t*9.));c+=pow(fr,.7)*uVoid.y*vec3(2.6,.95,.26)*(.35+.9*fl*fl);
   c+=smoothstep(uVoid.z-.12,uVoid.z+.02,vH)*vec3(.5,.18,.05)*uVoid.y*2.;
   float keep=clamp(.03+fr*.32+uVoid.x*.22+uVoid.y*.55,0.,1.);
