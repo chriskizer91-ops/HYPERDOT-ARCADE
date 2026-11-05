@@ -403,7 +403,7 @@ function drawUI(){
     if(EMBED)otxt3(g,'+'+APP.tix+' TICKETS',W/2,Math.round(H*.62)+9,'#2fe6ff',1,'c');}
   if(ARC.hold){TINT=.65;otxt5(g,'PAUSED',W/2,Math.round(H*.42),GR.steel,2,'c',.2);}
   if(sc==='fight'&&SUPERF>0)TINT=Math.max(TINT,.18);
-  const Uo=M_OUT.uniforms;Uo.uTint.value=lerp(Uo.uTint.value,TINT,.25);Uo.uTintC.value.setRGB(.32,.28,.42);Uo.uFlash.value=KOFLASH;
+  const Uo=M_OUT.uniforms;Uo.uTint.value=lerp(Uo.uTint.value,TINT,.25);Uo.uTintC.value.setRGB(.32,.28,.42);Uo.uFlash.value=Math.max(KOFLASH,FLASHG*(reduce?.02:.07));
 }
 let LAST=0;
 function frame(ts){

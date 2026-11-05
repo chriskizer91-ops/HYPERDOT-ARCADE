@@ -23,8 +23,9 @@ function showActor(A,o){
   poseParts(A.def,o.x,o.y,o.face,o.J,A.mats,{yaw:o.yaw||0,squint:o.squint,z:o.z||0});
   poseCloth(A,{def:A.def,chains:o.chains});
   A.U.uFlash.value=o.flash||0;A.U.uGlitch.value=A.def.look.holo&&!reduce?(VR()<.35?1:0):0;
-  A.refl.visible=Q().refl>0;if(A.cloth)A.grp.children[5].visible=Q().refl>0;
+  const fr=Q().refl>0&&!Q().mirror;A.refl.visible=fr;if(A.clothRefl)A.clothRefl.visible=fr;
   A.U.uDimF.value=o.dim??1;
+  const au=o.aura;A.U.uAura.value.set(au?au[0]:0,au?au[1]:0,au?au[2]:0,au?au[3]:0);
 }
 function drawFighters(al,dt){
   for(const A of ACTORS)for(const gh of A.ghosts)gh.m.visible=false;
@@ -35,7 +36,7 @@ function drawFighters(al,dt){
     if(F.state==='attack'&&m&&m.spin&&F.mf>=m.spin[0]&&F.mf<=m.spin[1])yaw=-(F.mf-m.spin[0]+al)*TAU/11*F.face;
     if(A.lastFace&&A.lastFace!==F.face&&!F.air)A.turn=1;A.lastFace=F.face;
     if(A.turn>0){yaw+=A.turn*Math.PI*-F.face;A.turn=Math.max(0,A.turn-dt*8);}
-    showActor(A,{x:I.x,y:I.y,face:F.face,J:I.J,chains:I.chains,yaw,squint:F.hurtT>0||F.state==='kd',flash:F.flashT>0?.5:0});
+    showActor(A,{x:I.x,y:I.y,face:F.face,J:I.J,chains:I.chains,yaw,squint:F.hurtT>0||F.state==='kd',flash:F.flashT>0?.5:0,aura:auraOf(F)});
     /* the boulder Magnus holds over his head */
     if(F.state==='attack'&&m&&m.hold&&F.mf>=m.hold[0]&&F.mf<=m.hold[1]){const J=F.Jr,hx=(J.haN[0]+J.haF[0])/2,hy=(J.haN[1]+J.haF[1])/2+.12;F._hold=[F.x+hx*F.face,F.y+hy];}else F._hold=null;
     /* afterimages from the engine's trail snapshots */
@@ -81,6 +82,7 @@ function camFight(al,dt){
   const Wn=Fi.winnerF,rwT=(Fi.phase==='roundend'&&Wn&&!Fi.demo)?1:0;CD.rw=lerp(CD.rw,rwT,Math.min(1,.05*step));
   if(CD.rw>.01&&Wn){const ch=chestOf(Wn),a=.42*Wn.face;_p2.set(ch[0]+Math.sin(a)*2.9,ch[1]+.25,Math.cos(a)*2.9);_t2.set(ch[0],ch[1]+.2,0);_p.lerp(_p2,CD.rw*.85);_t.lerp(_t2,CD.rw*.85);}
   CAM3.position.copy(_p);CAM3.lookAt(_t);CAM3.fov=30;
+  const cin=Math.max(CD.sw,CD.kw,CD.rw*.8,CD.iw*.6);POST.dof.f=_p.distanceTo(_t);POST.dof.r=lerp(34,4.5,cin);POST.dof.m=lerp(1.4,3.2,cin);
 }
 
 /* ---------- the studio: a dark room with an LED wall, for select / VS / continue / ending ---------- */
@@ -88,7 +90,7 @@ const STUDIO={};
 (function(){
   const g=STUDIOG;
   const fl=new THREE.PlaneGeometry(40,24);fl.rotateX(-Math.PI/2);fl.translate(0,0,-6);
-  const fm=new THREE.Mesh(fl,stdMat({color:0x120c1c,roughness:.35,metalness:.4}));fm.receiveShadow=true;g.add(fm);
+  const fm=new THREE.Mesh(fl,mirrorize(stdMat({color:0x120c1c,roughness:.35,metalness:.4}),{k:.55,rough:1}));fm.receiveShadow=true;g.add(fm);STUDIO.floors=[fm];
   const wallMat=new THREE.ShaderMaterial({uniforms:{uT:{value:0},uA:{value:new THREE.Color(1,.8,.2)},uB:{value:new THREE.Color(.2,.9,1)},uSplit:{value:2},uK:{value:1}},depthWrite:true,
     vertexShader:`varying vec2 vU;void main(){vU=uv*vec2(160.,64.);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
     fragmentShader:`uniform float uT,uSplit,uK;uniform vec3 uA,uB;varying vec2 vU;void main(){vec2 id=floor(vU),f=fract(vU)-.5;float d=length(f),m=1.-smoothstep(.28,.42,d);
@@ -98,7 +100,7 @@ const STUDIO={};
   const wall=new THREE.Mesh(new THREE.PlaneGeometry(40,16),wallMat);wall.position.set(0,7,-5);g.add(wall);
   const rings=[];for(let i=0;i<2;i++){const m=new THREE.Mesh(TORGEO,addMat(0xffffff));m.rotation.x=Math.PI/2;m.renderOrder=61;g.add(m);rings.push(m);}
   const seam=new THREE.Mesh(new THREE.PlaneGeometry(.16,16),addMat(0xffffff));seam.position.set(0,6,-4.9);seam.renderOrder=62;g.add(seam);
-  Object.assign(STUDIO,{wallMat,rings,seam});
+  Object.assign(STUDIO,{wallMat,rings,seam,floors:STUDIO.floors});
   g.visible=false;
 })();
 function studioEnv(sun,sunK,sky,skyK,rim,refl){SUN.color.set(sun);SUN.intensity=sunK;SUN.position.set(-2,6,6);HEMI.color.set(sky);HEMI.groundColor.set('#0a0612');HEMI.intensity=skyK;SCENE.fog=null;
@@ -151,7 +153,7 @@ function studioScene(sc){
     _p.set(0,1.3,6);_t.set(0,1.1,0);
   }
   const drift=Math.sin(t*.006)*.25;_p.x+=drift;
-  CAM3.position.copy(_p);CAM3.lookAt(_t);CAM3.fov=30;
+  CAM3.position.copy(_p);CAM3.lookAt(_t);CAM3.fov=30;POST.dof.f=_p.distanceTo(_t)-.2;POST.dof.r=sc==='vs'?2.2:4;POST.dof.m=sc==='vs'?7:5;
 }
 
 /* ---------- one frame ---------- */
@@ -171,32 +173,95 @@ function prepare3D(dt,al){
   CAM3.aspect=RECT.w/RECT.h;CAM3.updateProjectionMatrix();CAM3.updateMatrixWorld();
   SHU.uTime.value=performance.now()/1000;
   const rd=studio?1:(STAGE.rimDir||1);_rd.set(rd,.3,-.35).normalize().transformDirection(CAM3.matrixWorldInverse);SHU.uRimDir.value.copy(_rd);
+  _rd.copy(SUN.position).normalize();SHU.uKeyDir.value.copy(_rd);SHU.uKeyDirV.value.copy(_rd).transformDirection(CAM3.matrixWorldInverse);
+  SHU.uKeyColF.value.copy(SUN.color).multiplyScalar(SUN.intensity*.55);SHU.uSkyC.value.copy(HEMI.color).multiplyScalar(HEMI.intensity*.6);SHU.uGndC.value.copy(HEMI.groundColor).multiplyScalar(HEMI.intensity*.6);
   SHU.uKeyDir.value.copy(SUN.position).normalize();SHU.uKeyCol.value.copy(SUN.color).multiplyScalar(SUN.intensity*.5);SHU.uAmb.value.copy(HEMI.color).multiplyScalar(HEMI.intensity*.35);
   SUN.target.position.set(CAM3.position.x,0,0);SUN.position.add(SUN.target.position);
   /* keep the shadow map steady: snap its centre to whole texels */
   if(SUN.castShadow){const ts=14/Math.max(256,Q().shadow);SUN.target.position.x=Math.round(SUN.target.position.x/ts)*ts;}
   SUN.target.updateMatrixWorld();
+  postTick(dt,studio);
   drawFX3(al);
   if(!studio&&SUPERF>0&&SUPEROWN){const ch=chestOf(SUPEROWN);for(let i=0;i<22;i++){const a=VR()*TAU,r0=vr(1.4,2.4),r1=r0+vr(.8,2);
     const ca=Math.cos(a),sa=Math.sin(a);streak(BADD,ch[0]+(_cr.x*ca+_cu.x*sa)*r0,ch[1]+(_cr.y*ca+_cu.y*sa)*r0,(_cr.z*ca+_cu.z*sa)*r0,ch[0]+(_cr.x*ca+_cu.x*sa)*r1,ch[1]+(_cr.y*ca+_cu.y*sa)*r1,(_cr.z*ca+_cu.z*sa)*r1,.012,SUPEROWN.def.glow,.6,2.2);}
     const n=BADD.n;for(const [k,sz] of [['position',3],['aCol',4],['aUv',2],['aSp',2]]){const at=BADD.geo.attributes[k];at.clearUpdateRanges();at.addUpdateRange(0,Math.max(1,n*4*sz));at.needsUpdate=true;}BADD.geo.setDrawRange(0,n*6);}
   applyLights();
 }
+/* ---------- the mirror view under wet floors (as three.js's Reflector does it: a camera reflected in the floor, with its
+   near plane tilted onto the floor so nothing below it is drawn) ---------- */
+const MIRCAM=new THREE.PerspectiveCamera(),TEXMAT=new THREE.Matrix4(),_mrot=new THREE.Matrix4(),_mc=new V3(),_ml=new V3(),_mt=new V3(),_mpl=new THREE.Plane(),_mcp=new THREE.Vector4(),_mq=new THREE.Vector4();
+function updateMirrorCam(){
+  const cam=CAM3;_mc.setFromMatrixPosition(cam.matrixWorld);MIRCAM.position.set(_mc.x,-_mc.y,_mc.z);
+  _mrot.extractRotation(cam.matrixWorld);_ml.set(0,0,-1).applyMatrix4(_mrot).add(_mc);_mt.set(_ml.x,-_ml.y,_ml.z);
+  MIRCAM.up.set(0,1,0).applyMatrix4(_mrot);MIRCAM.up.y=-MIRCAM.up.y;MIRCAM.lookAt(_mt);MIRCAM.near=cam.near;MIRCAM.far=cam.far;MIRCAM.updateMatrixWorld();
+  MIRCAM.projectionMatrix.copy(cam.projectionMatrix);
+  TEXMAT.set(.5,0,0,.5,0,.5,0,.5,0,0,.5,.5,0,0,0,1);TEXMAT.multiply(MIRCAM.projectionMatrix);TEXMAT.multiply(MIRCAM.matrixWorldInverse);
+  _mpl.set(new V3(0,1,0),0);_mpl.applyMatrix4(MIRCAM.matrixWorldInverse);_mcp.set(_mpl.normal.x,_mpl.normal.y,_mpl.normal.z,_mpl.constant);
+  const pm=MIRCAM.projectionMatrix.elements;
+  _mq.x=(Math.sign(_mcp.x)+pm[8])/pm[0];_mq.y=(Math.sign(_mcp.y)+pm[9])/pm[5];_mq.z=-1;_mq.w=(1+pm[10])/pm[14];
+  _mcp.multiplyScalar(2/_mcp.dot(_mq));pm[2]=_mcp.x;pm[6]=_mcp.y;pm[10]=_mcp.z+1-.003;pm[14]=_mcp.w;
+  MIRCAM.projectionMatrixInverse.copy(MIRCAM.projectionMatrix).invert();
+}
+/* ---------- post effects driven by the fight: shockwaves, colour fringing, impact frames, super zoom ---------- */
+const POST={shocks:[],ca:0,imp:0,zoom:0,dof:{f:6,r:14,m:2.2},grade:{lift:new V3(),gain:new V3(1,1,1),gam:new V3(1,1,1),sat:1.1,con:1.04},rayK:0};
+const STUDIOGRADE={lift:[.012,0,.022],gain:[1.03,1,1.05],gam:[1,1,1],sat:1.1,con:1.04};
+const _pp=new V3();
+function toUV(x,y,z){_pp.set(x,y,z).project(CAM3);return [_pp.x*.5+.5,_pp.y*.5+.5,_pp.z];}
+function postTick(dt,studio){
+  const P_=POST,red=reduce;
+  for(const e of IMPACTS){if(studio||red)continue;const u=toUV(e.x,e.y,.2);if(u[2]>1)continue;
+    const big=e.kind==='super',hv=e.kind==='heavy'||e.kind==='elec'||e.kind==='slash'||e.kind==='plasma';
+    const s=big?1.5:hv?clamp(e.dmg/85,.35,1.1):e.kind==='block'?.22:.14;
+    P_.shocks.push({x:u[0],y:u[1],r:0,s,v:big?.9:.75});if(P_.shocks.length>3)P_.shocks.shift();
+    P_.ca=Math.min(2.2,P_.ca+s*1.1);if(big||e.dmg>=88)P_.imp=big?4:2;}
+  IMPACTS.length=0;
+  FLASHG=Math.max(0,FLASHG-dt*5);
+  for(const k of P_.shocks){k.r+=dt*k.v;k.s*=Math.exp(-dt*4.2);}P_.shocks=P_.shocks.filter(k=>k.s>.02&&k.r<1.4);
+  const sup=!studio&&SUPERF>0&&SUPEROWN;
+  P_.ca=Math.max(sup?.7:0,P_.ca*Math.exp(-dt*7));
+  P_.zoom=lerp(P_.zoom,sup&&!red?.5:0,Math.min(1,dt*(sup?10:6)));
+  const U=M_OUT.uniforms;
+  for(let i=0;i<3;i++){const k=P_.shocks[i];if(k)U.uShock.value[i].set(k.x,k.y,k.r,k.s);else U.uShock.value[i].set(0,0,0,0);}
+  U.uCA.value=P_.ca;U.uImpact.value=P_.imp>0?.85:0;if(P_.imp>0)P_.imp--;
+  U.uZoom.value=P_.zoom;if(sup){const c=chestOf(SUPEROWN),u=toUV(c[0],c[1],0);U.uZoomC.value.set(u[0],u[1]);}
+  /* grade and light shafts follow the stage (or the studio) */
+  const gd=studio?STUDIOGRADE:STAGE.env.grade,k=Math.min(1,dt*3),G_=P_.grade;
+  G_.lift.lerp(_pp.set(...gd.lift),k);G_.gain.lerp(_pp.set(...gd.gain),k);G_.gam.lerp(_pp.set(...gd.gam),k);G_.sat=lerp(G_.sat,gd.sat,k);G_.con=lerp(G_.con,gd.con,k);
+  U.uLift.value.copy(G_.lift);U.uGain.value.copy(G_.gain);U.uGam.value.copy(G_.gam);U.uSat.value=G_.sat;U.uContrast.value=G_.con;
+  U.uTime.value=performance.now()/1000;
+  /* lensing around Nova's plasma star */
+  const L=!studio&&!red&&NOVALENS;
+  if(L){const c=toUV(L.x,L.y,L.z),e=toUV(L.x,L.y+L.r,L.z);U.uLens.value.set(c[0],c[1],Math.max(.02,Math.abs(e[1]-c[1])),c[2]<1?L.k:0);}else U.uLens.value.w=0;
+}
 function render3D(){
   if(!GL_OK)return;
-  const studio=isStudio();
+  const studio=isStudio(),q=Q();
   renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=true;
   /* the rooftop billboard shows a live feed of the fight, as LEDs */
-  if(!studio&&STAGE&&STAGE.built&&STAGE.built.feed&&Q().id!=='low'){
+  if(!studio&&STAGE&&STAGE.built&&STAGE.built.feed&&q.id!=='low'){
     const fd=STAGE.built.feed;FEEDN++;
     if(!fd.rt)fd.rt=new THREE.WebGLRenderTarget(192,108,{type:HDR?THREE.HalfFloatType:THREE.UnsignedByteType});
     if(FEEDN%3===0&&FIGHT){const A=FIGHT.f[0],B=FIGHT.f[1],mx=(A.x+B.x)/2;fd.cam.position.set(mx+1.2,1.4,3.4);fd.cam.lookAt(mx,1.1,0);fd.cam.updateMatrixWorld();
       fd.mesh.visible=false;BADD.mesh.visible=false;renderer.setRenderTarget(fd.rt);renderer.setClearColor(0x0a0414,1);renderer.clear();renderer.render(SCENE,fd.cam);fd.mesh.visible=true;BADD.mesh.visible=true;fd.mat.uniforms.tF.value=fd.rt.texture;}
     fd.mat.uniforms.uDim.value=DIMK;
   }
-  renderer.setRenderTarget(RT);renderer.setClearColor(0x05030a,1);renderer.clear();renderer.info.reset();renderer.render(SCENE,CAM3);STATS.calls=renderer.info.render.calls;STATS.tris=renderer.info.render.triangles;
+  renderer.info.reset();
+  /* wet floors: render the mirror view */
+  const floors=studio?STUDIO.floors:(STAGE&&STAGE.floors)||[];
+  if(RTM&&floors.length){updateMirrorCam();MIRU.uTexMat.value.copy(TEXMAT);MIRU.uMirOn.value=0;for(const f of floors)f.visible=false;
+    renderer.setRenderTarget(RTM);renderer.setClearColor(0x05030a,1);renderer.clear();renderer.render(SCENE,MIRCAM);
+    for(const f of floors)f.visible=true;MIRU.tMir.value=RTM.texture;MIRU.uMirOn.value=1;}
+  else MIRU.uMirOn.value=0;
+  renderer.setRenderTarget(RT);renderer.setClearColor(0x05030a,1);renderer.clear();renderer.render(SCENE,CAM3);STATS.calls=renderer.info.render.calls;STATS.tris=renderer.info.render.triangles;
   const bl=bloomPass(studio?1.25:1.15);
+  const U=M_OUT.uniforms;
+  /* light shafts toward the stage's light */
+  let ray=null;if(!studio&&RTR&&STAGE.env.rays&&!DOTS){const r=STAGE.env.rays,u=toUV(r.p[0],r.p[1],r.p[2]);
+    if(u[2]<1){const vis=clamp(1.4-Math.max(Math.abs(u[0]-.5),Math.abs(u[1]-.5))*1.6,0,1);if(vis>0){ray=raysPass(u[0],u[1],.92);U.uRayK.value=r.k*vis*DIMK;U.uRayC.value.set(r.c);}}}
+  if(!ray){U.uRayK.value=0;}U.tRay.value=ray?ray.texture:BLACK;
+  const st=streakPass();U.tStreak.value=st?st.texture:BLACK;U.uStreakK.value=st?(studio?.5:(STAGE.env.streak??.6)):0;
+  const dof=!DOTS&&RTD?dofPass(POST.dof.f,POST.dof.r,POST.dof.m):null;U.tDof.value=dof?dof.texture:BLACK;U.uDofOn.value=dof?1:0;
   HUDTEX.needsUpdate=true;
-  const U=M_OUT.uniforms;U.tScene.value=RT.texture;U.tBloom.value=bl.texture;U.uDots.value=DOTS?1:0;U.uBloomK.value=DOTS?.55:.6;
+  U.tScene.value=RT.texture;U.tBloom.value=bl.texture;U.uDots.value=DOTS?1:0;U.uBloomK.value=DOTS?.55:.6;
   blit(M_OUT,null);
 }

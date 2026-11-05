@@ -36,12 +36,13 @@ A side-by-side test ran the original and this build on the same random seed: fiv
 
 | File | What it does |
 |---|---|
-| `10_gfx.js` | Renderer, quality levels, dual-filter bloom, and the final pass. The final pass lays the HUD over the picture as round LEDs; with the Dots filter on, the 3D picture itself becomes LEDs. |
-| `11_fighter.js` | The flat skeleton lifted into 3D. Near and far limbs get depth, the chest and head turn toward the camera, and arms and legs are solved again in 3D. Each fighter is one mesh with up to 20 parts, moved by a shader, so it is one draw call. Costume patterns are the original's own colour functions, evaluated per triangle. Toon shading, outlines, floor reflections, afterimages, and cloth tubes from the original's verlet chains. |
+| `10_gfx.js` | Renderer, quality levels and the picture pipeline: dual-filter bloom, light shafts from the stage's sun or moon, an anamorphic lens streak, depth of field, and the final pass (impact shockwaves, lensing, chromatic split, super zoom blur, impact frames, colour grade, film grain, vignette). The final pass lays the HUD over the picture as round LEDs; with the Dots filter on, the 3D picture itself becomes LEDs. |
+| `11_fighter.js` | The flat skeleton lifted into 3D, with smooth skinned joints, shaped limbs, faces, hair, belts and cloth. Near and far limbs get depth, the chest and head turn toward the camera, and arms and legs are solved again in 3D. Each fighter is one mesh with up to 20 parts, moved by a shader, so it is one draw call. Costume patterns are the original's own colour functions. Toon shading with real metal reflections and glossy highlights, rim light from the stage, electric and plasma auras, outlines, afterimages. |
 | `12_scene.js` | Camera, key light and shadows, a pool of moving lights that effects ask for each frame, and smoothing between fight steps (the fight runs at 60 Hz; a Pixel 7a screen at 90). |
-| `13_fx3d.js` | The engine's particles, drawn as glowing quads with depth (sparks burst toward the camera too). Projectiles and beams with real light. |
-| `14_stages.js` | The five stages, made from code. Neon Rooftop has rain, a city, neon signs in the original's font, and a billboard showing a live LED feed of the fight. The others are Blossom Shrine, Ironworks, Orbit Nine and The Core. |
-| `15_view.js` | The camera director and the studio. The camera sweeps in for supers. A K.O. by a super gets longer slow motion with the camera circling. The round-one intro and round wins have their own shots. The studio is a dark room with an LED wall, used for select, VS, continue and ending. |
+| `13_fx3d.js` | The engine's particles, drawn as glowing quads with depth (sparks burst toward the camera too), curved sword arcs, and projectiles with real light. |
+| `13_supers.js` | The super moves' own shows, visual only: Kai's beam with streaming energy and lightning strikes across the stage, Nova's boiling plasma star that bends the picture, Echo's rainbow beam, Runa's petal storm, Magnus's cracked floor and flying rocks, and auras crawling over the body. |
+| `14_stages.js` | The five stages, made from code, with mirror-wet floors (a real reflection pass), rain ripples and puddles. Neon Rooftop is a night city: towers with lit windows, a cloud deck lit by lightning, traffic, searchlights, neon tubes, steam, a scrolling LED ad and a billboard with a live LED feed of the fight. The others are Blossom Shrine, Ironworks, Orbit Nine and The Core. |
+| `15_view.js` | The camera director, the post-effect state and the studio. The camera sweeps in for supers. A K.O. by a super gets longer slow motion with the camera circling. The round-one intro and round wins have their own shots. The studio is a dark room with an LED wall, used for select, VS, continue and ending. |
 | `16_ui.js` | Flow (from the original) and the LED-dot screens. |
 | `vendor/three.vf.js` | three.js r170 core (MIT), bundled with `esbuild` from `npm i three@0.170.0`: `export * from 'three'` as an IIFE named `THREE`. |
 
@@ -63,10 +64,10 @@ Saves live only under `hd-voltfist3d-`: `hi`, `beat`, `mute`, `voice`, `dots`, `
 
 There are three levels.
 
-| Level | Starts on | Shadows | Moving lights | Anti-aliasing | Afterimages | Billboard feed |
-|---|---|---|---|---|---|---|
-| High | laptops | 2048 | 4 | 4x | 8 | yes |
-| Medium | phones | 1024 | 3 | none | 5 | yes |
-| Low | when Auto steps down, or picked in Options | none | 2 | none | 3 | no |
+| Level | Starts on | Shadows | Mirror floors | Light shafts, lens streak | Depth of field | Anti-aliasing | Moving lights | Afterimages |
+|---|---|---|---|---|---|---|---|---|
+| High | laptops | 2048 | yes | yes | yes | 4x | 4 | 8 |
+| Medium | phones | 1024 | yes, smaller | yes | no | none | 3 | 5 |
+| Low | when Auto steps down, or picked in Options | none | no | no | no | none | 2 | 3 |
 
 On Auto, if a fight can't hold about 45 frames a second for three seconds, it steps down one level. `?q=low|med|high` pins a level. Options in the main menu has the announcer, the Dots filter and quality; the pause menu has Dots too.

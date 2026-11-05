@@ -53,6 +53,8 @@ function zig3(B,x0,y0,z0,x1,y1,z1,n,amp,w,col,a,k){
     const qx=x0+dx*t+nx*o,qy=y0+dy*t+ny*o,qz=z0+(z1-z0)*t+oz;streak(B,px,py,pz,qx,qy,qz,w,col,a,k);px=qx;py=qy;pz=qz;}
 }
 const FXK=()=>Q().fx;
+/* every hit, block and K.O. spark the engine makes is also noted here, for the camera and post effects */
+const IMPACTS=[];const _spark=spark;spark=function(x,y,kind,dir,dmg){_spark(x,y,kind,dir,dmg);if(IMPACTS.length<8)IMPACTS.push({x,y,kind,dmg:dmg||40});};
 /* visual-only randomness has its own generator, so it never shifts the fight's own random numbers (the CPU, sparks) */
 const VR=mulberry(20261104),vr=(a,b)=>a+VR()*(b-a);
 function vdust(x,y,n){for(let i=0;i<n;i++)fxp({k:'dust',x:x+vr(-.2,.2),y:y+.02,vx:vr(-1.2,1.2),vy:vr(.1,.9),life:vr(18,34),max:34,s:vr(.06,.12),col:[150,140,160]});}
@@ -70,8 +72,9 @@ function initFxZ(p){
   }
 }
 function stepFxZ(p){if(p._vz){p._z+=p._vz/60;p._vz*=p.k==='spk'?.9:p.k==='dust'?.93:.97;}}
-function fxStepHook(F){}
+function fxStepHook(F){superStep(F);}
 function projStepHook(){
+  superWorldStep();
   for(const p of PROJ){if(p.dead)continue;const t=PT[p.type];
     if((t.draw==='bolt'||t.draw==='prism')&&p.t%2===0)fxp({k:'dot',x:p.x,y:p.y+vr(-.08,.08),vx:-p.vx*.15,vy:vr(-.3,.3),g:0,life:12,max:12,col:t.draw==='prism'?C_C:C_Y,s:.03});
     else if(t.draw==='orb'&&p.t%2===0)fxp({k:'dot',x:p.x,y:p.y,vx:-p.vx*.1+vr(-.4,.4),vy:vr(-.4,.4),g:0,life:16,max:16,col:C_V,s:.03});
@@ -113,21 +116,25 @@ function drawFX3(al){
         case 'dust':if(fk>.6||VR()<.6)bill(BALP,p.x+p.vx/60*al,p.y+p.vy/60*al,z,p.s*1.7,p.col.map(c=>c*.55),.34*f,1,4);break;
         case 'ring':{const r=lerp(p.r1,p.r0,f),th=clamp(p.w*.018*(1+f)/Math.max(.05,r),.02,.5);if(p.r0>p.r1){bill(BADD,p.x,p.y,z,r,p.col,f*.5,1.1,1,th*.6);break;}
           if(p.flat)flat(BADD,p.x,.02,0,r,r,p.col,f,1.8,1,th);else bill(BADD,p.x,p.y,z,r,p.col,f,2.2,1,th);break;}
-        case 'flash':{const r=p.r*(1.4-f*.4)*1.3;bill(BADD,p.x,p.y,z+.1,r,p.col,f*.85,1.5,0);
-          lightReq(p.x,p.y,z+.5,p.col,f*Math.min(14,5+p.r*10),2.5+p.r*4);break;}
+        case 'flash':{const r=p.r*(1.4-f*.4)*1.3;bill(BADD,p.x,p.y,z+.1,r,p.col,f*.6,1.4,0);
+          lightReq(p.x,p.y,z+.5,p.col,f*Math.min(8,3+p.r*6),2.5+p.r*4);break;}
         case 'bolt':zig3(BADD,p.x0,p.y0,z,p.x1,p.y1,p._z1??z,5,.05,.014,p.col,Math.min(1,f*2),4);break;
-        case 'slash':{const l=p.len,c=Math.cos(p.a),s=Math.sin(p.a),e=1-f;
-          streak(BADD,p.x-c*l*.5*e-c*l*.2,p.y+s*l*.5*e,z,p.x+c*l*.5,p.y-s*l*.5,z,.012+.03*f,p.col,f,3.4);break;}
-        case 'petal':{const s=.035;bill(BADD,p.x,p.y,z,s*(.4+.6*Math.abs(Math.sin(p.a))),p.col,Math.min(1,f*2)*.9,1.2,3);break;}
+        case 'slash':{/* a curved sword arc that sweeps open, thick in the middle */
+          const l=p.len*1.25,c=Math.cos(p.a),s=Math.sin(p.a),e=1-f,mx=p.x,my=p.y,nx=s,ny=c,rev=Math.min(1,e*3.2+.25),N=9;
+          let px=0,py=0;for(let i=0;i<=N;i++){const u=i/N*rev,bx=mx+c*l*(u-.5),by=my-s*l*(u-.5),bu=Math.sin(u*Math.PI),qx=bx+nx*bu*l*.2,qy=by+ny*bu*l*.2;
+            if(i){const w=(.005+.034*f)*Math.sin((i-.5)/N*rev*Math.PI)+.003,ta=Math.min(1,(i/N)*2.5);streak(BADD,px,py,z,qx,qy,z,w,p.col,f*ta,3.6);streak(BADD,px,py,z,qx,qy,z,w*3,p.col,f*ta*.25,1.6);}
+            px=qx;py=qy;}break;}
+        case 'petal':{const s=.03*(.5+.5*Math.abs(Math.sin(p.a))),dx=Math.cos(p.a*1.3)*s,dy=Math.sin(p.a*1.3)*s*.7;streak(BADD,p.x-dx,p.y-dy,z,p.x+dx,p.y+dy,z,.012,p.col,Math.min(1,f*2)*.8,1);break;}
       }
     }
     for(const p of PROJ)if(!p.dead)drawProj3(p,al);
+    drawSupers(al);
     for(const F of FIGHT.f){fighterLights(F);if(F._hold){const m=PROCK.get();m.position.set(F._hold[0],F._hold[1],.05);m.scale.setScalar(.29);m.rotation.set(.3,FRAMET*.05,.2);}}
   }
   if(STAGE&&STAGE.fx3&&FIGHTVIS)STAGE.fx3(BADD,BALP,al);
   for(const B of [BADD,BALP]){const n=B.n;B.geo.setDrawRange(0,n*6);
     for(const [k,sz] of [['position',3],['aCol',4],['aUv',2],['aSp',2]]){const at=B.geo.attributes[k];at.clearUpdateRanges();at.addUpdateRange(0,Math.max(1,n*4*sz));at.needsUpdate=true;}}
-  PROCK.reset();PSTAR.reset();PTOR.reset();PBEAM.reset();
+  PROCK.reset();PSTAR.reset();PTOR.reset();PBEAM.reset();PBEAMS.reset();PNOVA.reset();PNOVAC.reset();
 }
 let FIGHTVIS=true;
 function drawProj3(p,al){
@@ -150,16 +157,8 @@ function drawProj3(p,al){
     case 'well':{const on=p.on,a=on?.95:.45;
       for(let i=0;i<4;i++){const m=PTOR.get(),s=r*(1-i*.2);m.position.set(x,.04+i*.01,0);m.scale.set(s,s*1.15,s);m.rotation.set(Math.PI/2,0,p.spin*(i%2?1:-1));hdr(m,i%2?C_C:C_V,(on?2.6:1.2)*(1-i*.15));}
       flat(BADD,x,.02,0,r*(on?1.4:.9),r*(on?1.4:.9),C_V,on?.55:.25,2,0);lightReq(x,.3,.2,C_V,on?7:2,4);void a;break;}
-    case 'nova':{bill(BADD,x,y,z,r*2.4,C_V,.75,1.4,0);bill(BADD,x,y,z,r*1.3,C_C,.5,1.4,0);bill(BADD,x,y,z,r*.75,C_W,.9,2.2,0);
-      for(let i=0;i<3;i++){bill(BADD,x,y,z,r*(1+((p.t*.05+i/3)%1)),C_W,.5,1.2,1,.04);}
-      lightReq(x,y,z+.6,C_V,12,8);lightReq(x,y,z+.6,C_C,5,5);break;}
-    case 'beam':{const col=t.col,x1=p.face>0?STH+5:-STH-5,len=Math.abs(x1-x),mx=(x+x1)/2,hh=r*(1+.15*Math.sin(p.t*.9));
-      const layers=[[hh*1.8,col,.16],[hh,col,.5],[hh*.45,C_W,1.1]];
-      for(const [rad,c,k] of layers){const m=PBEAM.get();m.position.set(mx,y,z);m.scale.set(len,rad,rad);hdr(m,c,k);}
-      for(let i=0;i<3;i++)zig3(BADD,x,y+vr(-hh,hh),z+vr(-hh,hh),x1,y+vr(-hh,hh),z+vr(-hh,hh),18,hh*1.4,.012,i%2?C_W:col,.8,2);
-      bill(BADD,x,y,z,hh*4,col,.7,1.2,0);bill(BADD,x,y,z,hh*2,C_W,.9,1.6,0);
-      flat(BADD,mx,.02,0,len/2,1,col,.3,.7,0);
-      for(const fx of [0,.35,.7])lightReq(x+(x1-x)*fx,y,z+.6,col,fx?7:9,6);break;}
+    case 'nova':drawNova3(p,x,y,z,r);break;
+    case 'beam':drawBeam3(p,t,x,y,z,r);break;
   }
 }
 /* lights that come off the fighters themselves: auras, supers, the held boulder */
@@ -168,6 +167,6 @@ function fighterLights(F){
   const m=F.move,J=F.Jr,cx=F.x+J.chest[0]*F.face,cy=F.y+J.chest[1];
   if(F.state==='attack'&&m&&m.aura&&F.mf>=m.aura[0]&&F.mf<=m.aura[1]){
     const k=m.aura[2],col=k==='elec'?C_Y:k==='plasma'?C_V:[255,150,190];lightReq(cx,cy,.6,col,(m.super?4:3.2)*(.7+VR()*.6),4);}
-  if(SUPERF>0&&SUPEROWN===F)lightReq(cx+F.face*.5,cy+.4,1.6,F.def.glow,4.5,5);
+  if(SUPERF>0&&SUPEROWN===F)lightReq(cx+F.face*.5,cy+.4,1.6,F.def.glow,2.4,5);
   if(F.def.look.holo)lightReq(cx,cy,.5,F.def.glow,1.6,3);
 }
