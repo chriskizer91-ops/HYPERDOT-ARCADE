@@ -1,6 +1,6 @@
 /* ===================== the world: shared by every map (the maps themselves are in 04b_maps.js) =====================
-   PLAY = half-size of the ground you can walk on (160 x 160 m). Beyond it the ground rises (or meets water). */
-const PLAY=80,WORLD=170;
+   PLAY = half-size of the ground you can walk on (260 x 260 m since session 5; it was 160). Beyond it the ground rises (or meets water). */
+const PLAY=130,WORLD=225;
 let MAPID='woods',MAPDEF=null,TRAIL=[],CLEAR=[],SPAWN={x:0,z:70,yaw:0};
 function pickMap(){const want=(Q.get('map')||store.get('map','woods')).toLowerCase();MAPID=MAPS[want]?want:'woods';MAPDEF=MAPS[MAPID];
   TRAIL=MAPDEF.trail||[];CLEAR=MAPDEF.clear||[];SPAWN=MAPDEF.spawn;store.set('map',MAPID);}
@@ -10,7 +10,7 @@ function clearD(x,z){let d=1e9;for(const c of CLEAR)d=Math.min(d,Math.hypot(x-c[
 function hgt(x,z){return MAPDEF.h(x,z);}
 /* --- ground: a base texture, a second one (weight aMix) and a third (weight aTrail), each tiled in world space --- */
 function buildGround(){
-  const G_=MAPDEF.ground,n=170,g=new THREE.PlaneGeometry(WORLD*2,WORLD*2,n,n);g.rotateX(-Math.PI/2);
+  const G_=MAPDEF.ground,n=WORLD,g=new THREE.PlaneGeometry(WORLD*2,WORLD*2,n,n);g.rotateX(-Math.PI/2);
   const p=g.attributes.position,tr=new Float32Array(p.count),mx=new Float32Array(p.count);
   for(let i=0;i<p.count;i++){const x=p.getX(i),z=p.getZ(i);p.setY(i,hgt(x,z));const w=G_.w(x,z);mx[i]=w[0];tr[i]=w[1];}
   g.setAttribute('aTrail',new THREE.BufferAttribute(tr,1));g.setAttribute('aMix',new THREE.BufferAttribute(mx,1));g.computeVertexNormals();

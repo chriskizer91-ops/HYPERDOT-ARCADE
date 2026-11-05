@@ -159,6 +159,17 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
 - 85 was split into 5 icons (`85-pickup-icons-1..5`: chip, wrench, shield, missile, flame).
 - `showcase({a,d,h,ly})` in the dev handle puts the camera around the mech for model shots (a = angle from behind; pass null to go back).
 
+## Arenas (session 5 start)
+
+- Every arena grew 1.6× because Christopher wanted room to back off. `PLAY` is 130, so you can walk 260 × 260 m, and `WORLD` is 225 (terrain 450 m, 2 m grid).
+- `K=1.6` with `kp`/`kc`/`kr` scales the woods and field layouts.
+- Docks: bounds x ±128, z ±96, with the quay at z -100.
+  - 7×7 container blocks: x centres -110..94 step 34, lanes at x -93, -59, -25, 9, 43, 77, 111; z rows -80..64 step 24.
+  - 3 cranes and 5 warehouses at z 99..117. Spawn at (9, 88).
+- Field: farm at (67, 54), masts at (-64, -32), (77, -83), (-51, 83). Spawn at (0, 115).
+- Woods spawn at (0, 112).
+- Logic cost per frame: woods 1.4 ms, field 0.5 ms, docks 0.2 ms.
+
 ## Done in session 4
 
 - Three maps, chosen on the title screen (the WOODS, FIELD and DOCKS buttons reload the page with `?map=`):
