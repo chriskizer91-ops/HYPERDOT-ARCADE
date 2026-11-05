@@ -11,7 +11,7 @@ const UPG=[
 const UPG_COST=[150,300,500,800,1200];
 function upgLv(id){const u=(SAVE.get().upg)||{};return Math.min(5,u[id]||0);}
 function scrap(){return SAVE.get().scrap||0;}
-function addScrap(n){if(!MISSION)return;MS.scrap=(MS.scrap||0)+n;}
+function addScrap(n){if(!MISSION)return;MS.scrap=(MS.scrap||0)+n*(MISSION.endless?.5:1);}
 function bankScrap(){if(!MISSION||!MS.scrap)return 0;const sv=SAVE.get();sv.scrap=(sv.scrap||0)+MS.scrap;SAVE.put(sv);const n=MS.scrap;MS.scrap=0;return n;}
 function buyUpg(id){const lv=upgLv(id);if(lv>=5)return false;const c=UPG_COST[lv],sv=SAVE.get();if((sv.scrap||0)<c)return false;sv.scrap-=c;sv.upg=sv.upg||{};sv.upg[id]=lv+1;SAVE.put(sv);return true;}
 const UP={dmgK:1,stomp:false,repair:35};

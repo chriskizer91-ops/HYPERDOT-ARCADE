@@ -100,7 +100,7 @@ function readCtl(dt){
 /* ---- 03_render.js ---- */
 /* ===================== renderer, quality, sky, light ===================== */
 const cv=$('gl');
-const SET={quality:store.get('quality','auto'),view:store.get('view','close'),sens:parseFloat(store.get('sens','1'))||1,sound:store.get('sound','1')==='1'};
+const SET={fps:store.get('fps','0')==='1'||store.get('fps',0)===1,quality:store.get('quality','auto'),view:store.get('view','close'),sens:parseFloat(store.get('sens','1'))||1,sound:store.get('sound','1')==='1'};
 /* px = pixel budget; shadow = map size (0 = off); grass/near/far = draw distances in metres */
 const QUAL={low:{bloom:0,px:.75e6,shadow:0,grass:24,grassNear:8,near:24,far:115,fog:100},
             med:{bloom:1,px:1.35e6,shadow:1024,grass:36,grassNear:12,near:32,far:165,fog:140},
@@ -1091,6 +1091,7 @@ function spawnEnemy(id,x,z){const d=EDEF[id],tp=ETPL[id];if(!tp)return null;
   /* each enemy gets its own copy of the armour material so it can flash when hit */
   e.mat=EMAT.egrey.clone();e.mat.onBeforeCompile=EMAT.egrey.onBeforeCompile;e.mat.customProgramCacheKey=EMAT.egrey.customProgramCacheKey;
   o.traverse(m=>{if(m.isMesh&&m.material===EMAT.egrey)m.material=e.mat;});
+  if(!Q.has('noskin'))skinify(o);   /* speed pass: one skinned mesh per material instead of one mesh per part */
   o.scale.setScalar(d.sc||1);o.position.set(x,e.y,z);o.visible=false;S.add(o);EN.push(e);
   return e;}
 /* waves arrive in front of the player, 55-80 m ahead, with a red beacon first */
@@ -1116,11 +1117,11 @@ function killEnemy(e){e.dead=true;S.remove(e.o);if(e.beam)S.remove(e.beam);e.mat
   addScore(Math.round(e.d.score*mult*(G.hpK||1)));G.kills++;addScrap(e.d.scrap||10);
   if(Math.random()<e.d.drop)dropPickup(e.x,e.z,Math.random()<(e.d.chip||(e.id==='gunner'?.55:0))?'chip':null);
 }
-function hurtPlayer(dmg,fx,fz){if(P.dead||G.mode!=='play'&&G.mode!=='demo')return;dmg*=DIFF.dmg;P.regenT=P.regenDelay||3;
+function hurtPlayer(dmg,fx,fz){if(P.dead||G.mode!=='play'&&G.mode!=='demo')return;if(G.mode==='demo'){shieldFlash();return;}dmg*=DIFF.dmg;P.regenT=P.regenDelay||3;
   const s=Math.min(P.shield,dmg);P.shield-=s;dmg-=s;if(s>0){sShield();shieldFlash();HUD.hit(fx,fz,'s');}
   if(dmg>0){P.hull-=dmg;sHurt();HUD.hit(fx,fz,'h');CAMS.shake=Math.max(CAMS.shake,.3+dmg*.02);}
   if(P.hull<=0){P.hull=0;playerDown();}}
-function addScore(n){G.score+=n;ARC.score(G.score);}
+function addScore(n){if(G.mode==='demo')return;G.score+=n;ARC.score(G.score);}
 /* ---- pickups: chip (gun tier), repair, shield, missiles, fuel ---- */
 const PK=[],PKDEF={chip:{col:[1,.85,.2],name:'GUN TIER'},repair:{col:[.35,1,.45],name:'REPAIR'},shield:{col:[.4,.7,1],name:'SHIELD'},
   missile:{col:[1,.5,.2],name:'MISSILES'},fuel:{col:[.92,.95,1],name:'JET FUEL'}};
@@ -1205,6 +1206,20 @@ function poseEnemy(e,dt,sp){
     e.armR.rotation.x=e.armL.rotation.x=Math.atan2(P.y+(ln?3.2:2.6)-(e.y+(ln?3.55:2.85)),Math.hypot(P.x-e.x,P.z-e.z))*.9;}
 }
 
+/* speed pass: merge a machine's parts into one skinned mesh per material. Each joint node becomes a bone, so the animation code is unchanged,
+   and a machine costs about 4-6 draw calls instead of about 20 (twice that with shadows). */
+function skinify(root){root.updateMatrixWorld(true);const inv=new THREE.Matrix4().copy(root.matrixWorld).invert(),bones=[],bi=new Map(),groups=new Map();
+  root.traverse(o=>{if(!o.isMesh||o.isSkinnedMesh||!o.visible)return;const p=o.parent;if(!bi.has(p)){bi.set(p,bones.length);bones.push(p);}
+    const a=o.geometry.attributes,key=o.material.uuid+(a.color?'c':'')+(a.uv?'u':'');if(!groups.has(key))groups.set(key,{m:o.material,list:[],cast:o.castShadow});groups.get(key).list.push(o);});
+  if(bones.length<2)return;const made=[],M_=new THREE.Matrix4();
+  for(const {m,list,cast} of groups.values()){
+    const gs=list.map(o=>{const g=o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone();for(const n of Object.keys(g.attributes))if(!['position','normal','uv','color'].includes(n))g.deleteAttribute(n);
+      g.applyMatrix4(M_.multiplyMatrices(inv,o.matrixWorld));const c=g.attributes.position.count,si=new Uint16Array(c*4),sw=new Float32Array(c*4),b=bi.get(o.parent);
+      for(let i=0;i<c;i++){si[i*4]=b;sw[i*4]=1;}g.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(si,4));g.setAttribute('skinWeight',new THREE.Float32BufferAttribute(sw,4));return g;});
+    const merged=gs.length>1?THREE.mergeGeometries(gs,false):gs[0];if(!merged)continue;
+    const sm=new THREE.SkinnedMesh(merged,m);sm.castShadow=cast;sm.receiveShadow=true;root.add(sm);made.push(sm);for(const o of list)o.parent.remove(o);}
+  root.updateMatrixWorld(true);const sk=new THREE.Skeleton(bones);for(const sm of made)sm.bind(sk,sm.matrixWorld);}
+
 /* ---- 06d_missions.js ---- */
 /* ===================== missions: steps (destroy / reach / clear / hold), checkpoints, radio, results =====================
    ?mission=N loads that mission's map and look. Without it the game is the endless sandbox. Progress: hd-ironhowl3-save. */
@@ -1282,7 +1297,7 @@ const MISSIONS=[
    steps:[{t:'reach',label:'ENTER THE FOUNDRY YARD',at:[0,42],r:18,boss:1,wave:{skitter:4,bulwark:1},cp:1,radio:[['ROOK','This is it, Howl. Everything it built is between us and the core.'],['FORGE','UNIT 07. YOU ARE OBSOLETE.']]},
           {t:'boss',label:'DESTROY FORGE',cp:1,radio:[['FORGE','I BUILT EVERYTHING YOU SEE.'],['ROOK','Pylons first. Four of them, red orbs on top.']]}]},
 ];
-const MID=parseInt(Q.get('mission')||'0',10),MISSION=MISSIONS.find(m=>m.id===MID)||null;
+const MID=parseInt(Q.get('mission')||'0',10),EMAP=(Q.get('endless')||'').toLowerCase(),MISSION=EMAP&&endlessBoss(EMAP)?endlessDef(EMAP):MISSIONS.find(m=>m.id===MID)||null;
 /* difficulty climbs across the campaign: enemy damage and toughness per mission (mission 1 is gentle) */
 const DIFF=MISSION?{dmg:[.8,.85,.9,.95,1,1,1.05,1.1,1.1,1.15,1.2,1.25][MISSION.id-1]||1,hp:[.85,.9,.9,.95,1,1,1,1.05,1.05,1.1,1.15,1.15][MISSION.id-1]||1}:{dmg:1,hp:1};
 const MS={step:-1,t:0,waveT:0,wi:0,hold:0,repairs:3,cp:null,kills0:0,time:0,done:false,objs:[],truck:null,zone:null,built:{},limitT:0,wpos:null,escort:null};
@@ -1331,6 +1346,7 @@ function beginStep(i){
   MS.objs=MS.built[i];for(const t of MS.objs)if(!t.dead)t.hp=t.hpMax;
   if(s.t==='escort')escortBegin(s,first);
   if(s.t==='capture')captureBegin(s,first);
+  if(s.t==='endless')endlessBegin();
   if(s.boss||s.t==='boss'){if(!BOSS.o)BOSS_DEF[MISSION.boss].make(...(MISSION.bossAt||[10,-24]));BOSS.idle=s.t!=='boss';}
   if(s.truck&&!MS.truck)MS.truck=makeTruck(s.at[0],s.at[1],-.6);
   if(s.wreck&&!MS.wreck){MS.wreck=[makeTruck(s.at[0]+4,s.at[1]-3,.9,1),makeTruck(s.at[0]-6,s.at[1]+5,2.4,1)];}
@@ -1348,6 +1364,7 @@ function updMission(dt){
     if(s.masts){const all=MISSION.steps.filter(q=>q.masts).length,doneN=MISSION.steps.indexOf(s);txt=s.label+' '+(doneN+(left?0:1))+'/'+all;}ok=left===0;}
   else if(s.t==='reach'){ok=Math.hypot(P.x-s.at[0],P.z-s.at[1])<s.r;}
   else if(s.t==='escort'){const r=escortStep(s,dt);txt=r.txt;ok=r.ok;MS.wpos=r.pos;}
+  else if(s.t==='endless'){const r=endlessStep(s,dt);txt=r.txt;ok=false;MS.wpos=r.pos;}
   else if(s.t==='capture'){const r=captureStep(s,dt);txt=r.txt;ok=r.ok;MS.wpos=r.pos;}
   else if(s.t==='boss'){const r=BOSS_DEF[MISSION.boss].step(s,dt);txt=r.txt;ok=r.ok;MS.wpos=r.pos;}
   else if(s.t==='clear'){ok=MS.t>3&&EN.filter(e=>!e.dead).length===0&&BEACONS.length===0;}
@@ -1362,7 +1379,7 @@ function updMission(dt){
   HUD.set('obj','text',txt);
   if(ok){addScore(500);beginStep(MS.step+1);}
 }
-function finishMission(won){if(MS.done)return;MS.done=true;G.mode='results';
+function finishMission(won){if(MISSION.endless)return endlessOver();if(MS.done)return;MS.done=true;G.mode='results';
   const time=MS.time|0,bonus=won?2000+Math.max(0,600-time)*5+MS.repairs*400:0;if(won){addScore(bonus);addScrap(150+MS.repairs*25);}const got=bankScrap();
   const sv=SAVE.get();sv.best=sv.best||{};if(won){sv.unlocked=Math.max(sv.unlocked||1,MISSION.id+1);}sv.best[MISSION.id]=Math.max(sv.best[MISSION.id]||0,G.score);SAVE.put(sv);
   const tickets=Math.min(80,Math.floor(G.score/400)+(won?10:0));ARC.over(G.score,tickets);
@@ -1371,7 +1388,7 @@ function finishMission(won){if(MS.done)return;MS.done=true;G.mode='results';
   $('rnext').style.display=won&&MISSIONS.find(m=>m.id===MISSION.id+1)?'':'none';$('results').style.display='flex';jetLoop(0);
 }
 /* falling in a mission: repair at the last checkpoint (3 repairs per mission), then the mission is lost */
-function missionDown(){if(MS.repairs<=0){setTimeout(()=>finishMission(false),2200);return false;}return true;}
+function missionDown(){if(MS.repairs<=0){MS.failT=2.2;return false;}return true;}   /* counted in game time (tick), so it also works when timers are slowed */
 function repairAtCheckpoint(){MS.repairs--;const cp=MS.cp||{step:0,x:MISSION.start[0],z:MISSION.start[1],yaw:MISSION.start[2],tier:GUN.base};
   clearFight();P=mkPlayer();applyUpgrades();P.x=cp.x;P.z=cp.z;P.y=hgt(cp.x,cp.z);P.yaw=P.legYaw=cp.yaw;CAMS.ready=false;if(M)M.root.visible=true;
   P.hull=P.hullMax;P.shield=P.shieldMax;P.cells=P.cells;GUN.tier=Math.max(GUN.base,(cp.tier||1)-1);GUN.heat=0;GUN.over=false;$('down').style.display='none';G.mode='play';
@@ -1398,7 +1415,7 @@ const UPG=[
 const UPG_COST=[150,300,500,800,1200];
 function upgLv(id){const u=(SAVE.get().upg)||{};return Math.min(5,u[id]||0);}
 function scrap(){return SAVE.get().scrap||0;}
-function addScrap(n){if(!MISSION)return;MS.scrap=(MS.scrap||0)+n;}
+function addScrap(n){if(!MISSION)return;MS.scrap=(MS.scrap||0)+n*(MISSION.endless?.5:1);}
 function bankScrap(){if(!MISSION||!MS.scrap)return 0;const sv=SAVE.get();sv.scrap=(sv.scrap||0)+MS.scrap;SAVE.put(sv);const n=MS.scrap;MS.scrap=0;return n;}
 function buyUpg(id){const lv=upgLv(id);if(lv>=5)return false;const c=UPG_COST[lv],sv=SAVE.get();if((sv.scrap||0)<c)return false;sv.scrap-=c;sv.upg=sv.upg||{};sv.upg[id]=lv+1;SAVE.put(sv);return true;}
 const UP={dmgK:1,stomp:false,repair:35};
@@ -1818,6 +1835,83 @@ function forgeStep(s,dt){const B=BOSS;B.idle=false;
 const BOSS_DEF={thresher:{make:(x,z)=>makeThresher(x,z),step:(s,dt)=>bossStep(s,dt),idle:dt=>bossIdle(dt)},
   stag:{make:makeStag,step:stagStep,idle:stagIdle},maw:{make:makeMaw,step:mawStep,idle:mawIdle},forge:{make:makeForge,step:forgeStep,idle:forgeIdle}};
 
+/* ---- 06h_endless.js ---- */
+/* ===================== session 8: Endless mode, extra radio lines, the attract demo that fights ===================== */
+/* ---- Endless: ?endless=woods|field|docks|foundry. Waves that slowly get harder; every 5th is heavy, every 10th brings the arena's boss ---- */
+/* a function, not a table, because the missions file asks for it before this file has run */
+function endlessBoss(m){return {field:['thresher',[10,-24]],woods:['stag',[12,-66]],docks:['maw',[-8,-42]],foundry:['forge',null]}[m];}
+function endlessDef(map){const sp=MAPS[map].spawn,b=endlessBoss(map);
+  return {id:0,endless:true,name:'ENDLESS',map,yard:map==='docks',boss:b[0],bossAt:b[1]||[FORGE_AT.x,FORGE_AT.z],start:[sp.x,sp.z,sp.yaw||0],
+    brief:['Endless. The waves keep coming, and each one is a little harder.','Every 5th wave is heavy. Every 10th brings this arena’s boss. Supplies drop between waves.'],
+    steps:[{t:'endless',label:'SURVIVE THE WAVES'}]};}
+const EW={wave:0,state:'break',t:5,boss:false,queue:[],qt:0};
+/* machines join the waves in campaign order: [type, first wave, how common] */
+const EN_ORDER=[['skitter',1,5],['hound',3,3],['gunner',5,2.2],['hornet',7,2.2],['lancer',9,1],['bulwark',11,1.1],['tank',13,.7],['mortar',15,.6]];
+function endlessWave(n){const w={},add=(id,k)=>{w[id]=(w[id]||0)+k;};
+  if(n%10===0){add('skitter',Math.min(8,2+(n/5|0)));add('hound',Math.min(4,n/10|0));return w;}
+  if(n%5===0){add('gunner',2+(n/10|0));add('hound',2);if(n>=11)add('bulwark',1+(n/20|0));if(n>=13)add('tank',1+(n/25|0));else add('gunner',1);return w;}
+  const pool=EN_ORDER.filter(t=>n>=t[1]),tot=pool.reduce((a,t)=>a+t[2],0),count=Math.min(24,3+n);
+  for(let i=0;i<count;i++){let r=Math.random()*tot;for(const t of pool){r-=t[2];if(r<=0){add(t[0],1);break;}}}
+  return w;}
+function endlessBegin(){MS.repairs=0;Object.assign(EW,{wave:0,state:'break',t:6,boss:false,queue:[],qt:0});DIFF.dmg=.9;DIFF.hp=1;G.hpK=1;
+  radio([['ROOK','Endless. They keep coming, and every wave is a little worse.'],['ROOK','Supplies drop between waves. Every tenth wave, something big.']]);}
+function startEWave(){const n=++EW.wave;G.hpK=Math.min(2.2,1+.035*(n-1));DIFF.dmg=Math.min(1.6,.9+.025*(n-1));
+  const w=endlessWave(n),list=[];for(const id in w)for(let i=0;i<w[id];i++)list.push(id);list.sort(()=>Math.random()-.5);
+  EW.queue=[];for(let i=0;i<list.length;i+=6){const g={};for(const id of list.slice(i,i+6))g[id]=(g[id]||0)+1;EW.queue.push(g);}EW.qt=0;EW.state='fight';
+  if(n%10===0&&MISSION.boss){if(BOSS.o&&BOSS.kind!=='forge')S.remove(BOSS.o);if(!(MISSION.boss==='forge'&&BOSS.o&&!BOSS.dead)){BOSS_DEF[MISSION.boss].make(...MISSION.bossAt);}
+    BOSS.idle=false;EW.boss=true;radio([['FORGE',['SOMETHING LARGER IS COMING.','MEET MY BEST WORK.','YOU WILL NOT SURVIVE THIS ONE.'][(n/10-1)%3]]]);}
+  HUD.banner(n%10===0?'WAVE '+n+' · BOSS':n%5===0?'WAVE '+n+' · HEAVY':'WAVE '+n);sClick();
+  if(n>1&&n%4===1)radio([[Math.random()<.5?'ROOK':'FORGE',ENDLESS_LINES[Math.random()<.5?0:1][(Math.random()*6)|0]]]);}
+const ENDLESS_LINES=[['Still standing. Good.','They are getting tougher, Howl. So are you.','Keep moving. Do not let them box you in.','Watch the edges. They like to flank.','Use the breaks. Grab the crates.','Another wave. Deep breath.'],
+  ['YOUR RESISTANCE IS NOTED.','I HAVE MORE MACHINES THAN YOU HAVE TIME.','EVERY WAVE IS AN EXPERIMENT. YOU ARE THE SUBJECT.','RECALCULATING.','YOU CANNOT DO THIS FOREVER.','THE FACTORY NEVER SLEEPS.']];
+function endlessStep(s,dt){const alive=EN.filter(e=>!e.dead).length;
+  if(EW.state==='break'){EW.t-=dt;if(EW.t<=0)startEWave();return {txt:'WAVE '+(EW.wave+1)+' IN '+Math.max(1,Math.ceil(EW.t)),ok:false,pos:null};}
+  let bossPos=null;if(EW.boss&&BOSS.o){const r=BOSS_DEF[MISSION.boss].step(s,dt);bossPos=r.pos;if(BOSS.dead&&BOSS.deadT>2.5){EW.boss=false;addScore(3000);}}
+  if(EW.queue.length&&(EW.qt-=dt)<=0){EW.qt=7;const g=EW.queue.shift(),q=spawnSpot();spawnGroup(g,q[0],q[1],[0,10]);}
+  const left=alive+EW.queue.reduce((a,g)=>a+Object.values(g).reduce((x,y)=>x+y,0),0);
+  if(!left&&!EW.boss){addScore(EW.wave*200);EW.state='break';EW.t=8;HUD.banner('WAVE '+EW.wave+' CLEARED');sPickup();
+    const f=fwdOf(P.yaw),dx=P.x+f[0]*9,dz=P.z+f[1]*9;dropPickup(dx-2,dz,'repair');dropPickup(dx+2,dz,'shield');if(EW.wave%3===0)dropPickup(dx,dz+2,'chip');
+    return {txt:'WAVE '+EW.wave+' CLEARED',ok:false,pos:null};}
+  let near=null,nd=1e9;for(const e of EN){if(e.dead)continue;const d=Math.hypot(e.x-P.x,e.z-P.z);if(d<nd){nd=d;near=e;}}
+  return {txt:'WAVE '+EW.wave+' · '+left+' LEFT'+(EW.boss?' · BOSS':''),ok:false,pos:bossPos||(nd>45?near:null)};}
+function endlessOver(){if(MS.done)return;MS.done=true;G.mode='results';const time=MS.time|0,got=bankScrap(),sv=SAVE.get();sv.endless=sv.endless||{};
+  const b=sv.endless[MISSION.map]||{wave:0,score:0},best={wave:Math.max(b.wave,EW.wave),score:Math.max(b.score,G.score)};sv.endless[MISSION.map]=best;SAVE.put(sv);
+  const tickets=Math.min(80,Math.floor(G.score/400)+Math.floor(EW.wave/5)*2);ARC.over(G.score,tickets);
+  $('rtitle').textContent='WAVE '+EW.wave;$('rtitle').className='logo';
+  $('rstats').innerHTML=[['ARENA',MAPS[MISSION.map].name],['REACHED WAVE',EW.wave],['SCORE',G.score.toLocaleString('en-US')],['BEST',best.score.toLocaleString('en-US')+' · WAVE '+best.wave],
+    ['KILLS',G.kills],['TIME',Math.floor(time/60)+':'+String(time%60).padStart(2,'0')],['SCRAP',got+' (TOTAL '+scrap()+')'],['TICKETS',tickets]].map(r=>'<div><span>'+r[0]+'</span><b>'+r[1]+'</b></div>').join('');
+  $('rnext').style.display='none';$('results').style.display='flex';jetLoop(0);}
+function endlessMenu(){const box=$('elist'),E=SAVE.get().endless||{};
+  box.querySelector('.cards').innerHTML=['field','woods','docks','foundry'].map(m=>{const b=E[m];return '<button class="mcard" data-map="'+m+'"><b>'+MAPS[m].name+'</b><span>'+
+    (b?'BEST WAVE '+b.wave+' · '+b.score.toLocaleString('en-US'):'NOT PLAYED YET')+'</span></button>';}).join('');
+  box.querySelectorAll('.mcard').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const q=new URLSearchParams(location.search);q.delete('mission');q.delete('map');q.set('endless',b.dataset.map);location.search=q.toString();}));
+  box.style.display='flex';}
+/* ---- extra radio: checkpoints, low hull, overheating, combos, and FORGE getting angrier through the campaign ---- */
+const RX={hullT:0,heatT:0,comboT:0,forgeT:40,lastCombo:0,wasOver:false};
+const FORGE_POOL=[['UNIT 07. YOU ARE OBSOLETE.','YOUR CREW IS SMALL. MY FACTORY IS NOT.','I WILL BUILD A BETTER YOU.','RETURN TO THE SCRAPYARD.'],
+  ['YOU ARE BECOMING AN INCONVENIENCE.','I HAVE STUDIED YOUR MOVEMENTS.','EVERY MACHINE YOU BREAK, I REBUILD.','STOP. THIS IS NOT A REQUEST.'],
+  ['YOU WILL NOT REACH THE CORE.','I WILL MELT YOU DOWN MYSELF.','ENOUGH. ENOUGH!','THIS ENDS IN FIRE, UNIT 07.']];
+function updRadioX(dt){if(G.mode!=='play'||!MISSION||MS.done||P.dead)return;
+  RX.hullT-=dt;RX.heatT-=dt;RX.comboT-=dt;RX.forgeT-=dt;
+  if(P.hull/P.hullMax<.3&&RX.hullT<=0){RX.hullT=25;radio([['ROOK',['Hull under a third. Find a green repair.','You are leaking oil. Back off and recover.','Shield first, Howl. Break line of sight.'][(Math.random()*3)|0]]]);}
+  if(GUN.over&&!RX.wasOver&&RX.heatT<=0){RX.heatT=30;radio([['ROOK','Gun is cooking. Hit VENT.']]);}RX.wasOver=GUN.over;
+  if(G.combo>=5&&RX.lastCombo<5&&RX.comboT<=0){RX.comboT=20;radio([['ROOK',['Five in a row!','That is a streak.','Look at you go.'][(Math.random()*3)|0]]]);}RX.lastCombo=G.combo;
+  if(RX.forgeT<=0&&!MISSION.endless){RX.forgeT=45+Math.random()*30;if(Math.random()<.55){const tier=MISSION.id<=4?0:MISSION.id<=8?1:2;radio([['FORGE',FORGE_POOL[tier][(Math.random()*4)|0]]]);}}}
+/* ---- attract demo: walks the route, and when machines show up it turns, shoots, hops over charges and fires the salvo. It cannot die. ---- */
+const DM={spawnT:6,viewT:9,orbT:30,orbit:0,aimT:0,view:'far'};
+function demoFight(c,dt){
+  DM.spawnT-=dt;if(DM.spawnT<=0){DM.spawnT=12;if(EN.filter(e=>!e.dead).length<4){const q=spawnSpot();spawnGroup(Math.random()<.6?{skitter:3}:{hound:1,skitter:2},q[0],q[1],[0,8]);}}
+  let near=null,nd=60;for(const e of EN){if(e.dead||e.spawnT>0)continue;const d=Math.hypot(e.x-P.x,e.z-P.z);if(d<nd&&los(e.x,e.z)){nd=d;near=e;}}
+  if(near){const want=Math.atan2(-(near.x-P.x),-(near.z-P.z)),d=angD(want,P.yaw);c.turn=-clamp(d,-2.4*dt,2.4*dt);c.my=nd>24?.6:nd<10?-.5:0;
+    c.pitch=clamp((Math.atan2(near.y+near.d.cy-(P.y+3.3),nd)-(P.pitch||0))*.5,-.05,.05);c.fire=Math.abs(d)<.25;
+    if(near.id==='hound'&&near.st==='aim'&&nd<20){c.jetHit=true;c.jet=true;}
+    if(EN.filter(e=>!e.dead&&Math.hypot(e.x-P.x,e.z-P.z)<30).length>=3)c.salvo=true;}
+  /* the camera takes turns: far, close, and now and then a slow orbit */
+  DM.viewT-=dt;if(DM.viewT<=0){DM.viewT=9;DM.view=DM.view==='far'?'close':'far';}
+  DM.orbT-=dt;if(DM.orbT<=0&&!DM.orbit){DM.orbit=6;DM.orbT=32;}
+  if(DM.orbit>0){DM.orbit-=dt;CAMX={a:Math.PI+G.t*.35,d:16,h:7,ly:3.5};if(DM.orbit<=0){DM.orbit=0;CAMX=null;}}
+  return c;}
+
 /* ---- 07_fx.js ---- */
 /* ===================== particles: one system, smoke blends normally, glow adds light (premultiplied alpha) ===================== */
 const PFX={max:900,list:[],mesh:null};
@@ -2014,14 +2108,15 @@ function playerDown(){if(P.dead)return;P.dead=true;P.thrust=0;boom(P.x,P.y+2.5,P
   $('dgo').textContent='TAP TO GO AGAIN';const best=+store.get('best',0);if(G.score>best)store.set('best',G.score);
   $('dscore').textContent='SCORE '+G.score.toLocaleString('en-US')+'  ·  WAVE '+G.wave+'  ·  BEST '+Math.max(best,G.score).toLocaleString('en-US');
   ARC.over(G.score,Math.min(60,Math.floor(G.score/400)+G.wave));}
-function startPlay(){audioInit();resetRun();applyUpgrades();G.mode='play';G.paused=false;$('title').style.display='none';$('mlist').style.display='none';HUD.menu();ARC.begin();if(MISSION)startMission();
+function fpsLabel(){$('mfps').textContent='FRAME RATE: '+(SET.fps?'ON':'OFF');$('fps').style.display=SET.fps?'block':'none';}
+function startPlay(){$('attract').style.display='none';CAMX=null;audioInit();resetRun();applyUpgrades();G.mode='play';G.paused=false;$('title').style.display='none';$('mlist').style.display='none';HUD.menu();ARC.begin();if(MISSION)startMission();
   if(!touchy){lockMouse();HUD.hint('WASD MOVE · MOUSE AIM · SPACE JET HOP · V CAMERA · ESC PAUSE',9);}else HUD.hint('LEFT THUMB MOVES · RIGHT THUMB AIMS · JET TO HOP',7);}
-function startDemo(){resetRun();G.mode='demo';G.paused=false;G.demoI=1;$('title').style.display='none';HUD.menu();}
+function startDemo(){resetRun();G.mode='demo';G.paused=false;G.demoI=1;$('title').style.display='none';HUD.menu();Object.assign(DM,{spawnT:4,viewT:9,orbT:20,orbit:0,view:'far'});CAMX=null;$('attract').style.display='block';}
 /* attract mode: walk the trail, hop now and then */
 function demoCtl(dt){const c={mx:0,my:0,turn:0,pitch:0,jet:false,jetHit:false},RT=MAPDEF.route||TRAIL;const t=RT[G.demoI];if(!t)return c;
   const dx=t[0]-P.x,dz=t[1]-P.z;if(Math.hypot(dx,dz)<7){G.demoI++;if(G.demoI>=RT.length){G.demoI=1;P=mkPlayer();CAMS.ready=false;}}
   const want=Math.atan2(-dx,-dz),d=angD(want,P.yaw);c.turn=-clamp(d,-1.4*dt,1.4*dt);c.my=Math.abs(d)<.6?1:.3;
-  G.demoHop-=dt;if(G.demoHop<0){c.jetHit=true;c.jet=true;G.demoHop=5+Math.random()*4;}return c;}
+  G.demoHop-=dt;if(G.demoHop<0){c.jetHit=true;c.jet=true;G.demoHop=5+Math.random()*4;}return demoFight(c,dt);}
 function handleEvents(){
   for(const e of P.ev){
     if(e.t==='jet'){sJet();CAMS.shake=Math.max(CAMS.shake,.45);dustPuff(P.x,P.z,12,1.1);}
@@ -2043,17 +2138,18 @@ function tick(dt){
     let c=G.mode==='demo'?demoCtl(dt):readCtl(dt);
     if(CTLX){Object.assign(c,CTLX);CTLX.jetHit=false;CTLX.view=false;if(CTLX.turnOnce){c.turn=CTLX.turnOnce;CTLX.turnOnce=0;}}
     if(c.view)cycleView();if(c.pause&&G.mode==='play')setPause(true);
-    rayAim();updPlayer(c,dt);if(G.mode==='play')updGun(c,dt);handleEvents();updMission(dt);
+    rayAim();updPlayer(c,dt);updGun(c,dt);handleEvents();updMission(dt);
   }else if(G.mode==='play'){const c=readCtl(dt);if(c.pause)setPause(false);}
   else readCtl(dt);
-  const fight=(G.mode==='play'&&!G.paused)||G.mode==='down';
+  const fight=(G.mode==='play'&&!G.paused)||G.mode==='down'||G.mode==='demo';
   if(fight){updShots(dt);updEnemies(dt);updPickups(dt);}
-  updRadio(dt);if(NIGHT_ON&&M&&M.ready&&!M.lamp){M.lamp=new THREE.SpotLight(0xfff2d8,1600,110,.55,.6,1.4);M.lamp.position.set(0,.3,-.4);M.head.add(M.lamp);const t=new THREE.Object3D();t.position.set(0,-3,-30);M.head.add(t);M.lamp.target=t;}
+  updRadio(dt);updRadioX(dt);if(NIGHT_ON&&M&&M.ready&&!M.lamp){M.lamp=new THREE.SpotLight(0xfff2d8,1600,110,.55,.6,1.4);M.lamp.position.set(0,.3,-.4);M.head.add(M.lamp);const t=new THREE.Object3D();t.position.set(0,-3,-30);M.head.add(t);M.lamp.target=t;}
+  if(G.mode==='down'&&MISSION&&MS.failT>0){MS.failT-=dt;if(MS.failT<=0)finishMission(false);}
   if(G.mode==='down'){G.downT-=dt;if(G.downT<=0&&$('down').style.display!=='flex'){$('down').style.display='flex';}
     if(Math.random()<dt*20)part({x:P.x+(Math.random()-.5)*2,y:P.y+1+Math.random()*2,z:P.z+(Math.random()-.5)*2,vx:0,vy:2.5,vz:0,life:2.4,s0:1.2,s1:5,a:.4,col:[.2,.2,.21],drag:.6,grav:-.5});}
   if(M){const ev=poseMech(M,{x:P.x,z:P.z,gy:P.y,legYaw:P.legYaw,aimYaw:P.yaw,spd:live?P.spd:0,air:P.air,vy:P.vy,land:P.land,thrust:P.thrust,pitch:P.pitch},live?dt:0);
     for(const e of ev){const k=clamp(Math.abs(P.spd)/WALK,.35,1);sStep(k);if(e.x!==undefined){dustPuff(e.x,e.z,3,.55);if(SOFT_GROUND())decal('print',e.x,e.z,1.9,(P.legYaw!=null?P.legYaw:P.yaw)+Math.PI);}if(SET.view==='close')CAMS.shake=Math.max(CAMS.shake,.16*k);}}
-  const view=G.mode==='title'||G.mode==='demo'||G.mode==='down'?'far':SET.view;
+  const view=G.mode==='demo'?DM.view:G.mode==='title'||G.mode==='down'?'far':SET.view;
   updCam(live||G.mode!=='play'?dt:0,P,view);
   placeSun(P.x-Math.sin(P.yaw)*12,P.z-Math.cos(P.yaw)*12);
   U.uSunXZ.value.set(SUN.x/SUN.y,SUN.z/SUN.y);
@@ -2065,18 +2161,19 @@ function tick(dt){
 }
 /* auto quality: if frames are slow, lower the render scale, then the quality level */
 function autoQ(dt){if(SET.quality!=='auto'||G.mode!=='play'||G.paused)return;const pf=G.perf;pf.t+=dt;pf.n++;
-  if(pf.t>=2.5){const avg=pf.t/pf.n;pf.t=0;pf.n=0;
-    if(avg>1/40){if(DYN>.66){DYN*=.88;resize();}else if(QL!=='low'){setQuality(QL==='high'?'med':'low');}}
+  if(pf.t>=1.8){const avg=pf.t/pf.n;pf.t=0;pf.n=0;
+    if(avg>1/44){if(DYN>.66){DYN*=.88;resize();}else if(QL!=='low'){setQuality(QL==='high'?'med':'low');}}
     else if(avg<1/57&&DYN<1){DYN=Math.min(1,DYN*1.06);resize();}}}
 let last=performance.now();
 function frame(now){
   const raw=(now-last)/1000,dt=Math.min(.05,raw);last=now;G.fdt+=(raw-G.fdt)*.1;
-  tick(dt);autoQ(dt);renderFrame();HUD.dev();requestAnimationFrame(frame);
+  tick(dt);autoQ(dt);renderFrame();if(SET.fps&&(G.fpsT=(G.fpsT||0)-raw)<=0){G.fpsT=.5;$('fps').textContent=Math.round(1/Math.max(.001,G.fdt))+' FPS · '+QL.toUpperCase();}HUD.dev();requestAnimationFrame(frame);
 }
 function boot(){
   pickMap();setupHud();setQuality(QL);const LK=MISSION&&MISSION.look?Object.assign({},MAPDEF.look,MISSION.look):MAPDEF.look;NIGHT_ON=!!LK.night;applyLook(LK);buildEnv(LK);setupTitle();U.tCloud.value=tex('34-fog',{srgb:false});
   buildGround();const before=new Set(S.children);MAPDEF.build();mergeStatic(before);if(MAPDEF.dress&&!Q.has('nodress'))MAPDEF.dress();M=buildMech();buildFX();buildWeapons();P=mkPlayer();
-  const done=()=>{G.mode=G.mode==='load'?'title':G.mode;$('load').style.display='none';$('title').style.display=G.mode==='title'?'flex':'none';document.title='IRONHOWL 3';ARC.post('ready',{title:ARC.title});};
+  let readySent=false;   /* textures loaded later (decals, effects) fire onLoad again: say ready only once */
+  const done=()=>{if(readySent)return;readySent=true;G.mode=G.mode==='load'?'title':G.mode;$('load').style.display='none';$('title').style.display=G.mode==='title'?'flex':'none';document.title='IRONHOWL 3';ARC.post('ready',{title:ARC.title});};
   let vegDone=false,texDone=false;LM.onLoad=()=>{texDone=true;if(vegDone)done();};
   if(LK.rain)buildRain();
   Promise.all([loadVeg(MAPDEF.mix),loadEnemies().then(loadSet6)]).then(()=>{buildWeather(LK);envAll();navInit();navBuild();vegDone=true;if(texDone||LOADP>=1)done();});
@@ -2104,10 +2201,12 @@ if(DEV)window.__ih3={WX,MARKS,mortarAt,DIFF,BOSS_DEF,BOSS,MISSIONS,spawnGroup,ma
   info(){const i=R.info.render;return {calls:i.calls,tris:i.triangles,veg:VEGN.inst,ql:QL,mode:G.mode,x:+P.x.toFixed(1),z:+P.z.toFixed(1),air:P.air,fuel:+P.fuel.toFixed(2),hull:+P.hull.toFixed(0),shield:+P.shield.toFixed(0),tier:GUN.tier,heat:+GUN.heat.toFixed(0),over:GUN.over,msl:MSL.ammo,score:G.score,kills:G.kills,wave:G.wave,enemies:EN.filter(e=>!e.dead).length,bolts:BOLTS.length,ebolts:EBOLTS.length};}};
 /* title screen: mission briefing when a mission is loaded, otherwise the sandbox map buttons and the mission list */
 function setupTitle(){
-  if(MISSION){$('maps').style.display='none';$('bmis').style.display='none';$('tsub').textContent='MISSION '+MISSION.id+' · '+MISSION.name;
+  if(MISSION){$('maps').style.display='none';$('bmis').style.display='none';$('bend').style.display='none';$('tsub').textContent=MISSION.endless?'ENDLESS · '+MAPS[MISSION.map].name:'MISSION '+MISSION.id+' · '+MISSION.name;
     $('tbrief').innerHTML=MISSION.brief.map(l=>'<div>'+l+'</div>').join('')+'<div class="objs">'+MISSION.steps.filter((s,i,a)=>a.findIndex(q=>q.label===s.label)===i).map(s=>'· '+s.label).join('<br>')+'</div>';
     $('tgo').textContent='TAP TO DEPLOY';$('bmenu').style.display='';}
   $('bmis').onclick=e=>{e.stopPropagation();missionMenu();};
+  $('bend').onclick=e=>{e.stopPropagation();endlessMenu();};$('elback').onclick=e=>{e.stopPropagation();$('elist').style.display='none';};
+  $('mfps').onclick=e=>{e.stopPropagation();SET.fps=!SET.fps;store.set('fps',SET.fps?1:0);fpsLabel();};fpsLabel();
   $('bmenu').onclick=e=>{e.stopPropagation();const q=new URLSearchParams(location.search);q.delete('mission');location.search=q.toString();};
   $('mlback').onclick=e=>{e.stopPropagation();$('mlist').style.display='none';};
   $('rnext').onclick=()=>{const q=new URLSearchParams(location.search);q.set('mission',MISSION.id+1);location.search=q.toString();};

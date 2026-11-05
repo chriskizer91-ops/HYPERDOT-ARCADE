@@ -74,7 +74,7 @@ const MISSIONS=[
    steps:[{t:'reach',label:'ENTER THE FOUNDRY YARD',at:[0,42],r:18,boss:1,wave:{skitter:4,bulwark:1},cp:1,radio:[['ROOK','This is it, Howl. Everything it built is between us and the core.'],['FORGE','UNIT 07. YOU ARE OBSOLETE.']]},
           {t:'boss',label:'DESTROY FORGE',cp:1,radio:[['FORGE','I BUILT EVERYTHING YOU SEE.'],['ROOK','Pylons first. Four of them, red orbs on top.']]}]},
 ];
-const MID=parseInt(Q.get('mission')||'0',10),MISSION=MISSIONS.find(m=>m.id===MID)||null;
+const MID=parseInt(Q.get('mission')||'0',10),EMAP=(Q.get('endless')||'').toLowerCase(),MISSION=EMAP&&endlessBoss(EMAP)?endlessDef(EMAP):MISSIONS.find(m=>m.id===MID)||null;
 /* difficulty climbs across the campaign: enemy damage and toughness per mission (mission 1 is gentle) */
 const DIFF=MISSION?{dmg:[.8,.85,.9,.95,1,1,1.05,1.1,1.1,1.15,1.2,1.25][MISSION.id-1]||1,hp:[.85,.9,.9,.95,1,1,1,1.05,1.05,1.1,1.15,1.15][MISSION.id-1]||1}:{dmg:1,hp:1};
 const MS={step:-1,t:0,waveT:0,wi:0,hold:0,repairs:3,cp:null,kills0:0,time:0,done:false,objs:[],truck:null,zone:null,built:{},limitT:0,wpos:null,escort:null};
@@ -123,6 +123,7 @@ function beginStep(i){
   MS.objs=MS.built[i];for(const t of MS.objs)if(!t.dead)t.hp=t.hpMax;
   if(s.t==='escort')escortBegin(s,first);
   if(s.t==='capture')captureBegin(s,first);
+  if(s.t==='endless')endlessBegin();
   if(s.boss||s.t==='boss'){if(!BOSS.o)BOSS_DEF[MISSION.boss].make(...(MISSION.bossAt||[10,-24]));BOSS.idle=s.t!=='boss';}
   if(s.truck&&!MS.truck)MS.truck=makeTruck(s.at[0],s.at[1],-.6);
   if(s.wreck&&!MS.wreck){MS.wreck=[makeTruck(s.at[0]+4,s.at[1]-3,.9,1),makeTruck(s.at[0]-6,s.at[1]+5,2.4,1)];}
@@ -140,6 +141,7 @@ function updMission(dt){
     if(s.masts){const all=MISSION.steps.filter(q=>q.masts).length,doneN=MISSION.steps.indexOf(s);txt=s.label+' '+(doneN+(left?0:1))+'/'+all;}ok=left===0;}
   else if(s.t==='reach'){ok=Math.hypot(P.x-s.at[0],P.z-s.at[1])<s.r;}
   else if(s.t==='escort'){const r=escortStep(s,dt);txt=r.txt;ok=r.ok;MS.wpos=r.pos;}
+  else if(s.t==='endless'){const r=endlessStep(s,dt);txt=r.txt;ok=false;MS.wpos=r.pos;}
   else if(s.t==='capture'){const r=captureStep(s,dt);txt=r.txt;ok=r.ok;MS.wpos=r.pos;}
   else if(s.t==='boss'){const r=BOSS_DEF[MISSION.boss].step(s,dt);txt=r.txt;ok=r.ok;MS.wpos=r.pos;}
   else if(s.t==='clear'){ok=MS.t>3&&EN.filter(e=>!e.dead).length===0&&BEACONS.length===0;}
@@ -154,7 +156,7 @@ function updMission(dt){
   HUD.set('obj','text',txt);
   if(ok){addScore(500);beginStep(MS.step+1);}
 }
-function finishMission(won){if(MS.done)return;MS.done=true;G.mode='results';
+function finishMission(won){if(MISSION.endless)return endlessOver();if(MS.done)return;MS.done=true;G.mode='results';
   const time=MS.time|0,bonus=won?2000+Math.max(0,600-time)*5+MS.repairs*400:0;if(won){addScore(bonus);addScrap(150+MS.repairs*25);}const got=bankScrap();
   const sv=SAVE.get();sv.best=sv.best||{};if(won){sv.unlocked=Math.max(sv.unlocked||1,MISSION.id+1);}sv.best[MISSION.id]=Math.max(sv.best[MISSION.id]||0,G.score);SAVE.put(sv);
   const tickets=Math.min(80,Math.floor(G.score/400)+(won?10:0));ARC.over(G.score,tickets);
@@ -163,7 +165,7 @@ function finishMission(won){if(MS.done)return;MS.done=true;G.mode='results';
   $('rnext').style.display=won&&MISSIONS.find(m=>m.id===MISSION.id+1)?'':'none';$('results').style.display='flex';jetLoop(0);
 }
 /* falling in a mission: repair at the last checkpoint (3 repairs per mission), then the mission is lost */
-function missionDown(){if(MS.repairs<=0){setTimeout(()=>finishMission(false),2200);return false;}return true;}
+function missionDown(){if(MS.repairs<=0){MS.failT=2.2;return false;}return true;}   /* counted in game time (tick), so it also works when timers are slowed */
 function repairAtCheckpoint(){MS.repairs--;const cp=MS.cp||{step:0,x:MISSION.start[0],z:MISSION.start[1],yaw:MISSION.start[2],tier:GUN.base};
   clearFight();P=mkPlayer();applyUpgrades();P.x=cp.x;P.z=cp.z;P.y=hgt(cp.x,cp.z);P.yaw=P.legYaw=cp.yaw;CAMS.ready=false;if(M)M.root.visible=true;
   P.hull=P.hullMax;P.shield=P.shieldMax;P.cells=P.cells;GUN.tier=Math.max(GUN.base,(cp.tier||1)-1);GUN.heat=0;GUN.over=false;$('down').style.display='none';G.mode='play';

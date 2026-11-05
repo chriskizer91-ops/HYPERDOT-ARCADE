@@ -1,6 +1,6 @@
 /* ===================== renderer, quality, sky, light ===================== */
 const cv=$('gl');
-const SET={quality:store.get('quality','auto'),view:store.get('view','close'),sens:parseFloat(store.get('sens','1'))||1,sound:store.get('sound','1')==='1'};
+const SET={fps:store.get('fps','0')==='1'||store.get('fps',0)===1,quality:store.get('quality','auto'),view:store.get('view','close'),sens:parseFloat(store.get('sens','1'))||1,sound:store.get('sound','1')==='1'};
 /* px = pixel budget; shadow = map size (0 = off); grass/near/far = draw distances in metres */
 const QUAL={low:{bloom:0,px:.75e6,shadow:0,grass:24,grassNear:8,near:24,far:115,fog:100},
             med:{bloom:1,px:1.35e6,shadow:1024,grass:36,grassNear:12,near:32,far:165,fog:140},

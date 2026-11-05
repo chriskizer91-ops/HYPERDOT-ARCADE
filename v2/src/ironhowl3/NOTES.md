@@ -338,9 +338,37 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
   - Foundry: puddles, cracks, scorch, hazard paint, scrap, pipes, cones.
   - `?nodress` turns it off.
 
-## Next: session 8 (polish)
+## Done in session 8 (Endless, radio, speed pass, attract demo)
 
-- Sound pass, more radio lines, a phone performance pass (instancing enemies if draw calls are a problem), attract demo, Endless mode, final balance after his playtest.
+- **Endless** (`06h_endless.js`):
+  - Start it with `?endless=field|woods|docks|foundry`, or from the ENDLESS button on the title screen, which opens a list of arenas with each one's best wave.
+  - It runs as a mission with one `endless` step and no repairs.
+  - Waves:
+    - Wave *n* has 3+*n* machines, at most 24.
+    - New types join in order: Hound from wave 3, Gunner 5, Hornet 7, Lancer 9, Bulwark 11, Tank 13, Mortar 15.
+    - Every 5th wave is heavy (Gunners, Bulwarks, Tanks). Every 10th brings the arena's boss: Thresher, Stag, Maw or FORGE.
+    - Machines get tougher each wave: `G.hpK` = 1 + 0.035 per wave, up to 2.2. Their damage `DIFF.dmg` = 0.9 + 0.025 per wave, up to 1.6.
+    - Groups of up to 6 arrive 7 s apart.
+  - Between waves: 8 s, with a repair and a shield pickup, and a gun chip every 3 waves. Each cleared wave scores wave × 200.
+  - Scrap comes in at half rate. Results show the wave reached, and the best per arena is saved in `hd-ironhowl3-save` under `endless`.
+- **Radio** (`updRadioX`): low hull, overheating and 5-kill combo lines, and FORGE taunts every 45–75 s. The taunts come from 3 pools (missions 1–4, 5–8, 9–12) and get angrier. Endless has its own ROOK and FORGE lines every 4 waves.
+- **Speed pass:**
+  - Every machine is merged at spawn into one skinned mesh per material (`skinify`), with its joint nodes used as bones. 8 machines: 669 → 317 draw calls. `?noskin` turns it off.
+  - Auto quality checks every 1.8 s and steps down below 44 fps.
+  - FRAME RATE in the pause menu shows fps and the quality level, bottom left.
+- **Attract demo:** `demoFight()` spawns small groups. The mech turns, aims, fires, hops when a Hound lines up a charge, and uses the salvo when 3 or more are within 30 m. It cannot be hurt and sends no score. The camera alternates far and close every 9 s, with a 6 s orbit every 32 s, and the screen shows a blinking "IRONHOWL 3 · PRESS START". Tested: 6 kills in 30 s, never fell.
+- **Fixes:**
+  - Late texture loads fired `ready` twice; now it is sent once.
+  - The mission-failed delay counts game time instead of `setTimeout`.
+- **Tested:**
+  - Endless field reaches wave 10 with the Thresher. Endless docks game over → results → the menu shows the best.
+  - Demo; mission 7 still completes; the cabinet check passes (ready once, exit).
+
+## Next
+
+- His playtest on the Pixel 7a (FRAME RATE readout on), then balance.
+- Ironhowl 4 ideas: he has them, not written down yet.
+- Putting Ironhowl 3 on its cabinet: only when he asks.
 
 ## (old) session 7 plan
 
