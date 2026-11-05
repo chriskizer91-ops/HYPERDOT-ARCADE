@@ -140,6 +140,12 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
 - The jet flames are plain cones.
 - The autopilot test (`AUTO` in the shot steps) does not dodge, so it loses. A human hopping over Hound charges should do far better.
 
+## Waiting on
+
+- Image set 2 (numbers 47–86, prompts in `IMAGES-SET2.md`, also in the project as `claude/ironhowl3-image-list-set2.md`). Christopher is generating them.
+  - 47–52 are reference sheets for modelling and never go in the game.
+  - When they arrive: unpack to a scratch folder and extend `SPEC` in `tools/process_art.py` for 47–86 (kinds: ref, tex, sky, strip, add, alpha_black, alpha_white). Then run it, so masters go to `src/ironhowl3/art/masters/` and game files to `games/ironhowl3/art/`.
+
 ## Next: session 4 (places)
 
 - Field map: meadow and dry mixes, open hills, sun, cloud shadows, wind in the grass, farm props.
