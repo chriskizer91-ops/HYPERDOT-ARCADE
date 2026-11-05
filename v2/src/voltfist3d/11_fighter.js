@@ -247,7 +247,7 @@ function mkToon(U){
       .replace('#include <beginnormal_vertex>','vec3 objectNormal=skN(normal);vEmi=aEmi;vMat=aMat;')
       .replace('#include <begin_vertex>','vec3 transformed=skP(position);vUvB=uvB;vWb=aWb;if(uGlitch>0.){float bnd=floor(transformed.y*9.+floor(uTime*13.));transformed.x+=uGlitch*step(.82,fract(sin(bnd*12.9898)*43758.5453))*.06*sign(sin(bnd*7.3));}');
     sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform vec3 uRim,uRimDir,uKeyDirV,uKeyColF,uSkyC,uGndC;uniform vec4 uAura;uniform float uFlash,uEmiK,uHolo,uTime,uDimF,uArtEmi,uArtGold,uArtK,uArtBump;varying float vEmi;varying vec2 vMat;varying vec2 vUvB;varying float vWb;\nvec3 artPerturb(vec3 sp,vec3 sn,vec2 dH){vec3 sx=dFdx(sp),sy=dFdy(sp),r1=cross(sy,sn),r2=cross(sn,sx);float det=dot(sx,r1);vec3 g=sign(det)*(dH.x*r1+dH.y*r2);return normalize(abs(det)*sn-g);}')
-      .replace('#include <map_fragment>','float artH=.5;\n#ifdef USE_MAP\nvec4 tA=texture2D(map,vMapUv),tB=texture2D(map,vUvB),tM=mix(tA,tB,clamp(vWb,0.,1.));diffuseColor.rgb*=tM.rgb;artH=tM.a;\n#endif')
+      .replace('#include <map_fragment>','float artH=.5;\n#ifdef USE_MAP\nif(vMapUv.x>-.5){vec4 tA=texture2D(map,vMapUv),tB=texture2D(map,vUvB),tM=mix(tA,tB,clamp(vWb,0.,1.));diffuseColor.rgb*=tM.rgb;artH=tM.a;}\n#endif')
       .replace('#include <normal_fragment_maps>','#include <normal_fragment_maps>\nif(uArtBump>0.){normal=artPerturb(-vViewPosition,normal,vec2(dFdx(artH),dFdy(artH))*uArtBump*.012);}')
       .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\nif(uArtK>0.){float lg=dot(diffuseColor.rgb,vec3(.3,.59,.11));diffuseColor.rgb=max(mix(vec3(lg),diffuseColor.rgb,1.08),0.)*uArtK;}\ntotalEmissiveRadiance+=vColor.rgb*vEmi*uEmiK+diffuseColor.rgb*uArtEmi*smoothstep(.3,.65,min(diffuseColor.g,diffuseColor.b)-diffuseColor.r*.8);')
       .replace('#include <opaque_fragment>',`
@@ -341,6 +341,7 @@ function mkActorMesh(def){
     cgeo.setAttribute('color',new THREE.BufferAttribute(col,3));cgeo.setAttribute('aPart',new THREE.BufferAttribute(part,1));cgeo.setAttribute('aEmi',new THREE.BufferAttribute(emi,1));cgeo.setAttribute('aOl',new THREE.BufferAttribute(olw,1));
     cgeo.setAttribute('aMat',new THREE.BufferAttribute(mt,2));cgeo.setAttribute('aPart2',new THREE.BufferAttribute(new Float32Array(nv),1));cgeo.setAttribute('aW',new THREE.BufferAttribute(new Float32Array(nv),1));
     cgeo.setAttribute('aP2',new THREE.BufferAttribute(new Float32Array(nv*3),3));cgeo.setAttribute('aN2',new THREE.BufferAttribute(new Float32Array(nv*3),3));
+    cgeo.setAttribute('uv',new THREE.BufferAttribute(new Float32Array(nv*2).fill(-1),2));cgeo.setAttribute('uvB',new THREE.BufferAttribute(new Float32Array(nv*2).fill(-1),2));
     cgeo.boundingSphere=new THREE.Sphere(new THREE.Vector3(),100);
     cloth=new THREE.Mesh(cgeo,toon);cloth.frustumCulled=false;cloth.castShadow=true;cloth.customDepthMaterial=depth;
     const co=new THREE.Mesh(cgeo,ol);co.frustumCulled=false;clothRefl=new THREE.Mesh(cgeo,rf);clothRefl.frustumCulled=false;clothRefl.renderOrder=30;

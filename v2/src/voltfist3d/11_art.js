@@ -35,7 +35,7 @@ function artFit(def){
     sw:clamp((F.SL[0]-F.SR[0])/2*sF*.92,b.rChest*h*b.bulk*1.32*.8*.9,b.rChest*h*b.bulk*1.32*.8*1.25),
     hw:clamp((F.hL[0]-F.hR[0])/2*sF,b.rPelvis*h*b.bulk*1.32*.55*.9,b.rPelvis*h*b.bulk*1.32*.55*1.3)};
   const hd=m.head,hH=hd.tposeH*m.fs*sF;
-  A.kh=hH/(hd.front.chin-hd.front.top);A.chinL=-.72*b.headR*h*(def.look.headK||1);
+  A.kh=hH/(hd.front.chin-hd.front.top);if(m.head8)A.s8=hH/(m.head8.chin-m.head8.top);A.chinL=-.72*b.headR*h*(def.look.headK||1);
   /* the coarse relief grid (256 x 256, 128 = flat) */
   const raw=atob(m.disp),D=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)D[i]=raw.charCodeAt(i);A.disp=D;
   A.det=Q().id==='low'?.6:1;A.hb=(ARTFX[def.id]||{}).hb||[.14,.42];
@@ -53,6 +53,11 @@ const pkeyOf=part=>(PKEY||(PKEY={[P_UAN]:'UAN',[P_FAN]:'FAN',[P_HAN]:'HAN',[P_UA
 function projUV(A,part,p,n){
   const m=A.m,F=A.F,B=A.B,hd=m.head,px=p[0],py=p[1],pz=p[2];
   if(part===P_HEAD||part===P_EYE0||part===P_EYE1){
+    if(m.head8){const H8=m.head8,s8=A.s8;let th=Math.atan2(-n[2],n[0]);if(th<0)th+=TAU;
+      const f=th/(Math.PI/4),k0=Math.floor(f)%8,k1=(k0+1)%8,w=smoothstep(.18,.82,f-Math.floor(f)),o=[0,0,0,0,w];
+      for(const [j,k] of [[0,k0],[1,k1]]){const V=H8.views[k],ph=V.phi*D2R,ix=V.a+(px*-Math.sin(ph)+pz*-Math.cos(ph))/s8,iy=H8.chin-(py-A.chinL)/s8;
+        o[j*2]=V.cell[0]+ix*H8.sc;o[j*2+1]=V.cell[1]+iy*H8.sc;}
+      return o;}
     const s1=hd.front.s/A.kh,s2=hd.side.s/A.kh,c=n[0]/Math.sqrt(n[0]*n[0]+n[2]*n[2]+1e-6);
     return [hd.front.o[0]-pz*s1,hd.front.o[1]-(py-A.chinL)*s1,hd.side.o[0]+px*s2,hd.side.o[1]-(py-A.chinL)*s2,1-smoothstep(A.hb[0],A.hb[1],c)];}
   const wb=smoothstep(.28,-.28,n[0]),o=[0,0,0,0,wb];
@@ -123,6 +128,7 @@ function artBody(def,G,A){
   /* neck */
   const R=b.headR*h*(def.look.headK||1),nk=(b.neck+b.headR)*h,nl=Math.hypot(nk-.75*R,.08*R);
   gbCapsule(G,P_NECK,[0,0,0],[0,nl,0],b.rNeck*rs*1.12,b.rNeck*rs*.92,WH,{seg:24,len:5,lat:4,ol:0,mp:ARTMP});
+  if(m.head8)headFrom8(G,A,def);else{
   /* head: front width and side depth from the face sheet; below the eyes it narrows to the jaw */
   let hf=m.head.front.rows.map(r=>r.slice()),hs=m.head.side.rows.map(r=>r.slice());const kh=A.kh,nr=hf.length;
   const iRef=Math.round(nr*.5),wRef=hf[iRef][1],bRef=hs[iRef][2],fRef=hs[iRef][1];
@@ -134,9 +140,11 @@ function artBody(def,G,A){
   const faceBump=(i,cx,cz)=>{const k=Math.round(i*(nr-1)/Math.max(1,hf.length-1));return k>nr*.35?bumpF[k]*kh*Math.max(0,cx)*Math.exp(-(cz*cz)/(.03)):0;};
   if(det<1){hf=resample(hf,Math.round(nr*det));hs=resample(hs,Math.round(nr*det));}
   gbHull(G,P_HEAD,hf.map(r=>A.chinL+(m.head.front.chin-r[0])*kh),(i,cx,cz)=>sell(cx,cz,(cx>=0?hs[i][1]:hs[i][2])*kh,hf[i][1]*kh,2.1)+faceBump(i,cx,cz),{seg:80,ol:.7,A,amp:.003});
-  /* Kai's spikes stand out of his hair in 3D, painted from the same face sheet */
+  }
+  /* Kai's spikes stand out of his hair in 3D, painted from the same pictures */
   const L=def.look;
-  if(L.hairStyle==='spikes'&&L.spikes){const hr=(hf[Math.round(hf.length*.3)][1]*kh)/1.06,fan=[[-1.05,.74],[-.55,.9],[0,1],[.55,.9],[1.05,.74]];
+  /* (a head from eight views already has its spikes in its outline and paint) */
+  if(L.hairStyle==='spikes'&&L.spikes&&!m.head8){const hr=A.hr8||(m.head.front.rows[22][1]*A.kh)/1.06,fan=[[-1.05,.74],[-.55,.9],[0,1],[.55,.9],[1.05,.74]];
     for(const s of L.spikes){const a=s[0]*D2R,dv=[Math.sin(a),Math.cos(a),0];
       for(const [rz,k] of fan){const d=[dv[0],dv[1]*Math.cos(rz),dv[1]*Math.sin(rz)],c0=[0,hr*.2,0];
         gbCapsule(G,P_HEAD,v3add(c0,v3sc(d,hr*.6)),v3add(c0,v3sc(d,hr*s[1]*k*1.02)),hr*s[2]*(k<1?.85:.95),Math.max(.003,hr*.04),WH,{seg:10,len:5,lat:2,ol:.7,mp:[.3,0],prof:(t)=>1+.15*bump(t,.25,.2)});}}}
@@ -175,10 +183,46 @@ function artFist(G,ph,rh,det){
   gbCapsule(G,ph,[rh*.62,rh*.45,rh*.45],[rh*.72,rh*.72,rh*.12],rh*.19,rh*.16,WH,o);
 }
 
+/* a head measured from eight views: each height row knows how far the head reaches in eight directions (every 45
+   degrees); the ring between them follows the tightest of those limits, with the corners rounded off. The profile's
+   brow, nose, lips and chin stand out only along the middle of the face. */
+function headFrom8(G,A,def){
+  const H8=A.m.head8,s8=A.s8,det=A.det,rows=H8.rows.map(r=>r.slice()),nr=rows.length;
+  const sm=(j,win)=>{const v=rows.map(r=>r[j]);for(let i=0;i<nr;i++){let t=0,c=0;for(let k=-win;k<=win;k++){const q=clamp(i+k,0,nr-1);t+=v[q];c++;}rows[i][j]=t/c;}return v;};
+  let ic=0;for(let i=0;i<nr;i++)if(rows[i][0]<=H8.chin)ic=i;
+  for(let i=ic+1;i<nr;i++)for(const j of [3,4,5,6,7])rows[i][j]=Math.min(rows[i][j],rows[ic][j]*(1-.15*(i-ic)/Math.max(1,nr-1-ic)));
+  /* the front of the face sits behind the nose: take the lowest reach over a few rows, then smooth it */
+  const raw0=rows.map(r=>r[1]);for(let i=0;i<nr;i++){let mn=1e9;for(let k=-6;k<=6;k++)mn=Math.min(mn,raw0[clamp(i+k,0,nr-1)]);rows[i][1]=mn;}sm(1,4);for(const j of [3,5,7])sm(j,2);
+  const bump=raw0.map((v,i)=>Math.max(0,v-rows[i][1]));
+  const DIR=[0,1,2,3,4,5,6,7].map(k=>k*Math.PI/4);
+  let use=rows;if(det<1)use=resample(rows,Math.round(nr*det));
+  /* shape from the four straight views (front, both profiles, back): a rounded box between their limits */
+  const rad=(r,th)=>{const cx=Math.cos(th),cz=-Math.sin(th);return sell(cx,cz,cx>=0?r[1]:r[5],cz<0?r[3]:r[7],2.2);};
+  void DIR;
+  const ys=use.map(r=>A.chinL+(H8.chin-r[0])*s8);
+  gbHull(G,P_HEAD,ys,(i,cx,cz)=>{const th=Math.atan2(-cz,cx),r=use[i],ib=Math.round(i*(nr-1)/Math.max(1,use.length-1));
+    const fb=ib>nr*.3?bump[ib]*Math.exp(-(th*th)/.05):0;return (rad(r,(th+TAU)%TAU)+fb)*s8;},{seg:96,ol:.7,A,amp:.003});
+  A.hr8=rows[Math.round(nr*.3)][3]*s8/1.06;
+}
 /* ---------- the paint: two texture positions and a blend weight for every vertex ---------- */
+function h8uv(A,k,p){const H8=A.m.head8,V=H8.views[k],ph=V.phi*D2R,ix=V.a+(p[0]*-Math.sin(ph)+p[2]*-Math.cos(ph))/A.s8,iy=H8.chin-(p[1]-A.chinL)/A.s8;
+  return [(V.cell[0]+ix*H8.sc)/ARTA,1-(V.cell[1]+iy*H8.sc)/ARTA];}
 function artUV(def,G,A){
   const n=G.p.length/3,uv=new Float32Array(n*2),uv2=new Float32Array(n*2),wb=new Float32Array(n);
-  for(let i=0;i<n;i++){const q=projUV(A,G.part[i],[G.p[i*3],G.p[i*3+1],G.p[i*3+2]],[G.n[i*3],G.n[i*3+1],G.n[i*3+2]]);
+  const az=i=>{let t=Math.atan2(-G.n[i*3+2],G.n[i*3]);return t<0?t+TAU:t;};
+  for(let i=0;i<n;i++){
+    /* a head painted from eight views: each triangle picks the two views either side of the way it faces, and each of its
+       corners blends between those two, so neighbouring triangles always meet with the same colours */
+    if(A.m.head8&&G.part[i]===P_HEAD&&i%3===0){
+      let sx=0,sz=0;for(let k=0;k<3;k++){sx+=G.n[(i+k)*3];sz+=G.n[(i+k)*3+2];}
+      /* the front picture paints the face out to about 50 degrees (past that it only shows the ear edge-on), the
+         profiles the sides and ears, the back picture the back; the three-quarter pictures turned out to be drawn at
+         uneven angles, so they only serve as reference */
+      let tc=Math.atan2(-sz,sx);if(tc<0)tc+=TAU;const q=Math.floor(tc/(Math.PI/2))%4,kA=2*q,kB=(2*q+2)%8,cen=[50,35,55,40][q]*D2R,base=q*Math.PI/2;
+      for(let k=0;k<3;k++){const j=i+k,p=[G.p[j*3],G.p[j*3+1],G.p[j*3+2]];let d=az(j)-base;d=Math.atan2(Math.sin(d),Math.cos(d));
+        const w=smoothstep(cen-.12,cen+.12,clamp(d,0,Math.PI/2)),a0=h8uv(A,kA,p),a1=h8uv(A,kB,p);
+        uv[j*2]=a0[0];uv[j*2+1]=a0[1];uv2[j*2]=a1[0];uv2[j*2+1]=a1[1];wb[j]=w;}
+      i+=2;continue;}const q=projUV(A,G.part[i],[G.p[i*3],G.p[i*3+1],G.p[i*3+2]],[G.n[i*3],G.n[i*3+1],G.n[i*3+2]]);
     uv[i*2]=q[0]/ARTA;uv[i*2+1]=1-q[1]/ARTA;uv2[i*2]=q[2]/ARTA;uv2[i*2+1]=1-q[3]/ARTA;wb[i]=q[4];}
   return {uv,uv2,wb};
 }

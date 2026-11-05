@@ -17,6 +17,48 @@ FIGHTERS = {'kai': 'Kai-Volta', 'runa': 'Runa-Kage', 'magnus': 'Magnus-Strom', '
 SIDE_FACE = {'kai': 1, 'runa': 1, 'magnus': 1, 'nova': -1, 'echo': -1}
 HEAD_SIDE_FACE = {'kai': -1, 'runa': -1, 'magnus': 1, 'nova': 1, 'echo': -1}
 A = 2048; Q = 1024
+# optional: eight head views per fighter (front, 3/4 left, left profile, back 3/4 left, back, back 3/4 right, right
+# profile, 3/4 right), in FACES/<id>/*.png sorted by name. They replace the face sheet for the head.
+FACES = os.environ.get('VF_FACES')
+HEAD8 = {'kai': dict(chin=.69, bot=.71, untail=True), 'magnus': dict(chin=.69, bot=.77, untail=False)}
+
+
+def head8(fid):
+    """measure a head from eight views. The views share one scale and framing. Returns the eight pictures (background
+    filled) and the measurements: for each height row, how far the head reaches in eight directions around its axis"""
+    cfg = HEAD8[fid]; fs_ = sorted(glob.glob(os.path.join(FACES, fid, '*.png')))
+    imgs = [np.asarray(Image.open(f).convert('RGB')) for f in fs_]; H_, W_ = imgs[0].shape[:2]
+    views = []; masks = []
+    for k, im in enumerate(imgs):
+        m = mask_of(im)
+        hsv = cv2.cvtColor(im, cv2.COLOR_RGB2HSV)
+        mg = m.copy()
+        if cfg['untail']:
+            # the headband tails hang behind the head: they are cloth in the game, so they don't shape the head
+            yy = np.mgrid[0:H_, 0:W_][0]
+            white = (hsv[..., 1] < 45) & (hsv[..., 2] > 150) & (yy > 0.43 * H_)
+            mg &= ~(cv2.dilate(white.astype(np.uint8), np.ones((7, 7), np.uint8)) > 0)
+        # the head's turning axis: the cranium is close to round, so its outline is centred on the axis from every side
+        yt = np.where(mg.any(axis=1))[0].min(); hh_ = cfg['chin'] * H_ - yt; mids = []
+        for y in range(int(yt + .12 * hh_), int(yt + .36 * hh_), 4):
+            xs = np.where(mg[y])[0]
+            if len(xs): mids.append((xs.min() + xs.max()) / 2)
+        views.append(dict(phi=k * 45, a=float(np.median(mids))))
+        masks.append((im, m, mg))
+    ys0 = np.where(masks[0][2].any(axis=1))[0]; top = float(ys0.min())
+    chin = cfg['chin'] * H_; bot = cfg['bot'] * H_
+    rows = []
+    for i in range(73):
+        y = int(top + (bot - top) * i / 72); sup = [[] for _ in range(8)]
+        for k, (im, m, mg) in enumerate(masks):
+            xs = np.where(mg[y])[0]
+            if len(xs) == 0: continue
+            a_ = views[k]['a']; R_ = xs.max() - a_; L_ = a_ - xs.min()
+            sup[(k + 2) % 8].append(R_); sup[(k - 2) % 8].append(L_)
+        rows.append([float(y)] + [float(np.mean(v)) if v else 0.0 for v in sup])
+    return imgs, [mm[1] for mm in masks], dict(views=views, top=top, chin=chin, bot=bot, rows=rows, n=H_)
+
+
 
 
 def load(folder, key):
@@ -243,11 +285,19 @@ def main():
         tF = place(F, mF, 0, 0, (0, L['top'] - pad, F.shape[1], L['bot'] + pad))
         ysB = np.where(mB.any(axis=1))[0]; padB = 0.03 * LB['Hf']
         tB = place(back, mB, 1, 0, (0, ysB.min() - padB, back.shape[1], ysB.max() + padB))
+        H8 = head8(fid) if (FACES and fid in HEAD8 and os.path.isdir(os.path.join(FACES, fid))) else None
         hh = chinF - topF
         tHF = place(cf, mcf, 0, 1, (cxF - 0.75 * hh, topF - 0.08 * hh, cxF + 0.75 * hh, chinF + 0.4 * hh))
         hhs = chinS - topSd
         tHS = place(cs, mcs, 1, 1, (axS - 0.75 * hhs, topSd - 0.08 * hhs, axS + 0.75 * hhs, chinS + 0.4 * hhs))
         def tp(t, p): return [p[0] * t['s'] + t['ox'], p[1] * t['s'] + t['oy']]
+        if H8:
+            imgs8, m8, hm = H8; cs8 = 512 / hm['n']
+            for k, im in enumerate(imgs8):
+                cx, cy = (k % 4) * 512, Q + (k // 4) * 512
+                atlas[cy:cy + 512, cx:cx + 512] = cv2.resize(bleed(im, m8[k]), (512, 512), interpolation=cv2.INTER_AREA)
+                hm['views'][k]['cell'] = [cx, cy]
+            hm['sc'] = cs8
         LMK = ['N', 'C', 'W', 'H', 'SR', 'SL', 'ER', 'EL', 'WR', 'WL', 'TR', 'TL', 'hR', 'hL', 'kR', 'kL', 'aR', 'aL']
         meta = dict(
             front={k: tp(tF, L[k]) for k in LMK}, back={k: tp(tB, LB[k]) for k in LMK},
@@ -267,6 +317,7 @@ def main():
         g = np.clip(128 + g * 150, 0, 255).astype(np.uint8)
         import base64
         meta['disp'] = base64.b64encode(g.tobytes()).decode()
+        if H8: meta['head8'] = H8[2]
         META[fid] = meta
         Image.fromarray(np.dstack([atlas, alpha]), 'RGBA').save(os.path.join(OUT, fid + '.webp'), quality=84, alpha_quality=35, method=6)
         if DBG:
