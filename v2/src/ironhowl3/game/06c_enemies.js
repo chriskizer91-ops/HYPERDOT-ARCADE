@@ -21,7 +21,11 @@ function loadEnemies(){
 /* ---- path-finding: a flow field on a 2 m grid, rebuilt when the player moves to another cell ---- */
 const NAV={c:2,n:0,o:0,block:null,dist:null,pc:-1,t:0};
 function navInit(){const ext=PLAY+10;NAV.o=-ext;NAV.n=Math.ceil(ext*2/NAV.c);const n=NAV.n;NAV.block=new Uint8Array(n*n);NAV.dist=new Float32Array(n*n);
-  for(const a of VEG.cols.values())for(const c of a){const r=c.r+1.1,i0=Math.floor((c.x-r-NAV.o)/NAV.c),i1=Math.floor((c.x+r-NAV.o)/NAV.c),j0=Math.floor((c.z-r-NAV.o)/NAV.c),j1=Math.floor((c.z+r-NAV.o)/NAV.c);
+  const seen=new Set();
+  for(const a of VEG.cols.values())for(const c of a){if(seen.has(c))continue;seen.add(c);
+    if(c.b){const i0=Math.floor((c.x0-1.2-NAV.o)/NAV.c),i1=Math.floor((c.x1+1.2-NAV.o)/NAV.c),j0=Math.floor((c.z0-1.2-NAV.o)/NAV.c),j1=Math.floor((c.z1+1.2-NAV.o)/NAV.c);
+      for(let i=i0;i<=i1;i++)for(let j=j0;j<=j1;j++)if(i>=0&&j>=0&&i<n&&j<n)NAV.block[j*n+i]=1;continue;}
+    const r=c.r+1.1,i0=Math.floor((c.x-r-NAV.o)/NAV.c),i1=Math.floor((c.x+r-NAV.o)/NAV.c),j0=Math.floor((c.z-r-NAV.o)/NAV.c),j1=Math.floor((c.z+r-NAV.o)/NAV.c);
     for(let i=i0;i<=i1;i++)for(let j=j0;j<=j1;j++){if(i<0||j<0||i>=n||j>=n)continue;const cx=NAV.o+(i+.5)*NAV.c,cz=NAV.o+(j+.5)*NAV.c;if(Math.hypot(cx-c.x,cz-c.z)<r)NAV.block[j*n+i]=1;}}}
 const navCell=(x,z)=>{const i=Math.floor((x-NAV.o)/NAV.c),j=Math.floor((z-NAV.o)/NAV.c);return i<0||j<0||i>=NAV.n||j>=NAV.n?-1:j*NAV.n+i;};
 function navBuild(){const n=NAV.n,D=NAV.dist;D.fill(1e9);const s=navCell(P.x,P.z);if(s<0)return;NAV.pc=s;
@@ -60,9 +64,9 @@ const WAVES=[{skitter:4},{skitter:6,hound:1},{hound:2,skitter:4},{gunner:1,skitt
 const BEACONS=[];
 function spawnSpot(){const fx=-Math.sin(P.yaw),fz=-Math.cos(P.yaw);
   for(let tries=0;tries<40;tries++){const a=(Math.random()-.5)*1.2,d=55+Math.random()*25,ca=Math.cos(a),sa=Math.sin(a);
-    const dx=fx*ca-fz*sa,dz=fx*sa+fz*ca,x=clamp(P.x+dx*d,-PLAY+4,PLAY-4),z=clamp(P.z+dz*d,-PLAY+4,PLAY-4);
+    const B=BND(),dx=fx*ca-fz*sa,dz=fx*sa+fz*ca,x=clamp(P.x+dx*d,B.x0+4,B.x1-4),z=clamp(P.z+dz*d,B.z0+4,B.z1-4);
     if(Math.hypot(x-P.x,z-P.z)<35)continue;const k=navCell(x,z);if(k<0||NAV.block[k])continue;return [x,z];}
-  return [clamp(P.x-Math.sin(P.yaw)*60,-PLAY+4,PLAY-4),clamp(P.z-Math.cos(P.yaw)*60,-PLAY+4,PLAY-4)];}
+  const B=BND();return [clamp(P.x-Math.sin(P.yaw)*60,B.x0+4,B.x1-4),clamp(P.z-Math.cos(P.yaw)*60,B.z0+4,B.z1-4)];}
 function startWave(){
   const w=WAVES[G.wave%WAVES.length];G.hpK=1+Math.floor(G.wave/WAVES.length)*.3;G.wave++;
   HUD.banner('WAVE '+G.wave);
@@ -142,7 +146,7 @@ function updEnemies(dt){
     if(dist<e.d.r+RAD&&!(e.st==='charge')){mvx-=dx/dist;mvz-=dz/dist;}
     e.vx+=(mvx*sp-e.vx)*damp(6,dt);e.vz+=(mvz*sp-e.vz)*damp(6,dt);
     let nx=e.x+(e.vx+e.kx)*dt,nz=e.z+(e.vz+e.kz)*dt;e.kx*=Math.exp(-dt*4);e.kz*=Math.exp(-dt*4);
-    const c=collide(nx,nz,e.d.r);e.x=clamp(c[0],-PLAY-6,PLAY+6);e.z=clamp(c[1],-PLAY-6,PLAY+6);e.y=hgt(e.x,e.z);
+    const c=collide(nx,nz,e.d.r),B=BND();e.x=clamp(c[0],B.x0,B.x1);e.z=clamp(c[1],B.z0,B.z1);e.y=hgt(e.x,e.z);
     e.yaw+=clamp(angD(want,e.yaw),-dt*(e.st==='aim'?6:4),dt*(e.st==='aim'?6:4));
     poseEnemy(e,dt,Math.hypot(e.vx,e.vz));
   }

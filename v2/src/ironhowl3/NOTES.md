@@ -29,7 +29,8 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
 | 01_base | Helpers, noise, `store` (keys `hd-ironhowl3-*`), the `ARC` cabinet bridge. Axes are three.js: y up, yaw 0 faces north (-z), forward = (-sin yaw, 0, -cos yaw). |
 | 02_input | Keyboard, mouse lock, touch (left 45% of the screen = floating stick, rest = drag to aim, JET button), gamepad → `readCtl(dt)`. `turn` plus = right. |
 | 03_render | Renderer, `QUAL` table, sun and hemisphere light, shadow box that follows the mech (snapped to texels), sky dome (gradient, sun, clouds from `34-fog`), `hookWorld(mat,{fade,leaf,ground})` (cloud shadows on the sun light, dither fade per instance, leaf lighting, forest-floor tint). |
-| 04_world | Woods test map: `hgt(x,z)` terrain (rises into ridges past ±80 m), trail polyline, clearings, layout from the catalog biome mix, vegetation instancing, tree colliders `collide()`. |
+| 04_world | Map-neutral world code.<br>`pickMap()` (`?map=` or the saved `hd-ironhowl3-map`) and `hgt()` calls `MAPDEF.h`.<br>`buildGround()` blends three textures in world space (base, b by `aMix`, c by `aTrail`), and `ribbon()` drapes a road over the ground.<br>Vegetation instancing, and colliders: trunks (`addCol`) and boxes (`addBox`), with `collide()` handling both. |
+| 04b_maps | `MAPS.woods`, `MAPS.field` and `MAPS.docks`. Each has `h`, `ground`, `look` (sun, sky colours, fog, painted sky `pano`, horizon `ring`), `layout` (plants), `build` (structures), spawn, trail, route and bounds.<br>Shared builders: `tmat`, `sbox` (per-face metre repeats), `put`, `gable`, `boulders`.<br>`mergeStatic()` joins fixed map pieces per material. `BND()` gives the walkable bounds and `boxAt()` the box test used by the camera. |
 | 05_mech | Loads `models/mech/howler07.glb`, swaps in the game materials, `mergeParts` (about 170 pieces become about 60 draw calls), `setTier` (shows one of four barrel sets), 2-bone leg IK (`rev` = knee bends backwards), walk cycle with foot planting, jets. |
 | 06b_weapons | Autocannon tiers I–IV, heat and overheat, VENT (dumps heat, shoves enemies), missiles (salvo of 2, homing), bolts, hit tests (`segSphere`, `treeAt`, ground), crosshair ray with aim assist (`rayAim`), sparks and explosions. |
 | 06c_enemies | Loads the three enemy GLBs, flow-field path-finding on a 2 m grid (`navBuild`/`navDir`), line-of-sight test, brains (skitter swarms and zaps, hound aims then charges, gunner keeps 24–42 m, strafes and fires bursts), waves spawned 55–80 m ahead with red beacons, damage, score with combo, pickups. |
@@ -112,7 +113,7 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
   - Art processed (46 images → 49 files, 8.2 MB).
   - Forest pack stored with its catalog, three.js bundle built.
   - `DESIGN.md` written; `preview.html` is the first look.
-- **Session 4 start (5 Nov 2026):** image set 2 processed; Howler 07 rebuilt again from his turnaround sheet.
+- **Session 4 (5 Nov 2026):** image set 2 processed, Howler 07 rebuilt from his turnaround sheet, and the woods, field and docks maps with a map picker.
 - **Session 3 (5 Nov 2026):** combat core.
   - New Howler 07 model from Blender, with 4 barrel sets shown by gun tier.
   - Skitter, Hound and Gunner models.
@@ -150,7 +151,34 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
 - 85 was split into 5 icons (`85-pickup-icons-1..5`: chip, wrench, shield, missile, flame).
 - `showcase({a,d,h,ly})` in the dev handle puts the camera around the mech for model shots (a = angle from behind; pass null to go back).
 
-## Next: session 4 (places)
+## Done in session 4
+
+- Three maps, chosen on the title screen (the WOODS, FIELD and DOCKS buttons reload the page with `?map=`):
+  - **Woods:** forest-floor and mossy-roots ground, a draped farm-track trail, 16 mossy boulders.
+  - **Field:** rolling meadow with ploughed and wheat patches, the farm track with fences, a red barn, a farmhouse and a silo, round hay bales, 3 relay masts with red lights, hedgerow trees, the summer sky panorama (69) and a ring of distant hills (70).
+  - **Docks:** Harbor 9 at sunset.
+    - 4×4 blocks of container stacks 1–3 high (red HYPR LINE, blue KESTREL, teal and yellow), with lanes at x = -43, -9, 25 and 59 and cross lanes at z = -30, -6 and 18.
+    - Two ship-to-shore cranes, the quay wall with fenders over animated water, a moored ship, three warehouses with roller doors.
+    - The HARBOR 9 neon, a Hyperdot billboard on the east wall, lamp posts and bollards.
+    - Sunset sky panorama (80), harbour skyline ring (33). The walkable area is z -58..58, x -82..82.
+- The camera pulls in when a container or building would block it. Enemies path around boxes.
+- Measured at the start, on High:
+  - Woods: about 680k triangles, about 240 calls.
+  - Field: about 360k triangles, about 240 calls.
+  - Docks: about 100k triangles, about 240 calls.
+  - Each enemy adds about 25 calls, counting its shadow.
+
+## Next: session 5 (missions)
+
+- Mission system: objectives, fight zones, 2–3 checkpoints, briefing and results screens, radio lines (Rook and FORGE).
+- Missions 1–4:
+  1. Sunline: field, destroy the 3 relay masts.
+  2. Night Shift: docks at night.
+  3. Pinewall: woods, Hornets and Hounds.
+  4. Hold the Farm: field at dusk, defend the farmhouse.
+- New enemies: Hornet (flying), Tank. Night lighting for the docks (lamp light pools). Instance enemy parts if draw calls get high.
+
+## (old) session 4 plan
 
 - Field map: meadow and dry mixes, open hills, sun, cloud shadows, wind in the grass, farm props.
 - Docks map: container stacks (11, 10, 12), cranes, quay, water, the HARBOR 9 neon (44), rain, night sky (31) and harbour skyline (33).

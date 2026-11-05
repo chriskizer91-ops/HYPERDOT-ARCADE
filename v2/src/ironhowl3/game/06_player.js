@@ -34,7 +34,7 @@ function updPlayer(c,dt){
   /* move, then push out of tree trunks and keep inside the map */
   let nx=P.x+P.vx*dt,nz=P.z+P.vz*dt;
   const r=collide(nx,nz,RAD);if(r[2]&&(!P.air||P.y<hgt(r[0],r[1])+4)){nx=r[0];nz=r[1];}
-  const B=PLAY+6;if(Math.abs(nx)>B){nx=Math.sign(nx)*B;P.vx*=.2;}if(Math.abs(nz)>B){nz=Math.sign(nz)*B;P.vz*=.2;}
+  const B=BND();if(nx<B.x0||nx>B.x1){nx=clamp(nx,B.x0,B.x1);P.vx*=.2;}if(nz<B.z0||nz>B.z1){nz=clamp(nz,B.z0,B.z1);P.vz*=.2;}
   P.dist+=Math.hypot(nx-P.x,nz-P.z);P.x=nx;P.z=nz;
   const g=hgt(P.x,P.z);
   if(P.air){if(P.y<=g&&P.vy<0){const k=clamp(-P.vy/16,0,1.3);P.y=g;P.air=false;P.vy=0;P.groundT=0;P.land=Math.max(P.land,.18+k*.32);P.ev.push({t:'land',k});}}

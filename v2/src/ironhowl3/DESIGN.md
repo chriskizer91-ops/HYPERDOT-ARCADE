@@ -182,7 +182,7 @@ Each session ends with something playable at the same link, so progress can be s
 | 1 ✅ | Art and models processed and stored, this plan | The art sheet and the woods preview |
 | 2 ✅ | Engine core: folder game, terrain, both cameras, walking, jet hops, phone and laptop controls, a woods test map with the forest pack | Walk and hop around a real woods, switch cameras |
 | 3 ✅ | Combat core: new Blender mech, gun tiers I–IV, heat and vent, shields, missiles, Skitter, Gunner and Hound, pickups, path-finding | A woods sandbox fight |
-| 4 | Places: field (sun, cloud shadows, wind), docks (container stacks, cranes, water, neon, rain), woods polish (see-through canopy, light shafts) | One test map of each kind |
+| 4 ✅ | Places: field (sun, cloud shadows, farm), docks (container stacks, cranes, water, neon, sunset), woods polish (forest floor, boulders, trail), mech rebuilt from your turnaround | One test map of each kind |
 | 5 | Missions: objectives, fight zones, checkpoints, briefing and results screens, missions 1–4 | Play the first four missions |
 | 6 | Hangar and saves, scrap, missions 5–8, the Thresher | Two thirds of the campaign |
 | 7 | Missions 9–12, the Stag, the Maw, FORGE, difficulty tuning | The whole campaign |
@@ -190,7 +190,7 @@ Each session ends with something playable at the same link, so progress can be s
 
 Putting it on its cabinet stays a separate step, done only when you say so.
 
-**To continue (here or in a new chat), say:** "Continue Ironhowl 3, session 4 (places)." The build log `v2/src/ironhowl3/NOTES.md` in the repo says what is built, how to test it and what comes next.
+**To continue (here or in a new chat), say:** "Continue Ironhowl 3, session 5 (missions)." The build log `v2/src/ironhowl3/NOTES.md` in the repo says what is built, how to test it and what comes next.
 
 ## 12. Still open (you can change any of this)
 

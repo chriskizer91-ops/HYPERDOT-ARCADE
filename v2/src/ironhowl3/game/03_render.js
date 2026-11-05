@@ -40,12 +40,17 @@ function placeSun(fx,fz){
   KEY.target.position.set(ux,0,uz);KEY.position.set(ux+SUN.x*120,SUN.y*120,uz+SUN.z*120);KEY.target.updateMatrixWorld();
 }
 /* --- sky dome: gradient, sun, drifting clouds (the same cloud texture throws the moving shadows on the ground) --- */
-const SKYU={uSun:{value:SUN},uZen:{value:new THREE.Color(0x2a5fb4)},uHor:{value:new THREE.Color(0xb3c8de)},uSunC:{value:new THREE.Color(1,.93,.8)},
+const SKYU={tPano:{value:null},uPano:{value:0},uPanoK:{value:1},uSun:{value:SUN},uZen:{value:new THREE.Color(0x2a5fb4)},uHor:{value:new THREE.Color(0xb3c8de)},uSunC:{value:new THREE.Color(1,.93,.8)},
   tCloud:U.tCloud,uCloudOff:U.uCloudOff,uCloudAmt:U.uCloudAmt};
 const SKY=new THREE.Mesh(new THREE.SphereGeometry(500,32,16),new THREE.ShaderMaterial({uniforms:SKYU,side:THREE.BackSide,depthWrite:false,fog:false,
   vertexShader:`varying vec3 vD;void main(){vD=normalize(position);vec4 p=projectionMatrix*modelViewMatrix*vec4(position,1.);gl_Position=p.xyww;}`,
-  fragmentShader:`uniform vec3 uSun,uZen,uHor,uSunC;uniform sampler2D tCloud;uniform vec2 uCloudOff;uniform float uCloudAmt;varying vec3 vD;
+  fragmentShader:`uniform vec3 uSun,uZen,uHor,uSunC;uniform sampler2D tCloud,tPano;uniform vec2 uCloudOff;uniform float uCloudAmt,uPano,uPanoK;varying vec3 vD;
   void main(){vec3 d=normalize(vD);float h=max(d.y,0.);
+    if(uPano>.5){vec2 uv=vec2(atan(d.x,-d.z)/6.2831853+.5,.5+asin(clamp(d.y,-1.,1.))/3.1415927);vec3 pc=texture2D(tPano,vec2(uv.x,max(uv.y,.502))).rgb*uPanoK;
+      float sd=max(dot(d,uSun),0.);pc+=uSunC*pow(sd,700.)*10.;if(d.y<0.)pc=mix(pc,uHor,min(1.,-d.y*6.));gl_FragColor=vec4(pc,1.);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+      return;}
     vec3 c=mix(uHor,uZen,pow(h,.42));
     float sd=max(dot(d,uSun),0.);c+=uSunC*(pow(sd,900.)*28.+pow(sd,24.)*.55+pow(sd,4.)*.12);
     if(d.y>0.){vec2 uv=d.xz/(d.y+.1)*1.05+uCloudOff;
@@ -66,15 +71,16 @@ const LEAF_NORMAL=THREE.ShaderChunk.normal_fragment_begin.replace('normal *= fac
 function hookWorld(mat,o={}){
   mat.onBeforeCompile=sh=>{
     Object.assign(sh.uniforms,{tCloud:U.tCloud,uCloudOff:U.uCloudOff,uCloudScale:U.uCloudScale,uCloudAmt:U.uCloudAmt,uSunXZ:U.uSunXZ,uLeafGlow:U.uLeafGlow});
-    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;'+(o.fade?'\nattribute float aFade;varying float vFade;':'')+(o.ground?'\nattribute float aTrail;varying float vTrail;':''))
+    if(o.ground)Object.assign(sh.uniforms,{tB:{value:o.ground.tB},tC:{value:o.ground.tC},uBRep:{value:o.ground.bRep},uCRep:{value:o.ground.cRep},uTint:{value:new THREE.Vector3(...o.ground.tint)}});
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;'+(o.fade?'\nattribute float aFade;varying float vFade;':'')+(o.ground?'\nattribute float aTrail;varying float vTrail;attribute float aMix;varying float vMix;':''))
       .replace('#include <project_vertex>',`#include <project_vertex>
         vec4 wp4=vec4(transformed,1.);
         #ifdef USE_INSTANCING
           wp4=instanceMatrix*wp4;
         #endif
-        vWP=(modelMatrix*wp4).xyz;`+(o.fade?'vFade=aFade;':'')+(o.ground?'vTrail=aTrail;':''));
+        vWP=(modelMatrix*wp4).xyz;`+(o.fade?'vFade=aFade;':'')+(o.ground?'vTrail=aTrail;vMix=aMix;':''));
     let f=sh.fragmentShader.replace('#include <common>',`#include <common>
-      varying vec3 vWP;uniform sampler2D tCloud;uniform vec2 uCloudOff,uSunXZ;uniform float uCloudScale,uCloudAmt,uLeafGlow;`+(o.fade?'varying float vFade;':'')+(o.ground?'varying float vTrail;':'')+`
+      varying vec3 vWP;uniform sampler2D tCloud;uniform vec2 uCloudOff,uSunXZ;uniform float uCloudScale,uCloudAmt,uLeafGlow;`+(o.fade?'varying float vFade;':'')+(o.ground?'varying float vTrail;varying float vMix;uniform sampler2D tB,tC;uniform float uBRep,uCRep;uniform vec3 uTint;':'')+`
       float cloudShade(){vec2 uv=(vWP.xz+vWP.y*uSunXZ)*uCloudScale+uCloudOff;float n=clamp((texture2D(tCloud,uv).r*.72+texture2D(tCloud,uv*2.3).r*.28-.2)/.36,0.,1.);
         return mix(1.,.4,smoothstep(.5,.78,n)*uCloudAmt);}`)
       .replace('getDirectionalLightInfo( directionalLight, directLight );','getDirectionalLightInfo( directionalLight, directLight );\ndirectLight.color*=cloudShade();');
@@ -83,13 +89,27 @@ function hookWorld(mat,o={}){
     if(o.leaf)f=f.replace('#include <normal_fragment_begin>',LEAF_NORMAL)
       .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance+=diffuseColor.rgb*uLeafGlow*vec3(.9,1.,.7);');
     if(o.ground)f=f.replace('#include <map_fragment>',`#include <map_fragment>
-      {float big=texture2D(tCloud,vWP.xz/61.).r,small=texture2D(tCloud,vWP.xz/9.3).r;
-       vec3 moss=diffuseColor.rgb*vec3(.62,.72,.42)*(.75+big*.5);
-       vec3 litter=diffuseColor.rgb*vec3(.86,.74,.6)*(.8+small*.35);
-       vec3 floorc=mix(moss,litter,smoothstep(.35,.7,big));
-       diffuseColor.rgb=mix(floorc,diffuseColor.rgb*vec3(1.02,.95,.86),vTrail);}`);
+      {float big=texture2D(tCloud,vWP.xz/71.).r;
+       vec3 cb=texture2D(tB,vWP.xz*uBRep).rgb,cc=texture2D(tC,vWP.xz*uCRep).rgb;
+       vec3 c=mix(diffuseColor.rgb,cb,clamp(vMix,0.,1.));c=mix(c,cc,clamp(vTrail,0.,1.));
+       diffuseColor.rgb=c*uTint*(.82+big*.36);}`);
     sh.fragmentShader=f;
   };
   mat.customProgramCacheKey=()=>'w'+(o.fade?1:0)+(o.leaf?1:0)+(o.ground?1:0);
   return mat;
+}
+
+/* a ring of distant scenery (hills or a skyline) around the horizon; it follows the camera like the sky */
+let RING=null;
+function horizonRing(texName,height,lift,tint,copies){
+  const t=tex(texName,{clamp:false});t.wrapS=THREE.RepeatWrapping;t.wrapT=THREE.ClampToEdgeWrapping;t.repeat.set(copies||3,1);
+  const g=new THREE.CylinderGeometry(420,420,height,64,1,true);
+  const m=new THREE.MeshBasicMaterial({map:t,transparent:true,side:THREE.BackSide,depthWrite:false,fog:false,color:new THREE.Color(...(tint||[1,1,1]))});
+  RING=new THREE.Mesh(g,m);RING.renderOrder=-9;RING.frustumCulled=false;RING.userData.lift=lift;S.add(RING);}
+/* each map sets its own light, sky and fog */
+function applyLook(L){
+  SUN.set(...L.sun).normalize();KEY.color.set(L.sunCol);KEY.intensity=L.sunK;HEMI.color.set(L.sky);HEMI.groundColor.set(L.ground);HEMI.intensity=L.hemiK;
+  SKYU.uZen.value.set(L.zen);SKYU.uHor.value.set(L.hor);S.fog.color.set(L.fog);U.uCloudAmt.value=L.clouds;R.toneMappingExposure=L.exp||1.18;
+  if(L.pano){SKYU.tPano.value=tex(L.pano);SKYU.uPano.value=1;SKYU.uPanoK.value=L.panoK||1;}
+  if(L.ring)horizonRing(L.ring.tex,L.ring.h,L.ring.lift,L.ring.tint,L.ring.copies);
 }

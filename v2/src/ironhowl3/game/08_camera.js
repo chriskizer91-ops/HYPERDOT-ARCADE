@@ -14,7 +14,9 @@ function updCam(dt,p,view){
   const by=p.y;CAMS.ty+=(by-CAMS.ty)*damp(p.air?(view==='close'?7:3.2):9,dt);if(!CAMS.ready){CAMS.ty=by;}
   /* portrait screens are narrow: step back a little so the mech does not fill them */
   const pt=Math.max(0,1-cam.aspect),back=V.back+pt*(view==='close'?2.2:3),up=V.up+pt*(view==='close'?.7:1.2);
-  const pit=p.pitch,tx=p.x-fx*back+rx*sd,tz=p.z-fz*back+rz*sd;let ty=CAMS.ty+up-pit*(view==='close'?1.2:2.2);
+  const pit=p.pitch;let tx=p.x-fx*back+rx*sd,tz=p.z-fz*back+rz*sd,ty=CAMS.ty+up-pit*(view==='close'?1.2:2.2);
+  /* if a container or building sits between the mech and the camera, pull the camera in front of it */
+  {const hx=p.x,hy=p.y+5,hz=p.z;for(let t=.15;t<=1.001;t+=.05){const x=lerp(hx,tx,t),y=lerp(hy,ty,t),z=lerp(hz,tz,t);if(boxAt(x,z,y+.6)){const k=Math.max(.1,t-.08);tx=lerp(hx,tx,k);ty=lerp(hy,ty,k)+(1-k)*1.5;tz=lerp(hz,tz,k);break;}}}
   if(!CAMS.ready){CAMS.x=tx;CAMS.y=ty;CAMS.z=tz;CAMS.ready=true;}
   const k=damp(V.pos,dt);CAMS.x+=(tx-CAMS.x)*k;CAMS.z+=(tz-CAMS.z)*k;CAMS.y+=(ty-CAMS.y)*k;
   const gy=hgt(CAMS.x,CAMS.z)+1.6;if(CAMS.y<gy)CAMS.y=gy;

@@ -57,6 +57,7 @@ button:active{background:#ffb34733}
 #bvent{right:calc(max(18px,env(safe-area-inset-right)) + 92px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 92px);width:56px;height:56px;font-size:10px;color:#e0e8f0}
 #bvent.cool{opacity:.35}#bvent.hot{border-color:#ff3b30;animation:bl .5s infinite}
 .touch #mslc{display:none}
+#maps{display:flex;gap:8px;margin-top:6px}#maps button{padding:9px 14px;color:#ffffffaa;border-color:#ffffff33}#maps button.sel{color:#ffb347;border-color:#ffb347;background:#ffb34722}
 #down{background:#000a;z-index:4;cursor:pointer}#down .logo{color:#ff6a4a}
 #dev{position:fixed;left:12px;top:40px;font:11px monospace;color:#7f7;pointer-events:none;text-shadow:0 0 3px #000}
 </style></head><body>
@@ -71,7 +72,8 @@ button:active{background:#ffb34733}
 <div id="dev"></div>
 <div id="menu" class="ov"><div class="sub">PAUSED</div><button id="mresume">RESUME</button><button id="mview"></button><button id="mqual"></button><button id="msound"></button><button id="msens"></button><button id="mexit">EXIT</button></div>
 <div id="down" class="ov"><div class="logo">HOWLER DOWN</div><div class="sub" id="dscore"></div><div class="go" id="dgo">TAP TO GO AGAIN</div></div>
-<div id="title" class="ov"><div class="logo">IRONHOWL 3</div><div class="sub">WOODS SANDBOX · COMBAT TEST</div>
+<div id="title" class="ov"><div class="logo">IRONHOWL 3</div><div class="sub">SANDBOX · PICK A PLACE</div>
+  <div id="maps"><button data-map="woods">WOODS</button><button data-map="field">FIELD</button><button data-map="docks">DOCKS</button></div>
   <div class="go"><span class="desk-go">CLICK OR TAP TO START</span></div>
   <div class="keys desk">WASD MOVE · MOUSE AIM · CLICK FIRE · RIGHT CLICK MISSILES · R VENT · SPACE JET HOP · V CAMERA</div>
   <div class="keys tch">LEFT THUMB MOVES · RIGHT THUMB AIMS · HOLD FIRE AND DRAG IT TO AIM · PLAY SIDEWAYS</div></div>

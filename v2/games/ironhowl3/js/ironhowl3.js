@@ -140,12 +140,17 @@ function placeSun(fx,fz){
   KEY.target.position.set(ux,0,uz);KEY.position.set(ux+SUN.x*120,SUN.y*120,uz+SUN.z*120);KEY.target.updateMatrixWorld();
 }
 /* --- sky dome: gradient, sun, drifting clouds (the same cloud texture throws the moving shadows on the ground) --- */
-const SKYU={uSun:{value:SUN},uZen:{value:new THREE.Color(0x2a5fb4)},uHor:{value:new THREE.Color(0xb3c8de)},uSunC:{value:new THREE.Color(1,.93,.8)},
+const SKYU={tPano:{value:null},uPano:{value:0},uPanoK:{value:1},uSun:{value:SUN},uZen:{value:new THREE.Color(0x2a5fb4)},uHor:{value:new THREE.Color(0xb3c8de)},uSunC:{value:new THREE.Color(1,.93,.8)},
   tCloud:U.tCloud,uCloudOff:U.uCloudOff,uCloudAmt:U.uCloudAmt};
 const SKY=new THREE.Mesh(new THREE.SphereGeometry(500,32,16),new THREE.ShaderMaterial({uniforms:SKYU,side:THREE.BackSide,depthWrite:false,fog:false,
   vertexShader:`varying vec3 vD;void main(){vD=normalize(position);vec4 p=projectionMatrix*modelViewMatrix*vec4(position,1.);gl_Position=p.xyww;}`,
-  fragmentShader:`uniform vec3 uSun,uZen,uHor,uSunC;uniform sampler2D tCloud;uniform vec2 uCloudOff;uniform float uCloudAmt;varying vec3 vD;
+  fragmentShader:`uniform vec3 uSun,uZen,uHor,uSunC;uniform sampler2D tCloud,tPano;uniform vec2 uCloudOff;uniform float uCloudAmt,uPano,uPanoK;varying vec3 vD;
   void main(){vec3 d=normalize(vD);float h=max(d.y,0.);
+    if(uPano>.5){vec2 uv=vec2(atan(d.x,-d.z)/6.2831853+.5,.5+asin(clamp(d.y,-1.,1.))/3.1415927);vec3 pc=texture2D(tPano,vec2(uv.x,max(uv.y,.502))).rgb*uPanoK;
+      float sd=max(dot(d,uSun),0.);pc+=uSunC*pow(sd,700.)*10.;if(d.y<0.)pc=mix(pc,uHor,min(1.,-d.y*6.));gl_FragColor=vec4(pc,1.);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+      return;}
     vec3 c=mix(uHor,uZen,pow(h,.42));
     float sd=max(dot(d,uSun),0.);c+=uSunC*(pow(sd,900.)*28.+pow(sd,24.)*.55+pow(sd,4.)*.12);
     if(d.y>0.){vec2 uv=d.xz/(d.y+.1)*1.05+uCloudOff;
@@ -166,15 +171,16 @@ const LEAF_NORMAL=THREE.ShaderChunk.normal_fragment_begin.replace('normal *= fac
 function hookWorld(mat,o={}){
   mat.onBeforeCompile=sh=>{
     Object.assign(sh.uniforms,{tCloud:U.tCloud,uCloudOff:U.uCloudOff,uCloudScale:U.uCloudScale,uCloudAmt:U.uCloudAmt,uSunXZ:U.uSunXZ,uLeafGlow:U.uLeafGlow});
-    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;'+(o.fade?'\nattribute float aFade;varying float vFade;':'')+(o.ground?'\nattribute float aTrail;varying float vTrail;':''))
+    if(o.ground)Object.assign(sh.uniforms,{tB:{value:o.ground.tB},tC:{value:o.ground.tC},uBRep:{value:o.ground.bRep},uCRep:{value:o.ground.cRep},uTint:{value:new THREE.Vector3(...o.ground.tint)}});
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;'+(o.fade?'\nattribute float aFade;varying float vFade;':'')+(o.ground?'\nattribute float aTrail;varying float vTrail;attribute float aMix;varying float vMix;':''))
       .replace('#include <project_vertex>',`#include <project_vertex>
         vec4 wp4=vec4(transformed,1.);
         #ifdef USE_INSTANCING
           wp4=instanceMatrix*wp4;
         #endif
-        vWP=(modelMatrix*wp4).xyz;`+(o.fade?'vFade=aFade;':'')+(o.ground?'vTrail=aTrail;':''));
+        vWP=(modelMatrix*wp4).xyz;`+(o.fade?'vFade=aFade;':'')+(o.ground?'vTrail=aTrail;vMix=aMix;':''));
     let f=sh.fragmentShader.replace('#include <common>',`#include <common>
-      varying vec3 vWP;uniform sampler2D tCloud;uniform vec2 uCloudOff,uSunXZ;uniform float uCloudScale,uCloudAmt,uLeafGlow;`+(o.fade?'varying float vFade;':'')+(o.ground?'varying float vTrail;':'')+`
+      varying vec3 vWP;uniform sampler2D tCloud;uniform vec2 uCloudOff,uSunXZ;uniform float uCloudScale,uCloudAmt,uLeafGlow;`+(o.fade?'varying float vFade;':'')+(o.ground?'varying float vTrail;varying float vMix;uniform sampler2D tB,tC;uniform float uBRep,uCRep;uniform vec3 uTint;':'')+`
       float cloudShade(){vec2 uv=(vWP.xz+vWP.y*uSunXZ)*uCloudScale+uCloudOff;float n=clamp((texture2D(tCloud,uv).r*.72+texture2D(tCloud,uv*2.3).r*.28-.2)/.36,0.,1.);
         return mix(1.,.4,smoothstep(.5,.78,n)*uCloudAmt);}`)
       .replace('getDirectionalLightInfo( directionalLight, directLight );','getDirectionalLightInfo( directionalLight, directLight );\ndirectLight.color*=cloudShade();');
@@ -183,49 +189,82 @@ function hookWorld(mat,o={}){
     if(o.leaf)f=f.replace('#include <normal_fragment_begin>',LEAF_NORMAL)
       .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance+=diffuseColor.rgb*uLeafGlow*vec3(.9,1.,.7);');
     if(o.ground)f=f.replace('#include <map_fragment>',`#include <map_fragment>
-      {float big=texture2D(tCloud,vWP.xz/61.).r,small=texture2D(tCloud,vWP.xz/9.3).r;
-       vec3 moss=diffuseColor.rgb*vec3(.62,.72,.42)*(.75+big*.5);
-       vec3 litter=diffuseColor.rgb*vec3(.86,.74,.6)*(.8+small*.35);
-       vec3 floorc=mix(moss,litter,smoothstep(.35,.7,big));
-       diffuseColor.rgb=mix(floorc,diffuseColor.rgb*vec3(1.02,.95,.86),vTrail);}`);
+      {float big=texture2D(tCloud,vWP.xz/71.).r;
+       vec3 cb=texture2D(tB,vWP.xz*uBRep).rgb,cc=texture2D(tC,vWP.xz*uCRep).rgb;
+       vec3 c=mix(diffuseColor.rgb,cb,clamp(vMix,0.,1.));c=mix(c,cc,clamp(vTrail,0.,1.));
+       diffuseColor.rgb=c*uTint*(.82+big*.36);}`);
     sh.fragmentShader=f;
   };
   mat.customProgramCacheKey=()=>'w'+(o.fade?1:0)+(o.leaf?1:0)+(o.ground?1:0);
   return mat;
 }
 
+/* a ring of distant scenery (hills or a skyline) around the horizon; it follows the camera like the sky */
+let RING=null;
+function horizonRing(texName,height,lift,tint,copies){
+  const t=tex(texName,{clamp:false});t.wrapS=THREE.RepeatWrapping;t.wrapT=THREE.ClampToEdgeWrapping;t.repeat.set(copies||3,1);
+  const g=new THREE.CylinderGeometry(420,420,height,64,1,true);
+  const m=new THREE.MeshBasicMaterial({map:t,transparent:true,side:THREE.BackSide,depthWrite:false,fog:false,color:new THREE.Color(...(tint||[1,1,1]))});
+  RING=new THREE.Mesh(g,m);RING.renderOrder=-9;RING.frustumCulled=false;RING.userData.lift=lift;S.add(RING);}
+/* each map sets its own light, sky and fog */
+function applyLook(L){
+  SUN.set(...L.sun).normalize();KEY.color.set(L.sunCol);KEY.intensity=L.sunK;HEMI.color.set(L.sky);HEMI.groundColor.set(L.ground);HEMI.intensity=L.hemiK;
+  SKYU.uZen.value.set(L.zen);SKYU.uHor.value.set(L.hor);S.fog.color.set(L.fog);U.uCloudAmt.value=L.clouds;R.toneMappingExposure=L.exp||1.18;
+  if(L.pano){SKYU.tPano.value=tex(L.pano);SKYU.uPano.value=1;SKYU.uPanoK.value=L.panoK||1;}
+  if(L.ring)horizonRing(L.ring.tex,L.ring.h,L.ring.lift,L.ring.tint,L.ring.copies);
+}
+
 /* ---- 04_world.js ---- */
-/* ===================== the woods test map =====================
-   PLAY = half-size of the ground you can walk on (160 x 160 m). Beyond it the ground rises into wooded ridges. */
+/* ===================== the world: shared by every map (the maps themselves are in 04b_maps.js) =====================
+   PLAY = half-size of the ground you can walk on (160 x 160 m). Beyond it the ground rises (or meets water). */
 const PLAY=80,WORLD=170;
-const TRAIL=[[0,78],[-12,56],[-22,32],[-6,12],[16,-4],[20,-28],[2,-46],[-18,-60],[-12,-80]];
-const CLEAR=[[-32,38,15],[26,-14,17],[-24,-56,13],[34,50,11],[4,26,9]];
-const SPAWN={x:0,z:70,yaw:0};
+let MAPID='woods',MAPDEF=null,TRAIL=[],CLEAR=[],SPAWN={x:0,z:70,yaw:0};
+function pickMap(){const want=(Q.get('map')||store.get('map','woods')).toLowerCase();MAPID=MAPS[want]?want:'woods';MAPDEF=MAPS[MAPID];
+  TRAIL=MAPDEF.trail||[];CLEAR=MAPDEF.clear||[];SPAWN=MAPDEF.spawn;store.set('map',MAPID);}
 function segD(px,pz,ax,az,bx,bz){const vx=bx-ax,vz=bz-az,t=clamp(((px-ax)*vx+(pz-az)*vz)/(vx*vx+vz*vz),0,1),dx=px-ax-vx*t,dz=pz-az-vz*t;return Math.sqrt(dx*dx+dz*dz);}
 function trailD(x,z){let d=1e9;for(let i=0;i<TRAIL.length-1;i++){const a=TRAIL[i],b=TRAIL[i+1];d=Math.min(d,segD(x,z,a[0],a[1],b[0],b[1]));}return d;}
 function clearD(x,z){let d=1e9;for(const c of CLEAR)d=Math.min(d,Math.hypot(x-c[0],z-c[1])-c[2]);return d;}
-function hgt(x,z){
-  const big=(fbm(x*.011+3.1,z*.011-7.4,4)-.5)*9,small=(fbm(x*.047,z*.047+11,2)-.5)*1.8;
-  const e=Math.max(Math.abs(x),Math.abs(z)),rim=Math.pow(smooth(PLAY-6,PLAY+60,e),1.3)*28;
-  return big+small*smooth(1.5,7,trailD(x,z))+rim;
-}
-/* --- ground --- */
+function hgt(x,z){return MAPDEF.h(x,z);}
+/* --- ground: a base texture, a second one (weight aMix) and a third (weight aTrail), each tiled in world space --- */
 function buildGround(){
-  const n=170,g=new THREE.PlaneGeometry(WORLD*2,WORLD*2,n,n);g.rotateX(-Math.PI/2);
-  const p=g.attributes.position,tr=new Float32Array(p.count);
-  for(let i=0;i<p.count;i++){const x=p.getX(i),z=p.getZ(i);p.setY(i,hgt(x,z));tr[i]=smooth(4.6,2.0,trailD(x,z));}
-  g.setAttribute('aTrail',new THREE.BufferAttribute(tr,1));g.computeVertexNormals();
-  const m=hookWorld(new THREE.MeshStandardMaterial({map:tex('06-dirt-and-gravel',{rep:WORLD*2/4.6}),roughness:.97,metalness:0}),{ground:true});
+  const G_=MAPDEF.ground,n=170,g=new THREE.PlaneGeometry(WORLD*2,WORLD*2,n,n);g.rotateX(-Math.PI/2);
+  const p=g.attributes.position,tr=new Float32Array(p.count),mx=new Float32Array(p.count);
+  for(let i=0;i<p.count;i++){const x=p.getX(i),z=p.getZ(i);p.setY(i,hgt(x,z));const w=G_.w(x,z);mx[i]=w[0];tr[i]=w[1];}
+  g.setAttribute('aTrail',new THREE.BufferAttribute(tr,1));g.setAttribute('aMix',new THREE.BufferAttribute(mx,1));g.computeVertexNormals();
+  const m=hookWorld(new THREE.MeshStandardMaterial({map:tex(G_.a,{rep:WORLD*2/G_.ar}),roughness:G_.rough||.96,metalness:0}),
+    {ground:{tB:tex(G_.b),tC:tex(G_.c),bRep:1/G_.br,cRep:1/G_.cr,tint:G_.tint||[1,1,1]}});
   const mesh=new THREE.Mesh(g,m);mesh.receiveShadow=true;S.add(mesh);return mesh;
+}
+/* a road or trail draped over the ground, textured along its length, soft at the edges */
+function ribbon(pts,width,texName,repLen,lift){
+  const sm=[];for(let i=0;i<pts.length-1;i++){const p0=pts[Math.max(0,i-1)],p1=pts[i],p2=pts[i+1],p3=pts[Math.min(pts.length-1,i+2)];
+    const L=Math.hypot(p2[0]-p1[0],p2[1]-p1[1]),n=Math.max(2,Math.ceil(L/1.5));
+    for(let k=0;k<n;k++){const t=k/n,t2=t*t,t3=t2*t;const f=(a,b,c,d)=>.5*((2*b)+(-a+c)*t+(2*a-5*b+4*c-d)*t2+(-a+3*b-3*c+d)*t3);sm.push([f(p0[0],p1[0],p2[0],p3[0]),f(p0[1],p1[1],p2[1],p3[1])]);}}
+  sm.push(pts[pts.length-1]);
+  const pos=[],uv=[],col=[],idx=[];let v=0;
+  for(let i=0;i<sm.length;i++){const a=sm[Math.max(0,i-1)],b=sm[Math.min(sm.length-1,i+1)];let dx=b[0]-a[0],dz=b[1]-a[1];const l=Math.hypot(dx,dz)||1;dx/=l;dz/=l;
+    if(i>0)v+=Math.hypot(sm[i][0]-sm[i-1][0],sm[i][1]-sm[i-1][1])/repLen;
+    for(const s of [-1,-.7,.7,1]){const x=sm[i][0]-dz*s*width/2,z=sm[i][1]+dx*s*width/2;pos.push(x,hgt(x,z)+(lift||.07),z);uv.push((s+1)/2,v);col.push(1,1,1,Math.abs(s)>.9?0:1);}}
+  for(let i=0;i<sm.length-1;i++)for(let k=0;k<3;k++){const a=i*4+k,b=a+1,c=a+4,d=a+5;idx.push(a,c,b,b,c,d);}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+  g.setAttribute('color',new THREE.Float32BufferAttribute(col,4));g.setIndex(idx);g.computeVertexNormals();
+  const t=tex(texName);t.wrapS=THREE.ClampToEdgeWrapping;
+  const m=hookWorld(new THREE.MeshStandardMaterial({map:t,vertexColors:true,transparent:true,roughness:.95,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));
+  const mesh=new THREE.Mesh(g,m);mesh.receiveShadow=true;mesh.renderOrder=1;S.add(mesh);return mesh;
 }
 /* --- vegetation: one InstancedMesh per model part; near and far versions swap by distance; trees between the camera and the mech dither out --- */
 const VEG={list:[],byId:{},cat:null,ready:false,cols:new Map(),grassCell:12};
 function colKey(x,z){return ((Math.floor(x/10)+200)*1000)+(Math.floor(z/10)+200);}
 function addCol(x,z,r,h){const k=colKey(x,z);if(!VEG.cols.has(k))VEG.cols.set(k,[]);VEG.cols.get(k).push({x,z,r,h:h||9});}
+/* a solid box (containers, buildings, crane legs) from x0..x1, z0..z1, standing on y0, h tall */
+function addBox(x0,z0,x1,z1,h,y0){const c={b:1,x0,z0,x1,z1,h,y0:y0==null?hgt((x0+x1)/2,(z0+z1)/2):y0,x:(x0+x1)/2,z:(z0+z1)/2,r:Math.hypot(x1-x0,z1-z0)/2};
+  for(let i=Math.floor(x0/10);i<=Math.floor(x1/10);i++)for(let j=Math.floor(z0/10);j<=Math.floor(z1/10);j++){const k=((i+200)*1000)+(j+200);if(!VEG.cols.has(k))VEG.cols.set(k,[]);VEG.cols.get(k).push(c);}return c;}
 /* push a circle (x,z,rad) out of tree trunks; returns [x,z,hit] */
 function collide(x,z,rad){let hit=false;
   for(let i=-1;i<=1;i++)for(let j=-1;j<=1;j++){const a=VEG.cols.get(colKey(x+i*10,z+j*10));if(!a)continue;
-    for(const c of a){const dx=x-c.x,dz=z-c.z,rr=rad+c.r,d2=dx*dx+dz*dz;if(d2<rr*rr&&d2>1e-6){const d=Math.sqrt(d2);x=c.x+dx/d*rr;z=c.z+dz/d*rr;hit=true;}}}
+    for(const c of a){if(c.b){const cx=clamp(x,c.x0,c.x1),cz=clamp(z,c.z0,c.z1),dx=x-cx,dz=z-cz,d2=dx*dx+dz*dz;
+        if(d2<rad*rad){if(d2>1e-8){const d=Math.sqrt(d2);x=cx+dx/d*rad;z=cz+dz/d*rad;}else{const e=[x-c.x0,c.x1-x,z-c.z0,c.z1-z],m=Math.min(...e);if(m===e[0])x=c.x0-rad;else if(m===e[1])x=c.x1+rad;else if(m===e[2])z=c.z0-rad;else z=c.z1+rad;}hit=true;}continue;}
+      const dx=x-c.x,dz=z-c.z,rr=rad+c.r,d2=dx*dx+dz*dz;if(d2<rr*rr&&d2>1e-6){const d=Math.sqrt(d2);x=c.x+dx/d*rr;z=c.z+dz/d*rr;hit=true;}}}
   return [x,z,hit];}
 function vegAsset(id,kind){if(VEG.byId[id])return VEG.byId[id];const a={id,kind,inst:[],parts:{near:[],far:[]},sel:[],selFar:[]};VEG.byId[id]=a;VEG.list.push(a);return a;}
 function plant(id,kind,x,z,s,rnd){
@@ -234,27 +273,6 @@ function plant(id,kind,x,z,s,rnd){
   const cr=Math.max(c.size_m[0],c.size_m[2])*.5*s;
   a.inst.push({x,y,z,s,m,cr,h:c.size_m[1]*s,f:0});
   if(c.collider&&kind==='tree')addCol(x,z,c.collider.r*s+.1,c.size_m[1]*s);
-}
-function layoutWoods(mixId){
-  const mix=VEG.cat._biomes.find(b=>b.id===mixId)||VEG.cat._biomes[0],rnd=mulberry(4242);
-  const pick=o=>{let t=0;for(const k in o)t+=o[k];let r=rnd()*t;for(const k in o){r-=o[k];if(r<=0)return k;}return Object.keys(o)[0];};
-  /* trees: jittered grid, open trail and clearings in the middle, thick on the ridges */
-  for(let gx=-WORLD+4;gx<WORLD-4;gx+=7.5)for(let gz=-WORLD+4;gz<WORLD-4;gz+=7.5){
-    const x=gx+(rnd()-.5)*6.5,z=gz+(rnd()-.5)*6.5,e=Math.max(Math.abs(x),Math.abs(z)),inner=e<PLAY;
-    const td=trailD(x,z),cd=clearD(x,z);
-    if(Math.hypot(x-SPAWN.x,z-SPAWN.z)<13)continue;
-    if(td<6.5||cd<0)continue;
-    const p=inner?(.62*smooth(6.5,12,td)*smooth(0,6,cd)):.92;
-    if(rnd()>p)continue;
-    plant(pick(mix.tree),'tree',x,z,.82+rnd()*.4,rnd);
-  }
-  /* grass tufts and bushes */
-  for(let i=0;i<11000;i++){const x=(rnd()-.5)*2*(PLAY+14),z=(rnd()-.5)*2*(PLAY+14);if(trailD(x,z)<2.4&&rnd()<.85)continue;plant(pick(mix.grass),'grass',x,z,.75+rnd()*.7,rnd);}
-  for(let i=0;i<330;i++){const x=(rnd()-.5)*2*(PLAY+10),z=(rnd()-.5)*2*(PLAY+10);if(trailD(x,z)<4)continue;plant(rnd()<.65?'bush_sage':'bush_oleander','bush',x,z,.9+rnd()*.7,rnd);}
-  /* a few props by the trail */
-  const props=['prop_drum','prop_tires','prop_icechest','prop_drum','prop_tires','prop_mailbox'];
-  for(let i=0;i<props.length;i++){const k=(i+.5)/props.length*(TRAIL.length-1),a=TRAIL[k|0],b=TRAIL[(k|0)+1],f=k%1,x=lerp(a[0],b[0],f),z=lerp(a[1],b[1],f);
-    const dx=b[0]-a[0],dz=b[1]-a[1],l=Math.hypot(dx,dz),sd=i%2?-1:1;plant(props[i],'prop',x+dz/l*5.6*sd,z-dx/l*5.6*sd,1,rnd);}
 }
 function partsOf(scene,kind,lod){
   const out=[];scene.updateMatrixWorld(true);
@@ -283,9 +301,9 @@ function buildInstances(a,lod,scene){
 }
 function loadVeg(mixId){
   return fetch('models/catalog.json').then(r=>r.json()).then(c=>{
-    VEG.cat={_biomes:c.biomes};c.manifest.assets.forEach(a=>VEG.cat[a.id]=a);layoutWoods(mixId);
+    VEG.cat={_biomes:c.biomes};c.manifest.assets.forEach(a=>VEG.cat[a.id]=a);MAPDEF.layout(mulberry(4242),mixId);
     const L=new THREE.GLTFLoader(LM),jobs=[];
-    for(const a of VEG.list){const c=VEG.cat[a.id];for(const lod of ['near','far'])
+    for(const a of VEG.list.filter(a=>a.inst.length)){const c=VEG.cat[a.id];for(const lod of ['near','far'])
       jobs.push(new Promise(ok=>L.load('models/'+c.files[lod],g=>{buildInstances(a,lod,g.scene);ok();},undefined,()=>ok())));}
     return Promise.all(jobs).then(()=>{VEG.ready=true;});
   });
@@ -318,6 +336,155 @@ function updVeg(dt,mx,my,mz){
   }
   VEGN.tris=tris|0;VEGN.inst=inst;
 }
+
+/* ---- 04b_maps.js ---- */
+/* ===================== the three kinds of place: woods, field, docks =====================
+   Each map gives: h(x,z) ground height, ground textures + weights, look (light, sky, fog), layout (plants), build (structures),
+   spawn, trail (draped road), route (attract demo path), bounds (where the mech may walk). Pick one with ?map=woods|field|docks. */
+function tmat(name,o={}){const t=tex(name,{glb:o.glb});if(o.rep)t.repeat.set(o.rep[0],o.rep[1]);
+  return hookWorld(new THREE.MeshStandardMaterial({map:t,roughness:o.r==null?.8:o.r,metalness:o.m==null?.1:o.m,color:o.col==null?0xffffff:o.col,
+    transparent:!!o.alpha,alphaTest:o.alpha?.45:0,side:o.ds?THREE.DoubleSide:THREE.FrontSide}));}
+/* box geometry whose faces [+x,-x,+y,-y,+z,-z] repeat their texture every [u,v] metres (0 = stretch once) */
+function sbox(w,h,d,reps){const g=new THREE.BoxGeometry(w,h,d);if(!reps)return g;const uv=g.attributes.uv,dims=[[d,h],[d,h],[w,d],[w,d],[w,h],[w,h]];
+  for(let f=0;f<6;f++){const r=reps[f];if(!r)continue;for(let i=f*4;i<f*4+4;i++)uv.setXY(i,uv.getX(i)*(r[0]?dims[f][0]/r[0]:1),uv.getY(i)*(r[1]?dims[f][1]/r[1]:1));}return g;}
+function put(g,mats,x,y,z,ry,shadow){const m=new THREE.Mesh(g,mats);m.position.set(x,y,z);m.rotation.y=ry||0;m.castShadow=shadow!==false;m.receiveShadow=true;S.add(m);return m;}
+function gable(w,d,h){const s=new THREE.Shape();s.moveTo(-w/2,0);s.lineTo(w/2,0);s.lineTo(0,h);s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false});g.translate(0,0,-d/2);
+  const uv=g.attributes.uv;for(let i=0;i<uv.count;i++)uv.setXY(i,uv.getX(i)/3,uv.getY(i)/3);return g;}
+function rectW(x,z,r,soft){return smooth(-soft,soft,Math.min(x-r[0],r[2]-x,z-r[1],r[3]-z));}
+function pickW(o,rnd){let t=0;for(const k in o)t+=o[k];let r=rnd()*t;for(const k in o){r-=o[k];if(r<=0)return k;}return Object.keys(o)[0];}
+function biome(id){return VEG.cat._biomes.find(b=>b.id===id)||VEG.cat._biomes[0];}
+function propsAlong(rnd,list,side){for(let i=0;i<list.length;i++){const k=(i+.5)/list.length*(TRAIL.length-1),a=TRAIL[k|0],b=TRAIL[(k|0)+1],f=k%1,x=lerp(a[0],b[0],f),z=lerp(a[1],b[1],f);
+  const dx=b[0]-a[0],dz=b[1]-a[1],l=Math.hypot(dx,dz),sd=i%2?-1:1;plant(list[i],'prop',x+dz/l*side*sd,z-dx/l*side*sd,1,rnd);}}
+const MAPS={
+/* ---------------- woods: mixed forest, a trail, clearings ---------------- */
+woods:{name:'WOODS',mix:'woods',spawn:{x:0,z:70,yaw:0},
+  trail:[[0,78],[-12,56],[-22,32],[-6,12],[16,-4],[20,-28],[2,-46],[-18,-60],[-12,-80]],
+  clear:[[-32,38,15],[26,-14,17],[-24,-56,13],[34,50,11],[4,26,9]],
+  h(x,z){const big=(fbm(x*.011+3.1,z*.011-7.4,4)-.5)*9,small=(fbm(x*.047,z*.047+11,2)-.5)*1.8;
+    const e=Math.max(Math.abs(x),Math.abs(z)),rim=Math.pow(smooth(PLAY-6,PLAY+60,e),1.3)*28;return big+small*smooth(1.5,7,trailD(x,z))+rim;},
+  ground:{a:'81-forest-floor',ar:6,b:'82-mossy-ground-with-roots',br:7,c:'06-dirt-and-gravel',cr:4.6,
+    w(x,z){return [smooth(.45,.62,fbm(x*.03+5,z*.03-2,3)),smooth(5.5,3,trailD(x,z))*.5];}},
+  look:{sun:[-.42,.62,-.66],sunCol:0xfff0d6,sunK:3.1,sky:0xd6e4ff,ground:0x6a5a44,hemiK:1.55,zen:0x2a5fb4,hor:0xb3c8de,fog:0xb3c8de,clouds:.75},
+  layout(rnd,mixId){const mix=biome(mixId);
+    for(let gx=-WORLD+4;gx<WORLD-4;gx+=7.5)for(let gz=-WORLD+4;gz<WORLD-4;gz+=7.5){
+      const x=gx+(rnd()-.5)*6.5,z=gz+(rnd()-.5)*6.5,e=Math.max(Math.abs(x),Math.abs(z)),td=trailD(x,z),cd=clearD(x,z);
+      if(Math.hypot(x-SPAWN.x,z-SPAWN.z)<13||td<6.5||cd<0)continue;
+      if(rnd()>(e<PLAY?.62*smooth(6.5,12,td)*smooth(0,6,cd):.92))continue;plant(pickW(mix.tree,rnd),'tree',x,z,.82+rnd()*.4,rnd);}
+    for(let i=0;i<11000;i++){const x=(rnd()-.5)*2*(PLAY+14),z=(rnd()-.5)*2*(PLAY+14);if(trailD(x,z)<2.6&&rnd()<.9)continue;plant(pickW(mix.grass,rnd),'grass',x,z,.75+rnd()*.7,rnd);}
+    for(let i=0;i<330;i++){const x=(rnd()-.5)*2*(PLAY+10),z=(rnd()-.5)*2*(PLAY+10);if(trailD(x,z)<4)continue;plant(rnd()<.65?'bush_sage':'bush_oleander','bush',x,z,.9+rnd()*.7,rnd);}
+    propsAlong(rnd,['prop_drum','prop_tires','prop_icechest','prop_drum','prop_tires','prop_mailbox'],5.6);},
+  build(){ribbon(TRAIL,7.5,'62-farm-track',10);boulders(16,mulberry(77));}},
+/* ---------------- field: rolling farmland, a farm track, crops, a farmstead, relay masts ---------------- */
+field:{name:'FIELD',mix:'meadow',spawn:{x:0,z:72,yaw:0},
+  trail:[[0,88],[4,64],[-6,40],[-2,18],[14,0],[22,-22],[10,-44],[-12,-62],[-20,-88]],
+  crops:[[-74,-12,-24,28,'c'],[-72,40,-28,72,'b'],[34,-74,72,-34,'c'],[40,-24,76,8,'b'],[-60,-70,-26,-36,'b']],
+  farm:{x:42,z:34},
+  h(x,z){const big=(fbm(x*.0075+11,z*.0075-3,4)-.5)*15,small=(fbm(x*.04,z*.04,2)-.5)*1.1;
+    const e=Math.max(Math.abs(x),Math.abs(z)),rim=Math.pow(smooth(PLAY-4,PLAY+70,e),1.2)*30;
+    const flat=Math.min(smooth(3,10,trailD(x,z)),smooth(14,30,Math.hypot(x-42,z-34)));return (big*.8+small)*(.35+.65*flat)+rim;},
+  ground:{a:'60-meadow-ground',ar:5,b:'63-ploughed-field',br:6,c:'64-wheat-field',cr:4.5,
+    w(x,z){let b=0,c=0;for(const r of MAPS.field.crops){const k=rectW(x,z,r,1.6);if(r[4]==='b')b=Math.max(b,k);else c=Math.max(c,k);}return [b,c];}},
+  look:{sun:[-.35,.78,-.5],sunCol:0xfff4e2,sunK:3.3,sky:0xdbe9ff,ground:0x6f6a4a,hemiK:1.6,zen:0x2f6fd0,hor:0xc6daf0,fog:0xc4d6ea,clouds:.55,
+    pano:'69-daytime-field-sky',ring:{tex:'70-distant-hills',h:70,lift:-10,tint:[.9,.95,1],copies:3},exp:1.12},
+  layout(rnd,mixId){const mix=biome('meadow'),cropAt=(x,z)=>MAPS.field.crops.some(r=>rectW(x,z,r,3)>0),farmD=(x,z)=>Math.hypot(x-42,z-34);
+    /* hedgerow trees along the crop edges and the far hills, a few loners in the meadow */
+    for(const r of MAPS.field.crops)for(let t=0;t<1;t+=.06){const side=(t*4)|0,f=(t*4)%1,x=side===0?lerp(r[0],r[2],f):side===2?lerp(r[2],r[0],f):side===1?r[2]+2.5:r[0]-2.5,
+      z=side===0?r[1]-2.5:side===2?r[3]+2.5:side===1?lerp(r[1],r[3],f):lerp(r[3],r[1],f);if(rnd()<.55&&trailD(x,z)>7&&farmD(x,z)>18)plant(pickW({tree_oak:3,tree_cottonwood:1.5,tree_willow:.6},rnd),'tree',x,z,.8+rnd()*.35,rnd);}
+    for(let i=0;i<900;i++){const x=(rnd()-.5)*2*(WORLD-8),z=(rnd()-.5)*2*(WORLD-8),e=Math.max(Math.abs(x),Math.abs(z));
+      if(e<PLAY+4&&rnd()>.04)continue;if(trailD(x,z)<8||cropAt(x,z)||farmD(x,z)<22||Math.hypot(x-SPAWN.x,z-SPAWN.z)<14)continue;plant(pickW(e>PLAY?{tree_oak:2,tree_cottonwood:1,tree_ponderosa:1.5,tree_spruce:1}:{tree_oak:3,tree_cottonwood:1.5,tree_aspen:.8},rnd),'tree',x,z,.8+rnd()*.4,rnd);}
+    for(let i=0;i<14000;i++){const x=(rnd()-.5)*2*(PLAY+14),z=(rnd()-.5)*2*(PLAY+14);if(trailD(x,z)<3||cropAt(x,z)||farmD(x,z)<14)continue;plant(pickW({grass_meadow:3,grass_dry:1.2},rnd),'grass',x,z,.8+rnd()*.8,rnd);}
+    for(let i=0;i<120;i++){const x=(rnd()-.5)*2*PLAY,z=(rnd()-.5)*2*PLAY;if(trailD(x,z)<5||cropAt(x,z)||farmD(x,z)<16)continue;plant(rnd()<.6?'bush_sage':'bush_oleander','bush',x,z,.9+rnd()*.6,rnd);}
+    propsAlong(rnd,['prop_mailbox','prop_tires','prop_drum','prop_icechest'],5.8);},
+  build(){const rnd=mulberry(91);ribbon(TRAIL,7.5,'62-farm-track',10);
+    const F=MAPS.field.farm,y=hgt(F.x,F.z);
+    const red=tmat('66-red-barn-siding',{r:.85}),wood=tmat('67-wooden-fence-planks',{r:.9}),roof=tmat('10-corrugated-metal',{col:0x9a3a2e,r:.6,m:.4}),roof2=tmat('10-corrugated-metal',{col:0x7c828a,r:.6,m:.4}),dark=tmat('24-gunmetal',{col:0x55504a});
+    /* barn: walls, a gable roof, a big door */
+    put(sbox(22,9,14,[[4,4],[4,4],0,0,[4,4],[4,4]]),[red,red,dark,dark,red,red],F.x,y+4.5,F.z);put(gable(15,23.5,6),roof,F.x,y+9,F.z,Math.PI/2);addBox(F.x-11,F.z-7,F.x+11,F.z+7,15);
+    put(sbox(6,7,.3),wood,F.x,y+3.5,F.z-7.1);
+    /* farmhouse and silo */
+    put(sbox(14,6,10,[[4,4],[4,4],0,0,[4,4],[4,4]]),[wood,wood,dark,dark,wood,wood],F.x-26,y+3,F.z+4);put(gable(11,15,4),roof2,F.x-26,y+6,F.z+4,Math.PI/2);addBox(F.x-33,F.z-1,F.x-19,F.z+9,10);
+    const silo=tmat('12-rusted-steel-plate',{rep:[4,3],r:.7,m:.5});put(new THREE.CylinderGeometry(3.4,3.4,16,24),silo,F.x+16,y+8,F.z+10);put(new THREE.SphereGeometry(3.5,24,10,0,TAU,0,Math.PI/2),roof2,F.x+16,y+16,F.z+10);addCol(F.x+16,F.z+10,3.5,19);
+    /* fences along the track */
+    const rail=new THREE.BoxGeometry(.12,.16,1),post=new THREE.BoxGeometry(.22,1.5,.22);
+    for(let i=1;i<TRAIL.length-1;i++){const a=TRAIL[i],b=TRAIL[i+1],L=Math.hypot(b[0]-a[0],b[1]-a[1]),ang=Math.atan2(b[0]-a[0],b[1]-a[1]);if(i%2)continue;
+      for(const sd of [-1,1]){const ox=Math.cos(ang)*5.2*sd,oz=-Math.sin(ang)*5.2*sd;
+        for(let t=0;t<L;t+=4){const x=a[0]+(b[0]-a[0])*t/L+ox,z=a[1]+(b[1]-a[1])*t/L+oz,h0=hgt(x,z);put(post,wood,x,h0+.75,z,ang);
+          for(const hh of [.5,1.1]){const m=put(rail,wood,x+(b[0]-a[0])/L*2,h0+hh,z+(b[1]-a[1])/L*2,ang);m.scale.z=4;}}}}
+    /* round hay bales */
+    const hay=tmat('64-wheat-field',{rep:[3,1],r:.95}),hayEnd=hookWorld(new THREE.MeshStandardMaterial({map:tex('68-round-hay-bale-end'),alphaTest:.4,roughness:.95}));
+    const bg=new THREE.CylinderGeometry(1,1,1.4,20,1,false);bg.rotateZ(Math.PI/2);const bales=[];
+    for(let i=0;i<26;i++){const r=MAPS.field.crops[i%MAPS.field.crops.length],x=lerp(r[0],r[2],.1+rnd()*.8),z=lerp(r[1],r[3],.1+rnd()*.8);if(r[4]!=='c')continue;
+      bales.push(new THREE.Matrix4().compose(V3(x,hgt(x,z)+1,z),new THREE.Quaternion().setFromAxisAngle(V3(0,1,0),rnd()*TAU),V3(1,1,1)));addCol(x,z,1.1,2);}
+    const bim=new THREE.InstancedMesh(bg,[hay,hayEnd,hayEnd],bales.length);bales.forEach((m,k)=>bim.setMatrixAt(k,m));bim.castShadow=bim.receiveShadow=true;S.add(bim);
+    /* radio relay masts: lattice towers with a red light (mission 1 targets) */
+    const truss=tmat('74-crane-truss',{alpha:true,ds:true,rep:[4,6],r:.6,m:.5});
+    for(const [mx,mz] of [[-40,-20],[48,-52],[-32,52]]){const g0=hgt(mx,mz);put(new THREE.CylinderGeometry(.6,1.6,26,4,1,true),truss,mx,g0+13,mz,Math.PI/4);
+      const lamp=new THREE.Mesh(new THREE.SphereGeometry(.4,10,8),new THREE.MeshBasicMaterial({color:new THREE.Color(1,.1,.05).multiplyScalar(4)}));lamp.position.set(mx,g0+26.4,mz);S.add(lamp);addBox(mx-1.6,mz-1.6,mx+1.6,mz+1.6,26);}
+  }},
+/* ---------------- docks: Harbor 9 at sunset, container stacks, cranes, a ship, warehouses ---------------- */
+docks:{name:'DOCKS',mix:'woods',spawn:{x:-9,z:50,yaw:0},bounds:{x0:-82,x1:82,z0:-58,z1:58},quay:-62,
+  trail:[],route:[[-9,50],[-9,18],[25,18],[25,-30],[-43,-30],[-43,18],[-9,18]],
+  h(x,z){return z<-62?-7:0;},
+  ground:{a:'02-wet-concrete',ar:7,b:'79-dock-lane-markings',br:14,c:'07-harbor-paving',cr:5,rough:.7,
+    w(x,z){const lane=Math.max(...[-43,-9,25,59].map(c=>smooth(6,4.5,Math.abs(x-c)))),c=smooth(-48,-56,z);return [lane*smooth(52,46,Math.abs(z)),c];}},
+  look:{sun:[-.85,.3,-.42],sunCol:0xffb070,sunK:3.4,sky:0xb4a0d2,ground:0x6a5448,hemiK:2.1,zen:0x3a2a6a,hor:0xf0a070,fog:0xc8907e,clouds:.3,
+    pano:'80-harbour-sunset-sky',ring:{tex:'33-harbor-skyline',h:60,lift:-8,tint:[.8,.72,.85],copies:3},exp:1.28},
+  layout(){},
+  build(){const rnd=mulberry(19),Qz=-62;
+    /* water and the quay wall */
+    const wt=tex('75-harbour-water',{rep:60});const water=new THREE.Mesh(new THREE.PlaneGeometry(700,320),new THREE.MeshStandardMaterial({map:wt,color:0xa8bcc0,roughness:.16,metalness:.3}));
+    water.rotation.x=-Math.PI/2;water.position.set(0,-2.6,Qz-160);S.add(water);MAPS.docks.wt=wt;
+    put(sbox(420,3.4,1,[0,0,0,0,0,[7,0]]),[tmat('09-blast-wall'),tmat('09-blast-wall'),tmat('07-harbor-paving'),tmat('09-blast-wall'),tmat('09-blast-wall'),tmat('76-quay-edge-with-fenders')],0,-1.7,Qz-.5,0,false);
+    /* a moored ship */
+    const hull=tmat('77-ship-hull-side',{r:.6,m:.3}),deck=tmat('12-rusted-steel-plate',{rep:[10,2]}),hdark=tmat('24-gunmetal',{col:0x3a2a28});
+    put(sbox(150,18,22,[[0,0],[0,0],0,0,[28,0],[28,0]]),[hdark,hdark,deck,hdark,hull,hull],15,0,Qz-24,0,false);
+    put(sbox(20,14,18,[[6,6],[6,6],0,0,[6,6],[6,6]]),tmat('14-docks-building-facade'),-48,16,Qz-24,0,true);
+    /* two ship-to-shore cranes over the quay */
+    const truss=tmat('74-crane-truss',{alpha:true,ds:true,r:.55,m:.5});const tb=(w,h,d,x,y,z)=>{const g=sbox(w,h,d,[[2.5,2.5],[2.5,2.5],[2.5,2.5],[2.5,2.5],[2.5,2.5],[2.5,2.5]]);return put(g,truss,x,y,z);};
+    for(const cx of [-30,38]){for(const lx of [-7,7])for(const lz of [-52,-61]){tb(1.6,32,1.6,cx+lx,16,lz);addBox(cx+lx-1,lz-1,cx+lx+1,lz+1,32);}
+      tb(16,2,1.6,cx,31,-52);tb(16,2,1.6,cx,31,-61);tb(1.6,2,10,cx-7,31,-56.5);tb(1.6,2,10,cx+7,31,-56.5);
+      tb(3,2.4,78,cx,35,-75);put(sbox(7,4.5,9),tmat('12-rusted-steel-plate',{rep:[2,2]}),cx,38,-56.5);
+      const cab=put(sbox(3,2.4,3),tmat('24-gunmetal'),cx,32.5,-88);}
+    /* container stacks in blocks, lanes between them (each stack is one collider) */
+    const L=12.2,H=2.6,W=2.44,cg=new THREE.BoxGeometry(L,H,W),endM=tmat('11-container-door-end',{r:.7,m:.3}),roofM=tmat('73-container-roof',{r:.7,m:.3}),botM=tmat('24-gunmetal');
+    const kinds=[tmat('71-red-shipping-container-side',{r:.65,m:.35}),tmat('72-blue-shipping-container-side',{r:.65,m:.35}),tmat('10-corrugated-metal',{col:0x5f8a7a,r:.65,m:.35,rep:[3,1]}),tmat('10-corrugated-metal',{col:0xc8a040,r:.65,m:.35,rep:[3,1]})];
+    const lists=kinds.map(()=>[]);
+    for(const bx of [-60,-26,8,42])for(const bz of [-42,-18,6,30]){
+      if(Math.hypot(bx-SPAWN.x,bz-SPAWN.z)<18)continue;
+      for(let ix=0;ix<2;ix++)for(let iz=0;iz<3;iz++){if(rnd()<.12)continue;const x=bx-L/2+ix*L+(ix?.15:-.15),z=bz-W+iz*W*1.02,n=1+(rnd()*3|0);
+        for(let k=0;k<n;k++)lists[rnd()*4|0].push([x,H/2+k*H,z,rnd()<.5?0:Math.PI]);addBox(x-L/2,z-W/2,x+L/2,z+W/2,n*H,0);}}
+    kinds.forEach((m,i)=>{const l=lists[i];if(!l.length)return;const im=new THREE.InstancedMesh(cg,[endM,endM,roofM,botM,m,m],l.length);const t=new THREE.Matrix4();
+      l.forEach((p,k)=>{t.compose(V3(p[0],p[1],p[2]),new THREE.Quaternion().setFromAxisAngle(V3(0,1,0),p[3]),V3(1,1,1));im.setMatrixAt(k,t);});im.castShadow=im.receiveShadow=true;S.add(im);});
+    /* warehouses along the back, the HARBOR 9 neon and a Hyperdot billboard */
+    const clad=tmat('10-corrugated-metal',{col:0x8a9096,rep:[1,1]}),door=tmat('78-warehouse-roller-door',{r:.7,m:.3}),gravel=tmat('15-roof-gravel');
+    for(const wx of [-52,0,52]){put(sbox(34,12,18,[[4,4],[4,4],[6,6],0,[4,4],[34/3,0]]),[clad,clad,gravel,gravel,clad,door],wx,6,70);addBox(wx-17,61,wx+17,79,12,0);}
+    const neon=new THREE.Mesh(new THREE.PlaneGeometry(11,5.5),new THREE.MeshBasicMaterial({map:tex('44-neon-sign-harbor-9'),transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,color:new THREE.Color(2,2,2)}));
+    neon.position.set(0,13.6,60.9);neon.rotation.y=Math.PI;S.add(neon);
+    const bb=new THREE.Mesh(new THREE.PlaneGeometry(9,9),tmat('46-hyperdot-arcade-billboard',{r:.5}));bb.position.set(69.1,7,70);bb.rotation.y=Math.PI/2;S.add(bb);
+    /* lamp posts and bollards */
+    const pole=tmat('24-gunmetal'),lampM=new THREE.MeshBasicMaterial({color:new THREE.Color(1,.85,.55).multiplyScalar(3)});
+    for(const [x,z] of [[-43,-50],[-9,-50],[25,-50],[59,-50],[-43,46],[25,46],[-9,-6],[59,-6]]){put(new THREE.CylinderGeometry(.18,.25,13,8),pole,x,6.5,z);put(new THREE.BoxGeometry(1.6,.3,.7),lampM,x,13,z);addCol(x,z,.4,13);}
+    for(let x=-76;x<=76;x+=9.5)put(new THREE.CylinderGeometry(.35,.42,.8,10),pole,x,.4,Qz+1.2);
+  },
+  tick(dt){if(MAPS.docks.wt){MAPS.docks.wt.offset.x+=dt*.004;MAPS.docks.wt.offset.y+=dt*.0025;}}},
+};
+/* mossy boulders for the woods: lumpy rocks with a collider */
+function boulders(n,rnd){const m=tmat('83-mossy-boulder-rock',{rep:[2,2],r:.95,m:0});
+  for(let i=0;i<n;i++){let x,z,k=0;do{x=(rnd()-.5)*2*(PLAY-8);z=(rnd()-.5)*2*(PLAY-8);k++;}while((trailD(x,z)<8||Math.hypot(x-SPAWN.x,z-SPAWN.z)<15)&&k<20);
+    const g=new THREE.IcosahedronGeometry(1,2),p=g.attributes.position,r=1.6+rnd()*2.6;
+    for(let j=0;j<p.count;j++){const vx=p.getX(j),vy=p.getY(j),vz=p.getZ(j),f=1+(fbm(vx*1.7+i*3,vz*1.7+vy*1.3,3)-.5)*.7;p.setXYZ(j,vx*f*r,vy*f*r*.62,vz*f*r*(.8+rnd()*.1));}
+    g.computeVertexNormals();put(g,m,x,hgt(x,z)+r*.15,z,rnd()*TAU);addCol(x,z,r*.85,r*1.1);}}
+const BND=()=>MAPDEF.bounds||{x0:-PLAY-6,x1:PLAY+6,z0:-PLAY-6,z1:PLAY+6};
+function boxAt(x,z,y){const a=VEG.cols.get(colKey(x,z));if(!a)return false;for(const c of a)if(c.b&&x>c.x0&&x<c.x1&&z>c.z0&&z<c.z1&&y<c.y0+c.h)return true;return false;}
+/* after a map is built, join its fixed single-material meshes into one mesh per material (fences, posts, crane beams, lamps...) */
+function mergeStatic(before){
+  const by=new Map();
+  for(const o of S.children.slice()){if(before.has(o)||!o.isMesh||o.isInstancedMesh||Array.isArray(o.material)||o.material.transparent&&!o.material.alphaTest||o.userData.keep)continue;
+    o.updateMatrixWorld(true);let g=o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone();g.applyMatrix4(o.matrixWorld);
+    for(const k of Object.keys(g.attributes))if(!['position','normal','uv'].includes(k))g.deleteAttribute(k);if(!g.attributes.uv)continue;
+    if(!by.has(o.material))by.set(o.material,{gs:[],cast:o.castShadow});by.get(o.material).gs.push(g);S.remove(o);}
+  let n=0;for(const [m,v] of by){const mm=new THREE.Mesh(THREE.mergeGeometries(v.gs,false),m);mm.castShadow=v.cast;mm.receiveShadow=true;S.add(mm);n+=v.gs.length;}
+  return n;}
 
 /* ---- 05_mech.js ---- */
 /* ===================== Howler 07, the player's mech (models/mech/howler07.glb, built in Blender: v2/src/ironhowl3/blender) =====================
@@ -465,7 +632,7 @@ function updPlayer(c,dt){
   /* move, then push out of tree trunks and keep inside the map */
   let nx=P.x+P.vx*dt,nz=P.z+P.vz*dt;
   const r=collide(nx,nz,RAD);if(r[2]&&(!P.air||P.y<hgt(r[0],r[1])+4)){nx=r[0];nz=r[1];}
-  const B=PLAY+6;if(Math.abs(nx)>B){nx=Math.sign(nx)*B;P.vx*=.2;}if(Math.abs(nz)>B){nz=Math.sign(nz)*B;P.vz*=.2;}
+  const B=BND();if(nx<B.x0||nx>B.x1){nx=clamp(nx,B.x0,B.x1);P.vx*=.2;}if(nz<B.z0||nz>B.z1){nz=clamp(nz,B.z0,B.z1);P.vz*=.2;}
   P.dist+=Math.hypot(nx-P.x,nz-P.z);P.x=nx;P.z=nz;
   const g=hgt(P.x,P.z);
   if(P.air){if(P.y<=g&&P.vy<0){const k=clamp(-P.vy/16,0,1.3);P.y=g;P.air=false;P.vy=0;P.groundT=0;P.land=Math.max(P.land,.18+k*.32);P.ev.push({t:'land',k});}}
@@ -516,7 +683,7 @@ function rayAim(){
   let t=6;for(;t<BOLT.range;t+=2){const x=ox+dx*t,y=oy+dy*t,z=oz+dz*t;if(y<hgt(x,z)){t-=1;break;}if(treeAt(x,z,y))break;}
   AIM.e=null;AIM.x=ox+dx*t;AIM.y=oy+dy*t;AIM.z=oz+dz*t;AIM.dist=t;
 }
-function treeAt(x,z,y){const a=VEG.cols.get(colKey(x,z));if(!a)return false;for(const c of a){const dx=x-c.x,dz=z-c.z;if(dx*dx+dz*dz<(c.r+.25)*(c.r+.25)&&y<hgt(c.x,c.z)+(c.h||9))return true;}return false;}
+function treeAt(x,z,y){const a=VEG.cols.get(colKey(x,z));if(!a)return false;for(const c of a){if(c.b){if(x>c.x0&&x<c.x1&&z>c.z0&&z<c.z1&&y<c.y0+c.h)return true;continue;}const dx=x-c.x,dz=z-c.z;if(dx*dx+dz*dz<(c.r+.25)*(c.r+.25)&&y<hgt(c.x,c.z)+(c.h||9))return true;}return false;}
 function updGun(c,dt){
   GUN.cd-=dt;GUN.ventCd=Math.max(0,GUN.ventCd-dt);GUN.flash=Math.max(0,GUN.flash-dt*12);GUN.hitT=Math.max(0,GUN.hitT-dt);
   if(M.ready)setTier(M,GUN.tier);
@@ -630,7 +797,11 @@ function loadEnemies(){
 /* ---- path-finding: a flow field on a 2 m grid, rebuilt when the player moves to another cell ---- */
 const NAV={c:2,n:0,o:0,block:null,dist:null,pc:-1,t:0};
 function navInit(){const ext=PLAY+10;NAV.o=-ext;NAV.n=Math.ceil(ext*2/NAV.c);const n=NAV.n;NAV.block=new Uint8Array(n*n);NAV.dist=new Float32Array(n*n);
-  for(const a of VEG.cols.values())for(const c of a){const r=c.r+1.1,i0=Math.floor((c.x-r-NAV.o)/NAV.c),i1=Math.floor((c.x+r-NAV.o)/NAV.c),j0=Math.floor((c.z-r-NAV.o)/NAV.c),j1=Math.floor((c.z+r-NAV.o)/NAV.c);
+  const seen=new Set();
+  for(const a of VEG.cols.values())for(const c of a){if(seen.has(c))continue;seen.add(c);
+    if(c.b){const i0=Math.floor((c.x0-1.2-NAV.o)/NAV.c),i1=Math.floor((c.x1+1.2-NAV.o)/NAV.c),j0=Math.floor((c.z0-1.2-NAV.o)/NAV.c),j1=Math.floor((c.z1+1.2-NAV.o)/NAV.c);
+      for(let i=i0;i<=i1;i++)for(let j=j0;j<=j1;j++)if(i>=0&&j>=0&&i<n&&j<n)NAV.block[j*n+i]=1;continue;}
+    const r=c.r+1.1,i0=Math.floor((c.x-r-NAV.o)/NAV.c),i1=Math.floor((c.x+r-NAV.o)/NAV.c),j0=Math.floor((c.z-r-NAV.o)/NAV.c),j1=Math.floor((c.z+r-NAV.o)/NAV.c);
     for(let i=i0;i<=i1;i++)for(let j=j0;j<=j1;j++){if(i<0||j<0||i>=n||j>=n)continue;const cx=NAV.o+(i+.5)*NAV.c,cz=NAV.o+(j+.5)*NAV.c;if(Math.hypot(cx-c.x,cz-c.z)<r)NAV.block[j*n+i]=1;}}}
 const navCell=(x,z)=>{const i=Math.floor((x-NAV.o)/NAV.c),j=Math.floor((z-NAV.o)/NAV.c);return i<0||j<0||i>=NAV.n||j>=NAV.n?-1:j*NAV.n+i;};
 function navBuild(){const n=NAV.n,D=NAV.dist;D.fill(1e9);const s=navCell(P.x,P.z);if(s<0)return;NAV.pc=s;
@@ -669,9 +840,9 @@ const WAVES=[{skitter:4},{skitter:6,hound:1},{hound:2,skitter:4},{gunner:1,skitt
 const BEACONS=[];
 function spawnSpot(){const fx=-Math.sin(P.yaw),fz=-Math.cos(P.yaw);
   for(let tries=0;tries<40;tries++){const a=(Math.random()-.5)*1.2,d=55+Math.random()*25,ca=Math.cos(a),sa=Math.sin(a);
-    const dx=fx*ca-fz*sa,dz=fx*sa+fz*ca,x=clamp(P.x+dx*d,-PLAY+4,PLAY-4),z=clamp(P.z+dz*d,-PLAY+4,PLAY-4);
+    const B=BND(),dx=fx*ca-fz*sa,dz=fx*sa+fz*ca,x=clamp(P.x+dx*d,B.x0+4,B.x1-4),z=clamp(P.z+dz*d,B.z0+4,B.z1-4);
     if(Math.hypot(x-P.x,z-P.z)<35)continue;const k=navCell(x,z);if(k<0||NAV.block[k])continue;return [x,z];}
-  return [clamp(P.x-Math.sin(P.yaw)*60,-PLAY+4,PLAY-4),clamp(P.z-Math.cos(P.yaw)*60,-PLAY+4,PLAY-4)];}
+  const B=BND();return [clamp(P.x-Math.sin(P.yaw)*60,B.x0+4,B.x1-4),clamp(P.z-Math.cos(P.yaw)*60,B.z0+4,B.z1-4)];}
 function startWave(){
   const w=WAVES[G.wave%WAVES.length];G.hpK=1+Math.floor(G.wave/WAVES.length)*.3;G.wave++;
   HUD.banner('WAVE '+G.wave);
@@ -751,7 +922,7 @@ function updEnemies(dt){
     if(dist<e.d.r+RAD&&!(e.st==='charge')){mvx-=dx/dist;mvz-=dz/dist;}
     e.vx+=(mvx*sp-e.vx)*damp(6,dt);e.vz+=(mvz*sp-e.vz)*damp(6,dt);
     let nx=e.x+(e.vx+e.kx)*dt,nz=e.z+(e.vz+e.kz)*dt;e.kx*=Math.exp(-dt*4);e.kz*=Math.exp(-dt*4);
-    const c=collide(nx,nz,e.d.r);e.x=clamp(c[0],-PLAY-6,PLAY+6);e.z=clamp(c[1],-PLAY-6,PLAY+6);e.y=hgt(e.x,e.z);
+    const c=collide(nx,nz,e.d.r),B=BND();e.x=clamp(c[0],B.x0,B.x1);e.z=clamp(c[1],B.z0,B.z1);e.y=hgt(e.x,e.z);
     e.yaw+=clamp(angD(want,e.yaw),-dt*(e.st==='aim'?6:4),dt*(e.st==='aim'?6:4));
     poseEnemy(e,dt,Math.hypot(e.vx,e.vz));
   }
@@ -861,7 +1032,9 @@ function updCam(dt,p,view){
   const by=p.y;CAMS.ty+=(by-CAMS.ty)*damp(p.air?(view==='close'?7:3.2):9,dt);if(!CAMS.ready){CAMS.ty=by;}
   /* portrait screens are narrow: step back a little so the mech does not fill them */
   const pt=Math.max(0,1-cam.aspect),back=V.back+pt*(view==='close'?2.2:3),up=V.up+pt*(view==='close'?.7:1.2);
-  const pit=p.pitch,tx=p.x-fx*back+rx*sd,tz=p.z-fz*back+rz*sd;let ty=CAMS.ty+up-pit*(view==='close'?1.2:2.2);
+  const pit=p.pitch;let tx=p.x-fx*back+rx*sd,tz=p.z-fz*back+rz*sd,ty=CAMS.ty+up-pit*(view==='close'?1.2:2.2);
+  /* if a container or building sits between the mech and the camera, pull the camera in front of it */
+  {const hx=p.x,hy=p.y+5,hz=p.z;for(let t=.15;t<=1.001;t+=.05){const x=lerp(hx,tx,t),y=lerp(hy,ty,t),z=lerp(hz,tz,t);if(boxAt(x,z,y+.6)){const k=Math.max(.1,t-.08);tx=lerp(hx,tx,k);ty=lerp(hy,ty,k)+(1-k)*1.5;tz=lerp(hz,tz,k);break;}}}
   if(!CAMS.ready){CAMS.x=tx;CAMS.y=ty;CAMS.z=tz;CAMS.ready=true;}
   const k=damp(V.pos,dt);CAMS.x+=(tx-CAMS.x)*k;CAMS.z+=(tz-CAMS.z)*k;CAMS.y+=(ty-CAMS.y)*k;
   const gy=hgt(CAMS.x,CAMS.z)+1.6;if(CAMS.y<gy)CAMS.y=gy;
@@ -951,8 +1124,8 @@ function startPlay(){audioInit();resetRun();G.mode='play';G.paused=false;$('titl
   if(!touchy){lockMouse();HUD.hint('WASD MOVE · MOUSE AIM · SPACE JET HOP · V CAMERA · ESC PAUSE',9);}else HUD.hint('LEFT THUMB MOVES · RIGHT THUMB AIMS · JET TO HOP',7);}
 function startDemo(){resetRun();G.mode='demo';G.paused=false;G.demoI=1;$('title').style.display='none';HUD.menu();}
 /* attract mode: walk the trail, hop now and then */
-function demoCtl(dt){const c={mx:0,my:0,turn:0,pitch:0,jet:false,jetHit:false};const t=TRAIL[G.demoI];if(!t)return c;
-  const dx=t[0]-P.x,dz=t[1]-P.z;if(Math.hypot(dx,dz)<7){G.demoI++;if(G.demoI>=TRAIL.length){G.demoI=1;P=mkPlayer();CAMS.ready=false;}}
+function demoCtl(dt){const c={mx:0,my:0,turn:0,pitch:0,jet:false,jetHit:false},RT=MAPDEF.route||TRAIL;const t=RT[G.demoI];if(!t)return c;
+  const dx=t[0]-P.x,dz=t[1]-P.z;if(Math.hypot(dx,dz)<7){G.demoI++;if(G.demoI>=RT.length){G.demoI=1;P=mkPlayer();CAMS.ready=false;}}
   const want=Math.atan2(-dx,-dz),d=angD(want,P.yaw);c.turn=-clamp(d,-1.4*dt,1.4*dt);c.my=Math.abs(d)<.6?1:.3;
   G.demoHop-=dt;if(G.demoHop<0){c.jetHit=true;c.jet=true;G.demoHop=5+Math.random()*4;}return c;}
 function handleEvents(){
@@ -968,7 +1141,7 @@ function jetFX(dt){if(P.thrust<.05)return;for(const J of M.jets){J.n.getWorldPos
   const k=P.thrust;if(Math.random()<k*dt*60)part({x:_np.x,y:_np.y-.4,z:_np.z,vx:(Math.random()-.5)*2,vy:-6-Math.random()*4,vz:(Math.random()-.5)*2,life:.25+Math.random()*.15,s0:.9,s1:.35,a:1.4*k,col:[1,.55,.22],glow:true,drag:2});
   if(Math.random()<k*dt*30)part({x:_np.x,y:_np.y-.6,z:_np.z,vx:(Math.random()-.5)*1.5,vy:-3-Math.random()*2,vz:(Math.random()-.5)*1.5,life:1.2+Math.random()*.8,s0:.8,s1:3.4,a:.3,col:SMOKE,drag:1.6,grav:-.6});}}
 function tick(dt){
-  G.t+=dt;U.uTime.value=G.t;
+  G.t+=dt;U.uTime.value=G.t;if(MAPDEF.tick)MAPDEF.tick(dt);if(RING)RING.position.set(cam.position.x,cam.position.y+RING.userData.lift,cam.position.z);
   /* the clouds drift; their shadows slide over the ground with them */
   U.uCloudOff.value.x+=dt*.0016;U.uCloudOff.value.y+=dt*.0007;
   const live=(G.mode==='play'||G.mode==='demo')&&!G.paused;
@@ -1006,14 +1179,17 @@ function frame(now){
   tick(dt);autoQ(dt);R.render(S,cam);HUD.dev();requestAnimationFrame(frame);
 }
 function boot(){
-  setupHud();setQuality(QL);U.tCloud.value=tex('34-fog',{srgb:false});
-  buildGround();M=buildMech();buildFX();buildWeapons();P=mkPlayer();
+  pickMap();setupHud();setQuality(QL);applyLook(MAPDEF.look);U.tCloud.value=tex('34-fog',{srgb:false});
+  buildGround();const before=new Set(S.children);MAPDEF.build();mergeStatic(before);M=buildMech();buildFX();buildWeapons();P=mkPlayer();
   const done=()=>{G.mode=G.mode==='load'?'title':G.mode;$('load').style.display='none';$('title').style.display=G.mode==='title'?'flex':'none';document.title='IRONHOWL 3';ARC.post('ready',{title:ARC.title});};
   let vegDone=false,texDone=false;LM.onLoad=()=>{texDone=true;if(vegDone)done();};
-  Promise.all([loadVeg('woods'),loadEnemies()]).then(()=>{navInit();navBuild();vegDone=true;if(texDone||LOADP>=1)done();});
+  Promise.all([loadVeg(MAPDEF.mix),loadEnemies()]).then(()=>{navInit();navBuild();vegDone=true;if(texDone||LOADP>=1)done();});
   requestAnimationFrame(frame);
 }
 $('title').addEventListener('click',()=>{if(G.mode==='title')startPlay();});
+/* map choice on the title screen: reloads the page with that map */
+document.querySelectorAll('#maps button').forEach(b=>{b.classList.toggle('sel',b.dataset.map===MAPID);b.addEventListener('click',e=>{e.stopPropagation();if(b.dataset.map===MAPID)return;store.set('map',b.dataset.map);
+  const q=new URLSearchParams(location.search);q.set('map',b.dataset.map);location.search=q.toString();});});
 cv.addEventListener('click',()=>{if(G.mode==='play'&&!G.paused&&!touchy&&!MOUSE.locked)lockMouse();});
 addEventListener('keydown',e=>{if(G.mode==='title'&&(e.code==='Enter'||e.code==='Space'))startPlay();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&G.mode==='play'&&!G.paused)setPause(true);});
@@ -1031,5 +1207,6 @@ if(DEV)window.__ih3={S,KEY,SKY,PFX,GUN,MSL,EN,PK,AIM,startWave,spawnEnemy,dropPi
   ff(t){const n=Math.round(t*60);for(let i=0;i<n;i++)tick(1/60);},
   info(){const i=R.info.render;return {calls:i.calls,tris:i.triangles,veg:VEGN.inst,ql:QL,mode:G.mode,x:+P.x.toFixed(1),z:+P.z.toFixed(1),air:P.air,fuel:+P.fuel.toFixed(2),hull:+P.hull.toFixed(0),shield:+P.shield.toFixed(0),tier:GUN.tier,heat:+GUN.heat.toFixed(0),over:GUN.over,msl:MSL.ammo,score:G.score,kills:G.kills,wave:G.wave,enemies:EN.filter(e=>!e.dead).length,bolts:BOLTS.length,ebolts:EBOLTS.length};}};
 boot();
+document.querySelectorAll('#maps button').forEach(b=>b.classList.toggle('sel',b.dataset.map===MAPID));
 
 })();
