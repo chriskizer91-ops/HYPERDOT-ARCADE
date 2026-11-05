@@ -6,14 +6,17 @@ function buildFX(){
   const n=PFX.max;PFX.iP=new THREE.InstancedBufferAttribute(new Float32Array(n*3),3);PFX.iS=new THREE.InstancedBufferAttribute(new Float32Array(n*4),4);PFX.iC=new THREE.InstancedBufferAttribute(new Float32Array(n*3),3);
   for(const a of [PFX.iP,PFX.iS,PFX.iC])a.setUsage(THREE.DynamicDrawUsage);
   g.setAttribute('iP',PFX.iP);g.setAttribute('iS',PFX.iS);g.setAttribute('iC',PFX.iC);g.instanceCount=0;
-  const m=new THREE.ShaderMaterial({uniforms:{tSmoke:{value:tex('37-smoke-puff',{clamp:true})}},transparent:true,depthWrite:false,
+  const m=new THREE.ShaderMaterial({uniforms:{tSmoke:{value:tex('37-smoke-puff',{clamp:true})},tFx:{value:tex('fx-atlas',{clamp:true})}},transparent:true,depthWrite:false,
     blending:THREE.CustomBlending,blendSrc:THREE.OneFactor,blendDst:THREE.OneMinusSrcAlphaFactor,
     vertexShader:`attribute vec3 iP;attribute vec4 iS;attribute vec3 iC;varying vec2 vUv;varying vec4 vS;varying vec3 vC;
       void main(){vUv=uv;vS=iS;vC=iC;float c=cos(iS.y),s=sin(iS.y);vec2 q=vec2(c*position.x-s*position.y,s*position.x+c*position.y)*iS.x;
         vec4 mv=viewMatrix*vec4(iP,1.);mv.xy+=q;gl_Position=projectionMatrix*mv;}`,
-    fragmentShader:`uniform sampler2D tSmoke;varying vec2 vUv;varying vec4 vS;varying vec3 vC;
+    fragmentShader:`uniform sampler2D tSmoke,tFx;varying vec2 vUv;varying vec4 vS;varying vec3 vC;
       void main(){if(vS.w<.5){float t=texture2D(tSmoke,vUv).r;float a=smoothstep(.04,.6,t)*vS.z;gl_FragColor=vec4(vC*(.6+.5*t)*a,a);}
-        else{float r=length(vUv-.5)*2.;float gl=pow(max(0.,1.-r),2.2);gl_FragColor=vec4(vC*gl*vS.z,0.);}
+        else if(vS.w<1.5){float r=length(vUv-.5)*2.;float gl=pow(max(0.,1.-r),2.2);gl_FragColor=vec4(vC*gl*vS.z,0.);}
+        else{float t=vS.w-2.;vec2 tu=vec2((mod(t,4.)+vUv.x)*.25,1.-(floor(t/4.)+1.-vUv.y)*.5);vec3 c=texture2D(tFx,tu).rgb;
+          float edge=smoothstep(.5,.42,max(abs(vUv.x-.5),abs(vUv.y-.5)));c*=edge;   /* art tiles: 0-1 explosions, 2 muzzle flash, 3 sparks add light; 4 steam blends */
+          if(t>3.5){float a=smoothstep(.04,.6,dot(c,vec3(.33)))*vS.z;gl_FragColor=vec4(vC*c*a,a);}else gl_FragColor=vec4(c*vC*vS.z,0.);}
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`});
@@ -29,7 +32,7 @@ function updFX(dt){
   for(let i=L.length-1;i>=0;i--){const p=L[i];p.t+=dt;if(p.t>=p.life){L.splice(i,1);continue;}}
   for(const p of L){const dr=Math.exp(-(p.drag||0)*dt);p.vx*=dr;p.vy*=dr;p.vz*=dr;p.vy-=(p.grav||0)*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.z+=p.vz*dt;p.rot+=p.vr*dt;
     const f=p.t/p.life,s=lerp(p.s0,p.s1,Math.sqrt(f)),a=p.a*(p.glow?(1-f):Math.min(1,f*6)*(1-f)*(1-f));
-    P_[n*3]=p.x;P_[n*3+1]=p.y;P_[n*3+2]=p.z;S_[n*4]=s;S_[n*4+1]=p.rot;S_[n*4+2]=a;S_[n*4+3]=p.glow?1:0;C_[n*3]=p.col[0];C_[n*3+1]=p.col[1];C_[n*3+2]=p.col[2];n++;}
+    P_[n*3]=p.x;P_[n*3+1]=p.y;P_[n*3+2]=p.z;S_[n*4]=s;S_[n*4+1]=p.rot;S_[n*4+2]=a;S_[n*4+3]=p.img!=null?2+p.img:p.glow?1:0;C_[n*3]=p.col[0];C_[n*3+1]=p.col[1];C_[n*3+2]=p.col[2];n++;}
   PFX.mesh.geometry.instanceCount=n;PFX.iP.needsUpdate=PFX.iS.needsUpdate=PFX.iC.needsUpdate=true;
 }
 /* ===================== sound (all made on the fly, nothing to download) ===================== */

@@ -2,18 +2,18 @@
 const cv=$('gl');
 const SET={quality:store.get('quality','auto'),view:store.get('view','close'),sens:parseFloat(store.get('sens','1'))||1,sound:store.get('sound','1')==='1'};
 /* px = pixel budget; shadow = map size (0 = off); grass/near/far = draw distances in metres */
-const QUAL={low:{px:.75e6,shadow:0,grass:24,grassNear:8,near:24,far:115,fog:100},
-            med:{px:1.35e6,shadow:1024,grass:36,grassNear:12,near:32,far:165,fog:140},
-            high:{px:3.4e6,shadow:2048,grass:52,grassNear:18,near:48,far:230,fog:185}};
+const QUAL={low:{bloom:0,px:.75e6,shadow:0,grass:24,grassNear:8,near:24,far:115,fog:100},
+            med:{bloom:1,px:1.35e6,shadow:1024,grass:36,grassNear:12,near:32,far:165,fog:140},
+            high:{bloom:1,px:3.4e6,shadow:2048,grass:52,grassNear:18,near:48,far:230,fog:185}};
 let QL=SET.quality==='auto'?(touchy?'med':'high'):SET.quality,QC=QUAL[QL],DYN=1;
 const R=new THREE.WebGLRenderer({canvas:cv,antialias:!Q.has('noaa'),powerPreference:'high-performance',stencil:false});
 R.outputColorSpace=THREE.SRGBColorSpace;R.toneMapping=THREE.ACESFilmicToneMapping;R.toneMappingExposure=1.18;
-R.shadowMap.enabled=true;R.shadowMap.type=THREE.PCFShadowMap;R.shadowMap.autoUpdate=true;
+R.shadowMap.enabled=true;R.shadowMap.type=THREE.PCFSoftShadowMap;R.shadowMap.autoUpdate=true;
 const S=new THREE.Scene();
 const cam=new THREE.PerspectiveCamera(66,1,.1,700);
 function resize(){
   const w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,Math.sqrt(QC.px/(w*h)))*DYN;
-  R.setPixelRatio(Math.max(.5,dpr));R.setSize(w,h,false);cv.style.width=w+'px';cv.style.height=h+'px';cam.aspect=w/h;cam.updateProjectionMatrix();
+  R.setPixelRatio(Math.max(.5,dpr));R.setSize(w,h,false);cv.style.width=w+'px';cv.style.height=h+'px';cam.aspect=w/h;cam.updateProjectionMatrix();postResize();
 }
 addEventListener('resize',resize);
 /* shared uniforms used by every world material hook */
@@ -71,7 +71,7 @@ const LEAF_NORMAL=THREE.ShaderChunk.normal_fragment_begin.replace('normal *= fac
 function hookWorld(mat,o={}){
   mat.onBeforeCompile=sh=>{
     Object.assign(sh.uniforms,{tCloud:U.tCloud,uCloudOff:U.uCloudOff,uCloudScale:U.uCloudScale,uCloudAmt:U.uCloudAmt,uSunXZ:U.uSunXZ,uLeafGlow:U.uLeafGlow});
-    if(o.ground)Object.assign(sh.uniforms,{tB:{value:o.ground.tB},tC:{value:o.ground.tC},uBRep:{value:o.ground.bRep},uCRep:{value:o.ground.cRep},uTint:{value:new THREE.Vector3(...o.ground.tint)}});
+    if(o.ground)Object.assign(sh.uniforms,{tAN:{value:o.ground.nA||FLATN},tBN:{value:o.ground.nB||FLATN},tCN:{value:o.ground.nC||FLATN},uNStr:{value:o.ground.nk||.9},tB:{value:o.ground.tB},tC:{value:o.ground.tC},uBRep:{value:o.ground.bRep},uCRep:{value:o.ground.cRep},uTint:{value:new THREE.Vector3(...o.ground.tint)}});
     sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;'+(o.fade?'\nattribute float aFade;varying float vFade;':'')+(o.ground?'\nattribute float aTrail;varying float vTrail;attribute float aMix;varying float vMix;':''))
       .replace('#include <project_vertex>',`#include <project_vertex>
         vec4 wp4=vec4(transformed,1.);
@@ -80,7 +80,7 @@ function hookWorld(mat,o={}){
         #endif
         vWP=(modelMatrix*wp4).xyz;`+(o.fade?'vFade=aFade;':'')+(o.ground?'vTrail=aTrail;vMix=aMix;':''));
     let f=sh.fragmentShader.replace('#include <common>',`#include <common>
-      varying vec3 vWP;uniform sampler2D tCloud;uniform vec2 uCloudOff,uSunXZ;uniform float uCloudScale,uCloudAmt,uLeafGlow;`+(o.fade?'varying float vFade;':'')+(o.ground?'varying float vTrail;varying float vMix;uniform sampler2D tB,tC;uniform float uBRep,uCRep;uniform vec3 uTint;':'')+`
+      varying vec3 vWP;uniform sampler2D tCloud;uniform vec2 uCloudOff,uSunXZ;uniform float uCloudScale,uCloudAmt,uLeafGlow;`+(o.fade?'varying float vFade;':'')+(o.ground?'varying float vTrail;varying float vMix;uniform sampler2D tB,tC,tAN,tBN,tCN;uniform float uBRep,uCRep,uNStr;uniform vec3 uTint;':'')+`
       float cloudShade(){vec2 uv=(vWP.xz+vWP.y*uSunXZ)*uCloudScale+uCloudOff;float n=clamp((texture2D(tCloud,uv).r*.72+texture2D(tCloud,uv*2.3).r*.28-.2)/.36,0.,1.);
         return mix(1.,.4,smoothstep(.5,.78,n)*uCloudAmt);}`)
       .replace('getDirectionalLightInfo( directionalLight, directLight );','getDirectionalLightInfo( directionalLight, directLight );\ndirectLight.color*=cloudShade();');
@@ -93,6 +93,11 @@ function hookWorld(mat,o={}){
        vec3 cb=texture2D(tB,vWP.xz*uBRep).rgb,cc=texture2D(tC,vWP.xz*uCRep).rgb;
        vec3 c=mix(diffuseColor.rgb,cb,clamp(vMix,0.,1.));c=mix(c,cc,clamp(vTrail,0.,1.));
        diffuseColor.rgb=c*uTint*(.82+big*.36);}`);
+    /* ground bumps: the three ground normal maps blended like the colours, tilted into the terrain normal */
+    if(o.ground)f=f.replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
+      {vec3 nA=texture2D(tAN,vMapUv).xyz*2.-1.,nB=texture2D(tBN,vWP.xz*uBRep).xyz*2.-1.,nC=texture2D(tCN,vWP.xz*uCRep).xyz*2.-1.;
+       vec3 nn=mix(nA,nB,clamp(vMix,0.,1.));nn=mix(nn,nC,clamp(vTrail,0.,1.));
+       vec3 wn=(vec4(normal,0.)*viewMatrix).xyz;wn=normalize(wn+vec3(nn.x,0.,-nn.y)*uNStr);normal=normalize((viewMatrix*vec4(wn,0.)).xyz);}`);
     sh.fragmentShader=f;
   };
   mat.customProgramCacheKey=()=>'w'+(o.fade?1:0)+(o.leaf?1:0)+(o.ground?1:0);

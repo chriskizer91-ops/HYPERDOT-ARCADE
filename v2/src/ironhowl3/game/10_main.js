@@ -2,7 +2,7 @@
 let NIGHT_ON=false;
 const G={mode:'load',paused:false,t:0,fdt:1/60,birdT:6,perf:{t:0,n:0,s:0},demoI:1,demoHop:4,score:0,kills:0,combo:0,lastKill:-9,wave:0,hpK:1,breakT:3,downT:0};
 let M=null,CTLX=null;
-function setQuality(q){QL=q;QC=QUAL[q];DYN=1;resize();setShadow();S.fog.far=Math.min(QC.fog,LOOKNOW&&LOOKNOW.fogFar||1e9);S.fog.near=S.fog.far*.22;}
+function setQuality(q){QL=q;QC=QUAL[q];DYN=1;resize();setShadow();postSetup();S.fog.far=Math.min(QC.fog,LOOKNOW&&LOOKNOW.fogFar||1e9);S.fog.near=S.fog.far*.22;}
 function cycleView(){SET.view=SET.view==='close'?'far':'close';store.set('view',SET.view);HUD.view(SET.view);}
 function setPause(b){G.paused=b;HUD.menu();setVolume();if(!b&&!touchy&&G.mode==='play')lockMouse();if(b)jetLoop(0);}
 function clearFight(){for(const e of EN){S.remove(e.o);if(e.beam)S.remove(e.beam);}bossClearMarks();EN.length=0;BOLTS.length=EBOLTS.length=MISS.length=BEACONS.length=0;for(const p of PK)S.remove(p.g);PK.length=0;}
@@ -35,7 +35,7 @@ function jetFX(dt){if(P.thrust<.05)return;for(const J of M.jets){J.n.getWorldPos
   const k=P.thrust;if(Math.random()<k*dt*60)part({x:_np.x,y:_np.y-.4,z:_np.z,vx:(Math.random()-.5)*2,vy:-6-Math.random()*4,vz:(Math.random()-.5)*2,life:.25+Math.random()*.15,s0:.9,s1:.35,a:1.4*k,col:[1,.55,.22],glow:true,drag:2});
   if(Math.random()<k*dt*30)part({x:_np.x,y:_np.y-.6,z:_np.z,vx:(Math.random()-.5)*1.5,vy:-3-Math.random()*2,vz:(Math.random()-.5)*1.5,life:1.2+Math.random()*.8,s0:.8,s1:3.4,a:.3,col:SMOKE,drag:1.6,grav:-.6});}}
 function tick(dt){
-  G.t+=dt;U.uTime.value=G.t;if(MAPDEF.tick)MAPDEF.tick(dt);updRain(dt);updWeather(dt);if(G.mode==='play')updMarks(dt);if(RING)RING.position.set(cam.position.x,cam.position.y+RING.userData.lift,cam.position.z);
+  G.t+=dt;U.uTime.value=G.t;if(MAPDEF.tick)MAPDEF.tick(dt);updRain(dt);updWeather(dt);updShieldFx(dt);if(G.mode==='play')updMarks(dt);if(RING)RING.position.set(cam.position.x,cam.position.y+RING.userData.lift,cam.position.z);
   /* the clouds drift; their shadows slide over the ground with them */
   U.uCloudOff.value.x+=dt*.0016;U.uCloudOff.value.y+=dt*.0007;
   const live=(G.mode==='play'||G.mode==='demo')&&!G.paused;
@@ -52,7 +52,7 @@ function tick(dt){
   if(G.mode==='down'){G.downT-=dt;if(G.downT<=0&&$('down').style.display!=='flex'){$('down').style.display='flex';}
     if(Math.random()<dt*20)part({x:P.x+(Math.random()-.5)*2,y:P.y+1+Math.random()*2,z:P.z+(Math.random()-.5)*2,vx:0,vy:2.5,vz:0,life:2.4,s0:1.2,s1:5,a:.4,col:[.2,.2,.21],drag:.6,grav:-.5});}
   if(M){const ev=poseMech(M,{x:P.x,z:P.z,gy:P.y,legYaw:P.legYaw,aimYaw:P.yaw,spd:live?P.spd:0,air:P.air,vy:P.vy,land:P.land,thrust:P.thrust,pitch:P.pitch},live?dt:0);
-    for(const e of ev){const k=clamp(Math.abs(P.spd)/WALK,.35,1);sStep(k);if(e.x!==undefined)dustPuff(e.x,e.z,3,.55);if(SET.view==='close')CAMS.shake=Math.max(CAMS.shake,.16*k);}}
+    for(const e of ev){const k=clamp(Math.abs(P.spd)/WALK,.35,1);sStep(k);if(e.x!==undefined){dustPuff(e.x,e.z,3,.55);if(SOFT_GROUND())decal('print',e.x,e.z,1.9,(P.legYaw!=null?P.legYaw:P.yaw)+Math.PI);}if(SET.view==='close')CAMS.shake=Math.max(CAMS.shake,.16*k);}}
   const view=G.mode==='title'||G.mode==='demo'||G.mode==='down'?'far':SET.view;
   updCam(live||G.mode!=='play'?dt:0,P,view);
   placeSun(P.x-Math.sin(P.yaw)*12,P.z-Math.cos(P.yaw)*12);
@@ -71,15 +71,15 @@ function autoQ(dt){if(SET.quality!=='auto'||G.mode!=='play'||G.paused)return;con
 let last=performance.now();
 function frame(now){
   const raw=(now-last)/1000,dt=Math.min(.05,raw);last=now;G.fdt+=(raw-G.fdt)*.1;
-  tick(dt);autoQ(dt);R.render(S,cam);HUD.dev();requestAnimationFrame(frame);
+  tick(dt);autoQ(dt);renderFrame();HUD.dev();requestAnimationFrame(frame);
 }
 function boot(){
-  pickMap();setupHud();setQuality(QL);const LK=MISSION&&MISSION.look?Object.assign({},MAPDEF.look,MISSION.look):MAPDEF.look;NIGHT_ON=!!LK.night;applyLook(LK);setupTitle();U.tCloud.value=tex('34-fog',{srgb:false});
+  pickMap();setupHud();setQuality(QL);const LK=MISSION&&MISSION.look?Object.assign({},MAPDEF.look,MISSION.look):MAPDEF.look;NIGHT_ON=!!LK.night;applyLook(LK);buildEnv(LK);setupTitle();U.tCloud.value=tex('34-fog',{srgb:false});
   buildGround();const before=new Set(S.children);MAPDEF.build();mergeStatic(before);M=buildMech();buildFX();buildWeapons();P=mkPlayer();
   const done=()=>{G.mode=G.mode==='load'?'title':G.mode;$('load').style.display='none';$('title').style.display=G.mode==='title'?'flex':'none';document.title='IRONHOWL 3';ARC.post('ready',{title:ARC.title});};
   let vegDone=false,texDone=false;LM.onLoad=()=>{texDone=true;if(vegDone)done();};
   if(LK.rain)buildRain();
-  Promise.all([loadVeg(MAPDEF.mix),loadEnemies().then(loadSet6)]).then(()=>{buildWeather(LK);navInit();navBuild();vegDone=true;if(texDone||LOADP>=1)done();});
+  Promise.all([loadVeg(MAPDEF.mix),loadEnemies().then(loadSet6)]).then(()=>{buildWeather(LK);envAll();navInit();navBuild();vegDone=true;if(texDone||LOADP>=1)done();});
   requestAnimationFrame(frame);
 }
 $('title').addEventListener('click',()=>{if(G.mode==='title')startPlay();});

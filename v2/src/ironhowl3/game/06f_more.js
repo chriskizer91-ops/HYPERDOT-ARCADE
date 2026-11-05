@@ -9,8 +9,8 @@ function loadSet6(){const L=new THREE.GLTFLoader(LM),get=f=>new Promise(ok=>L.lo
       t.traverse(o=>{if(o.isMesh){const n=o.material.name;o.material=n==='red'?red:MT[MECH_MAT[n]||n]||MT.gun;o.castShadow=n!=='eye'&&n!=='glow'&&n!=='red';o.receiveShadow=true;}});mergeParts(t,o=>/^(ty|hub)\d/.test(o.name));TRUCK_TPL=t;}
     if(b){/* the boss gets lighter, less metallic armour than the small machines so its shape reads from far away, and a deeper red so the knees read as red */
       const k=m=>{m.vertexColors=true;return hookWorld(m);};
-      BMAT.egrey=k(new THREE.MeshStandardMaterial({map:tex('54-forge-armour'),color:0xc4b8b4,roughness:.55,metalness:.25}));
-      BMAT.egun=k(new THREE.MeshStandardMaterial({map:tex('24-gunmetal'),color:0x9a9ea6,roughness:.45,metalness:.45}));
+      BMAT.egrey=k(new THREE.MeshStandardMaterial({map:tex('54-forge-armour'),normalMap:nmap('54-forge-armour'),normalScale:new THREE.Vector2(nmapK('54-forge-armour'),nmapK('54-forge-armour')),color:0xc4b8b4,roughness:.55,metalness:.25}));
+      BMAT.egun=k(new THREE.MeshStandardMaterial({map:tex('24-gunmetal'),normalMap:nmap('24-gunmetal'),normalScale:new THREE.Vector2(nmapK('24-gunmetal'),nmapK('24-gunmetal')),color:0x9a9ea6,roughness:.45,metalness:.45}));
       BMAT.edark=k(new THREE.MeshStandardMaterial({color:0x34363a,roughness:.65,metalness:.35}));BMAT.esteel=MT.steel;BMAT.emblem=EMAT.emblem;
       BMAT.ered=new THREE.MeshBasicMaterial({color:new THREE.Color(1,.08,.03).multiplyScalar(1.5)});
       if(NIGHT_ON){BMAT.egrey.emissive.setRGB(.035,.025,.02);BMAT.egun.emissive.setRGB(.025,.02,.02);}   /* at night the bosses keep a faint glow so their shape reads */

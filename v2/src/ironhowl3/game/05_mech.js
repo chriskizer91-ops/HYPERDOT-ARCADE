@@ -5,10 +5,10 @@
 const MT={};
 function mechMats(){
   const k=(a)=>{a.vertexColors=true;return hookWorld(a);};
-  MT.org=k(new THREE.MeshStandardMaterial({map:tex('22-howler-armour'),roughness:.46,metalness:.35}));
-  MT.grey=k(new THREE.MeshStandardMaterial({map:tex('23-grey-armour'),roughness:.5,metalness:.45}));
-  MT.gun=k(new THREE.MeshStandardMaterial({map:tex('24-gunmetal'),color:0xb4bac4,roughness:.44,metalness:.72}));
-  MT.steel=k(new THREE.MeshStandardMaterial({map:tex('25-brushed-steel'),roughness:.28,metalness:.92}));
+  MT.org=k(new THREE.MeshStandardMaterial({map:tex('22-howler-armour'),normalMap:nmap('22-howler-armour'),normalScale:new THREE.Vector2(nmapK('22-howler-armour'),nmapK('22-howler-armour')),roughness:.46,metalness:.35}));
+  MT.grey=k(new THREE.MeshStandardMaterial({map:tex('23-grey-armour'),normalMap:nmap('23-grey-armour'),normalScale:new THREE.Vector2(nmapK('23-grey-armour'),nmapK('23-grey-armour')),roughness:.5,metalness:.45}));
+  MT.gun=k(new THREE.MeshStandardMaterial({map:tex('24-gunmetal'),normalMap:nmap('24-gunmetal'),normalScale:new THREE.Vector2(nmapK('24-gunmetal'),nmapK('24-gunmetal')),color:0xb4bac4,roughness:.44,metalness:.72}));
+  MT.steel=k(new THREE.MeshStandardMaterial({map:tex('25-brushed-steel'),normalMap:nmap('25-brushed-steel'),normalScale:new THREE.Vector2(.6,.6),roughness:.28,metalness:.92}));
   MT.trim=k(new THREE.MeshStandardMaterial({map:tex('26-hazard-trim'),roughness:.6,metalness:.2}));
   MT.dark=k(new THREE.MeshStandardMaterial({color:0x1a1c20,roughness:.68,metalness:.55}));
   MT.glass=k(new THREE.MeshStandardMaterial({color:0x0a0e14,roughness:.12,metalness:.6}));

@@ -17,7 +17,7 @@ function buildGround(){
   for(let i=0;i<p.count;i++){const x=p.getX(i),z=p.getZ(i);p.setY(i,hgt(x,z));const w=G_.w(x,z);mx[i]=w[0];tr[i]=w[1];}
   g.setAttribute('aTrail',new THREE.BufferAttribute(tr,1));g.setAttribute('aMix',new THREE.BufferAttribute(mx,1));g.computeVertexNormals();
   const m=hookWorld(new THREE.MeshStandardMaterial({map:tex(G_.a,{rep:WORLD*2/G_.ar}),roughness:G_.rough||.96,metalness:0}),
-    {ground:{tB:tex(G_.b),tC:tex(G_.c),bRep:1/G_.br,cRep:1/G_.cr,tint:G_.tint||[1,1,1]}});
+    {ground:{tB:tex(G_.b),tC:tex(G_.c),bRep:1/G_.br,cRep:1/G_.cr,tint:G_.tint||[1,1,1],nA:nmap(G_.a,{rep:[WORLD*2/G_.ar,WORLD*2/G_.ar]}),nB:nmap(G_.b),nC:nmap(G_.c)}});
   const mesh=new THREE.Mesh(g,m);mesh.receiveShadow=true;S.add(mesh);return mesh;
 }
 /* a road or trail draped over the ground, textured along its length, soft at the edges */

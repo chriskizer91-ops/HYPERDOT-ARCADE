@@ -7,8 +7,8 @@ const EN=[],EMAT={},ETPL={};
 let ENEMY_READY=false;
 function loadEnemies(){
   const k=a=>{a.vertexColors=true;return hookWorld(a);};
-  EMAT.egrey=k(new THREE.MeshStandardMaterial({map:tex('23-grey-armour'),color:0x9c8884,roughness:.5,metalness:.45}));
-  EMAT.egun=k(new THREE.MeshStandardMaterial({map:tex('24-gunmetal'),color:0x6c7078,roughness:.45,metalness:.7}));
+  EMAT.egrey=k(new THREE.MeshStandardMaterial({map:tex('23-grey-armour'),normalMap:nmap('23-grey-armour'),normalScale:new THREE.Vector2(nmapK('23-grey-armour'),nmapK('23-grey-armour')),color:0x9c8884,roughness:.5,metalness:.45}));
+  EMAT.egun=k(new THREE.MeshStandardMaterial({map:tex('24-gunmetal'),normalMap:nmap('24-gunmetal'),normalScale:new THREE.Vector2(nmapK('24-gunmetal'),nmapK('24-gunmetal')),color:0x6c7078,roughness:.45,metalness:.7}));
   EMAT.edark=k(new THREE.MeshStandardMaterial({color:0x121316,roughness:.7,metalness:.4}));
   EMAT.esteel=MT.steel;
   EMAT.ered=new THREE.MeshBasicMaterial({color:new THREE.Color(1,.12,.05).multiplyScalar(2.2)});
@@ -84,7 +84,7 @@ function killEnemy(e){e.dead=true;S.remove(e.o);if(e.beam)S.remove(e.beam);e.mat
   if(Math.random()<e.d.drop)dropPickup(e.x,e.z,Math.random()<(e.d.chip||(e.id==='gunner'?.55:0))?'chip':null);
 }
 function hurtPlayer(dmg,fx,fz){if(P.dead||G.mode!=='play'&&G.mode!=='demo')return;dmg*=DIFF.dmg;P.regenT=P.regenDelay||3;
-  const s=Math.min(P.shield,dmg);P.shield-=s;dmg-=s;if(s>0){sShield();HUD.hit(fx,fz,'s');}
+  const s=Math.min(P.shield,dmg);P.shield-=s;dmg-=s;if(s>0){sShield();shieldFlash();HUD.hit(fx,fz,'s');}
   if(dmg>0){P.hull-=dmg;sHurt();HUD.hit(fx,fz,'h');CAMS.shake=Math.max(CAMS.shake,.3+dmg*.02);}
   if(P.hull<=0){P.hull=0;playerDown();}}
 function addScore(n){G.score+=n;ARC.score(G.score);}

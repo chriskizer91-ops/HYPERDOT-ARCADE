@@ -1,8 +1,8 @@
 /* ===================== the three kinds of place: woods, field, docks =====================
    Each map gives: h(x,z) ground height, ground textures + weights, look (light, sky, fog), layout (plants), build (structures),
    spawn, trail (draped road), route (attract demo path), bounds (where the mech may walk). Pick one with ?map=woods|field|docks. */
-function tmat(name,o={}){const t=tex(name,{glb:o.glb});if(o.rep)t.repeat.set(o.rep[0],o.rep[1]);
-  return hookWorld(new THREE.MeshStandardMaterial({map:t,roughness:o.r==null?.8:o.r,metalness:o.m==null?.1:o.m,color:o.col==null?0xffffff:o.col,
+function tmat(name,o={}){const t=tex(name,{glb:o.glb});if(o.rep)t.repeat.set(o.rep[0],o.rep[1]);const nm=o.alpha?null:nmap(name,{glb:o.glb,rep:o.rep});
+  return hookWorld(new THREE.MeshStandardMaterial({normalMap:nm,normalScale:new THREE.Vector2(o.nk||1,o.nk||1),map:t,roughness:o.r==null?.8:o.r,metalness:o.m==null?.1:o.m,color:o.col==null?0xffffff:o.col,
     transparent:!!o.alpha,alphaTest:o.alpha?.45:0,side:o.ds?THREE.DoubleSide:THREE.FrontSide}));}
 /* box geometry whose faces [+x,-x,+y,-y,+z,-z] repeat their texture every [u,v] metres (0 = stretch once) */
 function sbox(w,h,d,reps){const g=new THREE.BoxGeometry(w,h,d);if(!reps)return g;const uv=g.attributes.uv,dims=[[d,h],[d,h],[w,d],[w,d],[w,h],[w,h]];

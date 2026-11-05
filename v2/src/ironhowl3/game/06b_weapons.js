@@ -54,7 +54,7 @@ function salvoRound(i){
   else{const a=P.yaw+i/SALVO.n*TAU;tx=P.x-Math.sin(a)*14;tz=P.z-Math.cos(a)*14;ty=hgt(tx,tz);}
   let ax=tx-_w.x,ay=ty-_w.y,az=tz-_w.z;const l=Math.hypot(ax,ay,az)||1;ax/=l;ay/=l;az/=l;
   BOLTS.push({x:_w.x,y:_w.y,z:_w.z,vx:ax*170,vy:ay*170,vz:az*170,life:(l+8)/170,dmg:SALVO.dmg,tg});
-  part({x:_w.x+ax*.6,y:_w.y+ay*.6,z:_w.z+az*.6,vx:0,vy:0,vz:0,life:.07,s0:1.5,s1:.6,a:2.4,col:[1,.75,.4],glow:true});MFL.position.copy(_w);GUN.flash=1;sGun(2);
+  part({x:_w.x+ax*.6,y:_w.y+ay*.6,z:_w.z+az*.6,vx:0,vy:0,vz:0,life:.07,s0:1.5,s1:.6,a:1.6,col:[1,.75,.4],glow:true});part({x:_w.x+ax*.9,y:_w.y+ay*.9,z:_w.z+az*.9,vx:0,vy:0,vz:0,life:.06,s0:1.7,s1:2.3,a:1.4,col:[1,1,1],glow:true,img:2,vr:0});MFL.position.copy(_w);GUN.flash=1;sGun(2);
 }
 function updGun(c,dt){
   updSalvo(c,dt);
@@ -83,6 +83,7 @@ function updGun(c,dt){
   MFL.intensity=GUN.flash*90;
   /* vent: dump all heat with a steam blast that shoves close enemies back */
   if(c.vent&&GUN.ventCd<=0&&!P.dead){GUN.ventCd=GUN.ventCool||8;GUN.heat=0;GUN.over=false;sVent();CAMS.shake=Math.max(CAMS.shake,.35);
+    for(let i=0;i<10;i++){const a=Math.random()*TAU;part({x:P.x+Math.cos(a)*1.5,y:P.y+2+Math.random()*2,z:P.z+Math.sin(a)*1.5,vx:Math.cos(a)*3,vy:2+Math.random()*2,vz:Math.sin(a)*3,life:1.6,s0:2,s1:6,a:.8,col:[1,1,1],img:4,drag:1.5,grav:-.6});}
     for(let i=0;i<26;i++){const a=Math.random()*TAU,s=4+Math.random()*7;part({x:P.x+Math.cos(a)*1.2,y:P.y+1.5+Math.random()*2,z:P.z+Math.sin(a)*1.2,vx:Math.cos(a)*s,vy:.5+Math.random()*2,vz:Math.sin(a)*s,life:1.4+Math.random(),s0:1,s1:4.2,a:.4,col:[.92,.93,.95],drag:2.2,grav:-.4});}
     for(const e of EN){if(e.dead)continue;const dx=e.x-P.x,dz=e.z-P.z,d=Math.hypot(dx,dz)||1;if(d<10){hurtEnemy(e,15,e.x,e.y+1,e.z);e.kx+=dx/d*16*(1-d/12);e.kz+=dz/d*16*(1-d/12);}}}
   /* missiles: tap to fire a salvo at the enemies nearest the crosshair */
@@ -140,10 +141,12 @@ function drawShots(){
   n=0;for(const m of MISS){if(m.t<m.delay)continue;const l=Math.hypot(m.vx,m.vy,m.vz)||1;_v.set(m.vx/l,m.vy/l,m.vz/l);_q.setFromUnitVectors(_z,_v);_m4.compose(_w.set(m.x,m.y,m.z),_q,V3(1,1,1));MSM.setMatrixAt(n++,_m4);}
   MSM.count=n;MSM.instanceMatrix.needsUpdate=true;MSM.visible=n>0;
 }
-function sparks(x,y,z,n,col){for(let i=0;i<n;i++){const a=Math.random()*TAU,b=Math.random()*2-1,s=4+Math.random()*7;
+function sparks(x,y,z,n,col){if(n>2)part({x,y,z,vx:0,vy:0,vz:0,life:.14,s0:.7,s1:1.6,a:1.3,col:[1,1,1],glow:true,img:3});for(let i=0;i<n;i++){const a=Math.random()*TAU,b=Math.random()*2-1,s=4+Math.random()*7;
   part({x,y,z,vx:Math.cos(a)*s*Math.sqrt(1-b*b),vy:b*s+2,vz:Math.sin(a)*s*Math.sqrt(1-b*b),life:.25+Math.random()*.25,s0:.22,s1:.06,a:2,col,glow:true,drag:2,grav:12});}}
 function boom(x,y,z,k){sBoom(k);CAMS.shake=Math.max(CAMS.shake,Math.min(.9,.7*k*12/Math.max(6,Math.hypot(x-P.x,z-P.z))));
-  part({x,y,z,vx:0,vy:0,vz:0,life:.35,s0:4*k,s1:7*k,a:2.4,col:[1,.62,.28],glow:true});
+  part({x,y,z,vx:0,vy:0,vz:0,life:.35,s0:4*k,s1:7*k,a:1.6,col:[1,.62,.28],glow:true});
+  for(let i=0;i<2;i++)part({x:x+(Math.random()-.5)*k,y:y+.3*i,z:z+(Math.random()-.5)*k,vx:0,vy:1.2,vz:0,life:.5+i*.15,s0:2.6*k,s1:(7.5+i*2)*k,a:1.5,col:[1,1,1],glow:true,img:i,vr:(Math.random()-.5)*2});
+  if(y-hgt(x,z)<3.5)decal('scorch',x,z,(2.4+Math.random()*1.4)*Math.max(.8,k)*1.5,Math.random()*TAU);
   for(let i=0;i<10*k;i++){const a=Math.random()*TAU,s=2+Math.random()*5*k;part({x,y,z,vx:Math.cos(a)*s,vy:1+Math.random()*4,vz:Math.sin(a)*s,life:1.4+Math.random(),s0:1.2*k,s1:4.4*k,a:.45,col:[.32,.3,.29],drag:1.8,grav:-.6});}
   sparks(x,y,z,10*k,[1,.62,.25]);MFL.position.set(x,y+1,z);GUN.flash=Math.max(GUN.flash,1.4*k);}
 function splash(x,y,z,r,dmg){for(const t of TARGETS){if(t.dead)continue;const s=t.spheres[0];if(Math.hypot(s[0]-x,s[1]-y,s[2]-z)<r+s[3]+2)hurtTarget(t,dmg);}for(const e of EN){if(e.dead||e.spawnT>0)continue;const d=Math.hypot(e.x-x,e.y+e.d.cy-y,e.z-z);if(d<r+e.d.r)hurtEnemy(e,dmg*(1-.5*clamp(d/r,0,1)),e.x,e.y+e.d.cy,e.z);}}
