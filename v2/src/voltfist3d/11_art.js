@@ -38,7 +38,7 @@ function artFit(def){
   A.kh=hH/(hd.front.chin-hd.front.top);A.chinL=-.72*b.headR*h*(def.look.headK||1);
   /* the coarse relief grid (256 x 256, 128 = flat) */
   const raw=atob(m.disp),D=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)D[i]=raw.charCodeAt(i);A.disp=D;
-  A.det=Q().id==='low'?.6:1;
+  A.det=Q().id==='low'?.6:1;A.hb=(ARTFX[def.id]||{}).hb||[.14,.42];
   /* the limbs' landmarks: origin, end, model length, centre-offset key */
   const rs=h*b.bulk,LB={};
   for(const [s,sd] of [['R','F'],['L','N']]){
@@ -54,7 +54,7 @@ function projUV(A,part,p,n){
   const m=A.m,F=A.F,B=A.B,hd=m.head,px=p[0],py=p[1],pz=p[2];
   if(part===P_HEAD||part===P_EYE0||part===P_EYE1){
     const s1=hd.front.s/A.kh,s2=hd.side.s/A.kh,c=n[0]/Math.sqrt(n[0]*n[0]+n[2]*n[2]+1e-6);
-    return [hd.front.o[0]-pz*s1,hd.front.o[1]-(py-A.chinL)*s1,hd.side.o[0]+px*s2,hd.side.o[1]-(py-A.chinL)*s2,1-smoothstep(.6,.86,c)];}
+    return [hd.front.o[0]-pz*s1,hd.front.o[1]-(py-A.chinL)*s1,hd.side.o[0]+px*s2,hd.side.o[1]-(py-A.chinL)*s2,1-smoothstep(A.hb[0],A.hb[1],c)];}
   const wb=smoothstep(.28,-.28,n[0]),o=[0,0,0,0,wb];
   for(let v=0;v<2;v++){const V=v?B:F,lat=(v?A.kB:1)/A.sF,vs=v?A.kB:1;let x,y;
     if(part===P_TORSO){x=V.W[0]-pz*lat;y=V.W[1]-py*vs*(F.W[1]-F.N[1])/A.lT;}
@@ -126,10 +126,14 @@ function artBody(def,G,A){
   /* head: front width and side depth from the face sheet; below the eyes it narrows to the jaw */
   let hf=m.head.front.rows.map(r=>r.slice()),hs=m.head.side.rows.map(r=>r.slice());const kh=A.kh,nr=hf.length;
   const iRef=Math.round(nr*.5),wRef=hf[iRef][1],bRef=hs[iRef][2],fRef=hs[iRef][1];
-  for(let i=iRef;i<nr;i++){const u=(i-iRef)/(nr-1-iRef);hf[i][1]=Math.min(hf[i][1],wRef*(1-.3*u*u));hs[i][2]=Math.min(hs[i][2],bRef*(1-.25*u));hs[i][1]=Math.min(hs[i][1],fRef*1.05);}
-  for(let pass=0;pass<2;pass++)for(let i=1;i<nr-1;i++){hf[i][1]=(hf[i-1][1]+hf[i][1]*2+hf[i+1][1])/4;for(const j of [1,2])hs[i][j]=(hs[i-1][j]+hs[i][j]*2+hs[i+1][j])/4;}
+  for(let i=iRef;i<nr;i++){const u=(i-iRef)/(nr-1-iRef);hf[i][1]=lerp(Math.min(hf[i][1],wRef),wRef*(1-.38*u*u),.85);hs[i][2]=Math.min(hs[i][2],bRef*(1-.25*u));hs[i][1]=Math.min(hs[i][1],fRef*1.08);}
+  for(let pass=0;pass<3;pass++)for(let i=1;i<nr-1;i++){hf[i][1]=(hf[i-1][1]+hf[i][1]*2+hf[i+1][1])/4;hs[i][2]=(hs[i-1][2]+hs[i][2]*2+hs[i+1][2])/4;}
+  /* the face's own profile (brow, nose, lips, chin) stands out of a smooth front only along the middle */
+  const frS=hs.map(r=>r[1]),base=frS.map((v,i)=>{let s=0,c=0;for(let k=-6;k<=6;k++){const j=clamp(i+k,0,nr-1);s+=frS[j];c++;}return s/c;});
+  const bumpF=frS.map((v,i)=>Math.max(0,v-base[i]));for(let i=0;i<nr;i++)hs[i][1]=base[i];
+  const faceBump=(i,cx,cz)=>{const k=Math.round(i*(nr-1)/Math.max(1,hf.length-1));return k>nr*.35?bumpF[k]*kh*Math.max(0,cx)*Math.exp(-(cz*cz)/(.03)):0;};
   if(det<1){hf=resample(hf,Math.round(nr*det));hs=resample(hs,Math.round(nr*det));}
-  gbHull(G,P_HEAD,hf.map(r=>A.chinL+(m.head.front.chin-r[0])*kh),(i,cx,cz)=>sell(cx,cz,(cx>=0?hs[i][1]:hs[i][2])*kh,hf[i][1]*kh,2.1),{seg:80,ol:.7,A,amp:.004});
+  gbHull(G,P_HEAD,hf.map(r=>A.chinL+(m.head.front.chin-r[0])*kh),(i,cx,cz)=>sell(cx,cz,(cx>=0?hs[i][1]:hs[i][2])*kh,hf[i][1]*kh,2.1)+faceBump(i,cx,cz),{seg:80,ol:.7,A,amp:.003});
   /* Kai's spikes stand out of his hair in 3D, painted from the same face sheet */
   const L=def.look;
   if(L.hairStyle==='spikes'&&L.spikes){const hr=(hf[Math.round(hf.length*.3)][1]*kh)/1.06,fan=[[-1.05,.74],[-.55,.9],[0,1],[.55,.9],[1.05,.74]];

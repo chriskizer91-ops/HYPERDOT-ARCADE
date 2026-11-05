@@ -88,7 +88,7 @@ const OK=k=>ed(k,'P')||ed(k,'start'),BACK=k=>ed(k,'K');
 /* ---------- puppets: fighters shown outside a fight (select, VS, endings) ---------- */
 const PUP={};
 function puppet(id,face,tag){const k=id+face+(tag||'');let p=PUP[k];if(!p){const def=ROSTER[id];p={def,x:0,y:0,face,state:'idle',hurtT:0,tp:P(def.st.S0),J:{},Jr:null,clock:0,chains:mkChains(def)};p.Jr=p.J;PUP[k]=p;solve(p.tp,def.body,p.J);}return p;}
-function animPuppet(p,pose,bob){p.clock++;cpPose(pose||p.def.st.S0,p.tp);const b=Math.sin(p.clock*.085);p.tp.hy-=.012*(1+b)*.5*(bob??1);p.tp.an[1]+=.012*b;solve(p.tp,p.def.body,p.J);FRAMET++;for(const ch of p.chains)updChain(ch,p);}
+function animPuppet(p,pose,bob){p.clock++;cpPose(pose||altS0(p.def)||p.def.st.S0,p.tp);const b=Math.sin(p.clock*.085);p.tp.hy-=.012*(1+b)*.5*(bob??1);p.tp.an[1]+=.012*b;solve(p.tp,p.def.body,p.J);FRAMET++;for(const ch of p.chains)updChain(ch,p);}
 
 /* ===================== the LED-dot overlay: HUD, menus, text =====================
    Everything here draws into the OW x OH dot grid with the original's bitmap fonts; the final pass shows it as LEDs.

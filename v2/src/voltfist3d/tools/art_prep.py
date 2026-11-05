@@ -167,6 +167,16 @@ def main():
         cf = Fc[:, ff[0][0]:ff[0][1] + 1]; mcf = mC[:, ff[0][0]:ff[0][1] + 1]
         cs = Fc[:, ff[1][0]:ff[1][1] + 1]; mcs = mC[:, ff[1][0]:ff[1][1] + 1]
         if HEAD_SIDE_FACE[fid] < 0: cs = cs[:, ::-1]; mcs = mcs[:, ::-1]
+        if fid == 'kai':
+            # his headband tails hang beside his cheeks in the face-front picture: take them out, so the cheeks
+            # get skin colour instead of white cloth (the tails are cloth chains in the game anyway)
+            ys_, xs_ = np.where(mcf); t0, t1 = ys_.min(), ys_.max(); hsv = cv2.cvtColor(cf, cv2.COLOR_RGB2HSV)
+            cxm = (xs_.min() + xs_.max()) / 2; wm = xs_.max() - xs_.min()
+            yy, xx = np.mgrid[0:mcf.shape[0], 0:mcf.shape[1]]
+            white = (hsv[..., 1] < 50) & (hsv[..., 2] > 150)
+            tails = white & (yy > t0 + 0.42 * (t1 - t0)) & (np.abs(xx - cxm) > 0.2 * wm)
+            tails = cv2.dilate(tails.astype(np.uint8), np.ones((9, 9), np.uint8)) > 0
+            mcf = mcf & ~tails
         # ---- measurements in front-T-pose pixels ----
         lim = int(0.14 * Hf); TS = [i / 30 for i in range(31)]
         meas = {}

@@ -27,10 +27,36 @@ function showActor(A,o){
   A.U.uDimF.value=o.dim??1;
   const au=o.aura;A.U.uAura.value.set(au?au[0]:0,au?au[1]:0,au?au[2]:0,au?au[3]:0);
 }
+/* ---------- standing poses: a better-looking stance for each fighter while they stand still (looks only; the fight's
+   own skeleton, hit boxes and timing are untouched). The pose blends in and out over a few frames. ---------- */
+const POSEALT={
+  kai:{A:{hy:.78,lean:4,head:-2,an:[.42,1.42],af:[.14,1.26],ln:[.28,0],lf:[-.3,0]},B:{hy:.77,lean:10,head:-8,an:[.32,1.47],af:[.18,1.45],ln:[.26,0],lf:[-.28,0]}},
+  runa:{A:{hy:.72,lean:12,head:-6,an:[.4,1.3],af:[.14,1.22],ln:[.34,0],lf:[-.34,0]},B:{hy:.7,lean:18,head:-12,an:[.52,1.12],af:[-.02,1.34],ln:[.36,0],lf:[-.34,0]}},
+  magnus:{A:{hy:.75,lean:8,head:-2,an:[.4,1.3],af:[.24,1.24],ln:[.34,0],lf:[-.36,0]},B:{hy:.78,lean:5,head:3,an:[.34,1.42],af:[.2,1.4],ln:[.3,0],lf:[-.32,0]}},
+  nova:{A:{hy:.84,lean:0,head:0,an:[.42,1.24],af:[.1,1.02],ln:[.16,0],lf:[-.2,0]},B:{hy:.86,lean:-2,head:4,an:[.3,1.4],af:[-.04,1.36],ln:[.14,0],lf:[-.18,0]}},
+  echo:{A:{hy:.79,lean:6,head:-2,an:[.44,1.36],af:[.18,1.3],ln:[.28,0],lf:[-.3,0]},B:{hy:.76,lean:12,head:-10,an:[.36,1.48],af:[.2,1.46],ln:[.3,0],lf:[-.32,0]}}};
+const POSEPICK={kai:null,runa:'B',magnus:'A',nova:'A',echo:'A'};   /* Christopher's picks: Kai keeps his own stance */
+const ALTS0={};
+function altS0(def){const k=POSEPICK[def.id],o=k&&POSEALT[def.id]&&POSEALT[def.id][k];if(!o)return null;const key=def.id+k;return ALTS0[key]||(ALTS0[key]=P(def.st.S0,o));}
+const _altP={},_altJ={};
+function altPose(F,A,I,dt){
+  const s0=altS0(F.def),want=s0&&F.state==='idle'&&!F.air?1:0;
+  A.pw=lerp(A.pw||0,want,Math.min(1,dt*10));if(!s0||A.pw<.01)return I;
+  const t=FRAMET/60+F.side*1.7,br=Math.sin(t*2.2);
+  cpPose(s0,_altP);_altP.hy-=.006*(1+br)*.5;_altP.an[1]+=.01*br;_altP.af[1]+=.01*br;
+  const Ja=solve(_altP,F.def.body,{}),w=A.pw,J=A._jb||(A._jb={});
+  for(const k in I.J){const a=I.J[k],b=Ja[k];if(a&&b&&typeof a!=='number'&&a.length===2){const d=J[k]||(J[k]=[0,0]);d[0]=a[0]+(b[0]-a[0])*w;d[1]=a[1]+(b[1]-a[1])*w;}else J[k]=a;}
+  for(const k of ['dir','q','hu','hfw']){const d=J[k];if(d){const l=Math.hypot(d[0],d[1])||1;d[0]/=l;d[1]/=l;}}
+  /* the cloth hangs from the moved body: shift each chain by how far its anchor moved */
+  const chains=I.chains.map((c,i)=>{const o=F.def.chains&&F.def.chains[i];if(!c||!c.p||!o)return c;
+    const a0=anchorL(o.anchor,I.J),a1=anchorL(o.anchor,J),dx=(a1[0]-a0[0])*F.face,dy=a1[1]-a0[1];
+    return {p:c.p.map(q=>[q[0]+dx,q[1]+dy])};});
+  return {x:I.x,y:I.y,J,chains};
+}
 function drawFighters(al,dt){
   for(const A of ACTORS)for(const gh of A.ghosts)gh.m.visible=false;
   for(const F of FIGHT.f){
-    const A=actorFor('f'+F.side,F.def),I=interpActor(F,al);
+    const A=actorFor('f'+F.side,F.def),I=altPose(F,A,interpActor(F,al),dt);
     if(F.hidden){A.grp.visible=false;continue;}
     let yaw=0;const m=F.move;
     if(F.state==='attack'&&m&&m.spin&&F.mf>=m.spin[0]&&F.mf<=m.spin[1])yaw=-(F.mf-m.spin[0]+al)*TAU/11*F.face;
