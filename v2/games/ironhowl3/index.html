@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>IRONHOWL 3</title>
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden;color:#fff;font:700 13px/1.2 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;letter-spacing:.08em;
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:none}
+canvas{position:fixed;left:0;top:0;display:block}
+.ov{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center}
+#load{display:flex;background:#000}
+#load .bar{width:min(260px,60vw);height:4px;background:#ffffff1f;border-radius:2px;overflow:hidden}#ldbar{height:100%;width:0;background:#ffb347;transition:width .2s}
+.logo{font-size:clamp(34px,9vw,64px);letter-spacing:.14em;color:#ffb347;text-shadow:0 0 24px #ff8a1a88}
+.sub{color:#ffffffaa;font-size:12px;letter-spacing:.22em}
+#title{background:linear-gradient(#0008,#0003 40%,#0008);cursor:pointer}
+#title .go{margin-top:18px;color:#fff;animation:bl 1.4s infinite}@keyframes bl{50%{opacity:.35}}
+#title .keys{color:#ffffff88;font-size:11px;max-width:86vw;line-height:1.7}
+.touch #title .keys.desk,#title .keys.tch{display:none}.touch #title .keys.tch{display:block}
+#top{position:fixed;left:0;right:0;top:0;display:flex;justify-content:space-between;align-items:flex-start;padding:max(10px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) 0 max(12px,env(safe-area-inset-left));pointer-events:none}
+#fuel{display:flex;gap:5px;align-items:center}#fuel:before{content:"JETS";color:#ffffffb0;font-size:11px;margin-right:4px}
+#fuel i{display:block;width:30px;height:9px;border-radius:3px;background:#ffffff26;overflow:hidden}#fuel b{display:block;height:100%;width:0;background:#9cd2ff}
+#fuel i.full b{background:#d9efff;box-shadow:0 0 8px #9cd2ff}
+#fuel.no i{animation:no .5s}@keyframes no{30%{background:#ff3b30aa}}
+.btns{display:flex;gap:8px;pointer-events:auto}
+button{font:inherit;color:#ffb347;background:#0009;border:1px solid #ffb34755;border-radius:9px;padding:8px 11px;cursor:pointer}
+button:active{background:#ffb34733}
+#cross{position:fixed;left:50%;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px;border:2px solid #ffffffb0;border-radius:50%;pointer-events:none;box-shadow:0 0 4px #000a}
+#cross:after{content:"";position:absolute;left:50%;top:50%;width:3px;height:3px;margin:-1.5px;background:#ffb347;border-radius:50%}
+#bjet{display:none;position:fixed;right:max(22px,env(safe-area-inset-right));bottom:max(26px,env(safe-area-inset-bottom));width:84px;height:84px;border-radius:50%;
+  color:#d9efff;border:2px solid #9cd2ff88;background:#0a1a2a99;font-size:15px}
+#bjet.on{background:#9cd2ff55}.touch #bjet{display:block}
+#stick{display:none;position:fixed;width:116px;height:116px;margin:-58px 0 0 -58px;border-radius:50%;border:2px solid #ffffff33;background:#ffffff0d;pointer-events:none}
+#knob{position:absolute;left:33px;top:33px;width:50px;height:50px;border-radius:50%;background:#ffffff40}
+#hint{position:fixed;left:0;right:0;top:calc(max(10px,env(safe-area-inset-top)) + 46px);text-align:center;color:#ffffffcc;font-size:11px;opacity:0;transition:opacity .8s;pointer-events:none;padding:0 16px;text-shadow:0 1px 3px #000}
+#menu{background:#000b;z-index:5}#menu button{width:min(280px,76vw);padding:13px;font-size:14px}
+#dev{position:fixed;left:12px;top:40px;font:11px monospace;color:#7f7;pointer-events:none;text-shadow:0 0 3px #000}
+</style></head><body>
+<canvas id="gl"></canvas>
+<div id="top"><div id="fuel"></div><div class="btns"><button id="bview">CLOSE</button><button id="bpause">II</button></div></div>
+<div id="cross"></div>
+<button id="bjet">JET</button>
+<div id="stick"><div id="knob"></div></div>
+<div id="hint"></div>
+<div id="dev"></div>
+<div id="menu" class="ov"><div class="sub">PAUSED</div><button id="mresume">RESUME</button><button id="mview"></button><button id="mqual"></button><button id="msound"></button><button id="msens"></button><button id="mexit">EXIT</button></div>
+<div id="title" class="ov"><div class="logo">IRONHOWL 3</div><div class="sub">WOODS TEST · ENGINE PREVIEW</div>
+  <div class="go"><span class="desk-go">CLICK OR TAP TO START</span></div>
+  <div class="keys desk">WASD MOVE · MOUSE AIM · SPACE JET HOP (HOLD FOR LONGER) · V CAMERA</div>
+  <div class="keys tch">LEFT THUMB MOVES · RIGHT THUMB AIMS · JET TO HOP · PLAY SIDEWAYS FOR THE BEST VIEW</div></div>
+<div id="load" class="ov"><div class="logo">IRONHOWL 3</div><div class="bar"><div id="ldbar"></div></div></div>
+<script src="js/three-ih3.min.js"></script>
+<script src="js/ironhowl3.js"></script>
+</body></html>

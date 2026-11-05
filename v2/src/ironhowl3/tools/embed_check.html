@@ -1,0 +1,5 @@
+<!doctype html><html><body style="margin:0;background:#111">
+<iframe id="f" src="../../../games/ironhowl3/index.html?embed=1&dev&noaa" style="width:800px;height:450px;border:0"></iframe>
+<script>window.LOG=[];addEventListener('message',e=>{if(e.data&&e.data.src==='hyperdot')LOG.push(e.data.type+(e.data.id?':'+e.data.id:''));});
+function send(cmd){document.getElementById('f').contentWindow.postMessage({src:'hyperdot-arcade',cmd},'*');}
+function inner(){return document.getElementById('f').contentWindow.__ih3;}</script></body></html>

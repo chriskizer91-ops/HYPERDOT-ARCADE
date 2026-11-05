@@ -1,6 +1,6 @@
 # IRONHOWL 3 — design plan
 
-*Version 1 · 5 Nov 2026 · designer: Claude, for Christopher (Hyperdot Arcade)*
+*Version 1.1 · 5 Nov 2026 · designer: Claude, for Christopher (Hyperdot Arcade)*
 
 Ironhowl 3 is a new game in the Ironhowl series, not a patch on Ironhowl 3D. You pilot one big mech, seen from behind, across 12 missions with checkpoints, upgrades between missions, and three kinds of places that take turns: **open fields**, **crowded docks**, and **woods**.
 
@@ -169,7 +169,7 @@ New for Ironhowl 3:
 - a loading screen with a progress bar
 - a hangar screen
 
-**Phone budget (Pixel 7a, Medium):** under 250k triangles and about 120 draw calls on screen, and the first mission under 6 MB to download. High quality is for laptops.
+**Phone budget (Pixel 7a, Medium):** about 400k triangles (shadows included) and about 150 draw calls on screen, as measured in session 2, and the first mission under 6 MB to download. High quality is for laptops.
 
 **Files:** the game lives in its own folder, `v2/games/ironhowl3/` (the page plus `art/`, `models/` and `js/`). Source and tools live in `v2/src/ironhowl3/`. Nothing else in the repo is touched.
 
@@ -180,7 +180,7 @@ Each session ends with something playable at the same link, so progress can be s
 | Session | What gets built | What you can try at the end |
 |---|---|---|
 | 1 ✅ | Art and models processed and stored, this plan | The art sheet and the woods preview |
-| 2 | Engine core: folder game, terrain, both cameras, walking, jet hops, phone and laptop controls, a woods test map with the forest pack | Walk and hop around a real woods, switch cameras |
+| 2 ✅ | Engine core: folder game, terrain, both cameras, walking, jet hops, phone and laptop controls, a woods test map with the forest pack | Walk and hop around a real woods, switch cameras |
 | 3 | Combat core: gun tiers I–IV, heat and vent, shields, missiles with lock-on, Skitter, Gunner and Hound, pickups, path-finding | A woods sandbox fight |
 | 4 | Places: field (sun, cloud shadows, wind), docks (container stacks, cranes, water, neon, rain), woods polish (see-through canopy, light shafts) | One test map of each kind |
 | 5 | Missions: objectives, fight zones, checkpoints, briefing and results screens, missions 1–4 | Play the first four missions |
@@ -190,7 +190,7 @@ Each session ends with something playable at the same link, so progress can be s
 
 Putting it on its cabinet stays a separate step, done only when you say so.
 
-**To continue in a new chat in this project, say:** "Continue Ironhowl 3, session 2 (engine core). Read `claude/ironhowl3-design.md` and `v2/src/ironhowl3/DESIGN.md` first."
+**To continue (here or in a new chat), say:** "Continue Ironhowl 3, session 3 (combat core)." The build log `v2/src/ironhowl3/NOTES.md` in the repo says what is built, how to test it and what comes next.
 
 ## 12. Still open (you can change any of this)
 

@@ -1,0 +1,47 @@
+/* ===================== the player: walking, jet hops, collisions ===================== */
+const WALK=7.5,RAD=1.35;
+/* jet hop: vh = sideways speed, vy = launch speed, hold = how long holding JET keeps pushing, refill = seconds per fuel cell */
+const JET={vh:21,vy:9.5,grav:22,hold:.6,holdG:.42,refill:3.6,drain:.55};
+let P=null;
+function mkPlayer(){return {x:SPAWN.x,z:SPAWN.z,y:hgt(SPAWN.x,SPAWN.z),yaw:SPAWN.yaw,pitch:0,legYaw:SPAWN.yaw,vx:0,vz:0,vy:0,air:false,
+  cells:2,fuel:2,jetT:9,land:0,thrust:0,spd:0,groundT:9,ev:[],hops:0,dist:0};}
+function updPlayer(c,dt){
+  P.yaw-=c.turn;P.pitch=clamp(P.pitch+c.pitch,-.3,.34);   /* turn: plus = to the right */
+  const fx=-Math.sin(P.yaw),fz=-Math.cos(P.yaw),rx=Math.cos(P.yaw),rz=-Math.sin(P.yaw);
+  let wx=fx*c.my+rx*c.mx,wz=fz*c.my+rz*c.mx;const ml=Math.hypot(wx,wz);
+  /* jet hop */
+  if(c.jetHit){
+    if(!P.air&&P.fuel>=.98){const dx=ml>.2?wx/ml:fx,dz=ml>.2?wz/ml:fz;
+      P.vx=dx*JET.vh;P.vz=dz*JET.vh;P.vy=JET.vy;P.air=true;P.fuel-=1;P.jetT=0;P.hops++;P.ev.push({t:'jet'});}
+    else if(!P.air)P.ev.push({t:'nofuel'});
+  }
+  if(P.air){
+    P.jetT+=dt;const hold=c.jet&&P.jetT<JET.hold&&P.fuel>.02;
+    if(hold)P.fuel=Math.max(0,P.fuel-JET.drain*dt);
+    P.vy-=JET.grav*(hold?JET.holdG:1)*dt;
+    /* a little steering in the air */
+    P.vx+=wx*5*dt;P.vz+=wz*5*dt;const hv=Math.hypot(P.vx,P.vz);if(hv>JET.vh*1.05){P.vx*=JET.vh*1.05/hv;P.vz*=JET.vh*1.05/hv;}
+    P.thrust+=((P.jetT<.28?1:hold?.75:0)-P.thrust)*damp(14,dt);
+    P.y+=P.vy*dt;
+  }else{
+    const tx=wx*WALK,tz=wz*WALK,k=damp(Math.hypot(P.vx,P.vz)>WALK*1.1?2.6:ml>.05?3.4:5.5,dt);
+    P.vx+=(tx-P.vx)*k;P.vz+=(tz-P.vz)*k;P.thrust+=(0-P.thrust)*damp(10,dt);P.groundT+=dt;
+    if(P.groundT>.6)P.fuel=Math.min(P.cells,P.fuel+dt/JET.refill);
+  }
+  /* move, then push out of tree trunks and keep inside the map */
+  let nx=P.x+P.vx*dt,nz=P.z+P.vz*dt;
+  const r=collide(nx,nz,RAD);if(r[2]&&(!P.air||P.y<hgt(r[0],r[1])+4)){nx=r[0];nz=r[1];}
+  const B=PLAY+6;if(Math.abs(nx)>B){nx=Math.sign(nx)*B;P.vx*=.2;}if(Math.abs(nz)>B){nz=Math.sign(nz)*B;P.vz*=.2;}
+  P.dist+=Math.hypot(nx-P.x,nz-P.z);P.x=nx;P.z=nz;
+  const g=hgt(P.x,P.z);
+  if(P.air){if(P.y<=g&&P.vy<0){const k=clamp(-P.vy/16,0,1.3);P.y=g;P.air=false;P.vy=0;P.groundT=0;P.land=Math.max(P.land,.18+k*.32);P.ev.push({t:'land',k});}}
+  else P.y=g;
+  P.land=Math.max(0,P.land-dt*1.6);
+  /* legs: face the way you walk (backwards when walking backwards), shuffle round when turning on the spot */
+  const hs=Math.hypot(P.vx,P.vz);let tgt=P.legYaw,turnStep=0;
+  if(hs>.6){const my=Math.atan2(-P.vx,-P.vz);tgt=Math.abs(angD(my,P.yaw))>1.95?my+Math.PI:my;}
+  else if(Math.abs(angD(P.yaw,P.legYaw))>.55){tgt=P.yaw;turnStep=2.4;}
+  const dl=angD(tgt,P.legYaw),mx=(P.air?2:5.5)*dt;P.legYaw+=clamp(dl,-mx,mx);
+  const lf=-Math.sin(P.legYaw),lz=-Math.cos(P.legYaw);
+  P.spd=P.vx*lf+P.vz*lz;if(Math.abs(P.spd)<turnStep&&!P.air&&Math.abs(dl)>.05)P.spd=turnStep*Math.sign(P.spd||1);
+}
