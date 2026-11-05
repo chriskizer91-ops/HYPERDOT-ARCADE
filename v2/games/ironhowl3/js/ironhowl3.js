@@ -42,7 +42,7 @@ const MOUSE={dx:0,dy:0,locked:false,l:false,rHit:false};
 addEventListener('mousedown',e=>{if(!MOUSE.locked)return;if(e.button===0)MOUSE.l=true;if(e.button===2)MOUSE.rHit=true;});
 addEventListener('mouseup',e=>{if(e.button===0)MOUSE.l=false;});
 addEventListener('contextmenu',e=>e.preventDefault());
-const TS={id:-1,ox:0,oy:0,ax:0,ay:0,look:-1,lx:0,ly:0,ldx:0,ldy:0,jet:false,jetHit:false,fire:false,fireId:-1,msl:false,vent:false};
+const TS={id:-1,ox:0,oy:0,ax:0,ay:0,look:-1,lx:0,ly:0,ldx:0,ldy:0,jet:false,jetHit:false,fire:false,fireId:-1,msl:false,vent:false,salvo:false};
 let PAD_PREV={};
 addEventListener('keydown',e=>{if(e.repeat)return;KEYS.add(e.code);HIT.add(e.code);if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();});
 addEventListener('keyup',e=>KEYS.delete(e.code));
@@ -73,25 +73,25 @@ addEventListener('touchstart',touchStart,{passive:false});
 addEventListener('touchmove',touchMove,{passive:false});
 addEventListener('touchend',touchEnd);addEventListener('touchcancel',touchEnd);
 function readCtl(dt){
-  const o={mx:0,my:0,turn:0,pitch:0,jet:false,jetHit:false,view:false,pause:false,fire:false,msl:false,vent:false};
+  const o={mx:0,my:0,turn:0,pitch:0,jet:false,jetHit:false,view:false,pause:false,fire:false,msl:false,vent:false,salvo:false};
   const k=c=>KEYS.has(c);
   o.mx=(k('KeyD')?1:0)-(k('KeyA')?1:0);o.my=(k('KeyW')||k('ArrowUp')?1:0)-(k('KeyS')||k('ArrowDown')?1:0);
-  o.turn+=((k('ArrowRight')||k('KeyE')?1:0)-(k('ArrowLeft')||k('KeyQ')?1:0))*2.4*dt;
+  o.turn+=((k('ArrowRight')?1:0)-(k('ArrowLeft')?1:0))*2.4*dt;
   if(MOUSE.locked){o.turn+=MOUSE.dx*.0026;o.pitch-=MOUSE.dy*.002;}
   MOUSE.dx=MOUSE.dy=0;
-  o.jet=k('Space');o.jetHit=HIT.has('Space');o.fire=MOUSE.l||k('KeyF');o.msl=MOUSE.rHit||HIT.has('KeyG');o.vent=HIT.has('KeyR');MOUSE.rHit=false;o.view=HIT.has('KeyV');o.pause=HIT.has('KeyP')||HIT.has('Escape');
+  o.jet=k('Space');o.jetHit=HIT.has('Space');o.fire=MOUSE.l||k('KeyF');o.msl=MOUSE.rHit||HIT.has('KeyG');o.vent=HIT.has('KeyR');o.salvo=HIT.has('KeyQ')||HIT.has('KeyE');MOUSE.rHit=false;o.view=HIT.has('KeyV');o.pause=HIT.has('KeyP')||HIT.has('Escape');
   /* touch */
   if(TS.id>=0){const m=Math.min(1,Math.hypot(TS.ax,TS.ay)),a=Math.atan2(TS.ay,TS.ax),dz=m<.12?0:(m-.12)/.88;o.mx+=Math.cos(a)*dz;o.my-=Math.sin(a)*dz;}
   if(TS.ldx||TS.ldy){o.turn+=TS.ldx*.0062*SET.sens;o.pitch-=TS.ldy*.004*SET.sens;TS.ldx=TS.ldy=0;}
   if(TS.jet)o.jet=true;if(TS.jetHit){o.jetHit=true;TS.jetHit=false;}
-  if(TS.fire)o.fire=true;if(TS.msl){o.msl=true;TS.msl=false;}if(TS.vent){o.vent=true;TS.vent=false;}
+  if(TS.fire)o.fire=true;if(TS.msl){o.msl=true;TS.msl=false;}if(TS.vent){o.vent=true;TS.vent=false;}if(TS.salvo){o.salvo=true;TS.salvo=false;}
   /* gamepad */
   const pads=navigator.getGamepads?navigator.getGamepads():[];
   for(const p of pads){if(!p||!p.connected)continue;const ax=i=>Math.abs(p.axes[i]||0)>.16?p.axes[i]:0,b=i=>p.buttons[i]&&p.buttons[i].pressed;
     o.mx+=ax(0);o.my-=ax(1);o.turn+=ax(2)*2.8*dt;o.pitch-=ax(3)*1.6*dt;
     if(b(0)||b(4))o.jet=true;const pr=PAD_PREV;if((b(0)||b(4))&&!pr.j)o.jetHit=true;if(b(3)&&!pr.v)o.view=true;if(b(9)&&!pr.s)o.pause=true;
-    if(b(7)||b(5))o.fire=true;if(b(6)&&!pr.m)o.msl=true;if(b(1)&&!pr.x)o.vent=true;
-    PAD_PREV={j:b(0)||b(4),v:b(3),s:b(9),m:b(6),x:b(1)};break;}
+    if(b(7)||b(5))o.fire=true;if(b(6)&&!pr.m)o.msl=true;if(b(1)&&!pr.x)o.vent=true;if(b(2)&&!pr.q)o.salvo=true;
+    PAD_PREV={j:b(0)||b(4),v:b(3),s:b(9),m:b(6),x:b(1),q:b(2)};break;}
   const l=Math.hypot(o.mx,o.my);if(l>1){o.mx/=l;o.my/=l;}
   HIT.clear();
   return o;
@@ -599,7 +599,7 @@ function poseMech(M,st,dt){
 /* ===================== the player: walking, jet hops, collisions ===================== */
 const WALK=7.5,RAD=1.35;
 /* jet hop: vh = sideways speed, vy = launch speed, hold = how long holding JET keeps pushing, refill = seconds per fuel cell */
-const JET={vh:21,vy:9.5,grav:22,hold:.6,holdG:.42,refill:3.6,drain:.55};
+const JET={vh:30,vy:11,grav:22,hold:.9,holdG:.35,refill:3.2,drain:.55};   /* tap: about 30 m, hold: about 55 m */
 let P=null;
 function mkPlayer(){return {x:SPAWN.x,z:SPAWN.z,y:hgt(SPAWN.x,SPAWN.z),yaw:SPAWN.yaw,pitch:0,legYaw:SPAWN.yaw,vx:0,vz:0,vy:0,air:false,
   cells:2,fuel:2,jetT:9,land:0,thrust:0,spd:0,groundT:9,ev:[],hops:0,dist:0,hull:100,hullMax:100,shield:60,shieldMax:60,regenT:0,dead:false};}
@@ -607,7 +607,7 @@ function updPlayer(c,dt){
   if(P.dead){P.thrust=0;return;}
   /* shield comes back after 3 s without a hit */
   if(P.regenT>0)P.regenT-=dt;else P.shield=Math.min(P.shieldMax,P.shield+22*dt);
-  P.yaw-=c.turn;P.pitch=clamp(P.pitch+c.pitch,-.3,.34);   /* turn: plus = to the right */
+  P.yaw-=c.turn;P.pitch=clamp(P.pitch+c.pitch,-.85,.34);   /* turn: plus = to the right */
   const fx=-Math.sin(P.yaw),fz=-Math.cos(P.yaw),rx=Math.cos(P.yaw),rz=-Math.sin(P.yaw);
   let wx=fx*c.my+rx*c.mx,wz=fz*c.my+rz*c.mx;const ml=Math.hypot(wx,wz);
   /* jet hop */
@@ -654,6 +654,9 @@ const GUN={tier:1,base:1,heat:0,over:false,cd:0,side:0,cool:0,ventCd:0,flash:0,h
 const HEAT={shot:2.3,cool:30,delay:.45,resume:38};
 const MSL={ammo:12,max:24,salvo:2,cd:0};
 const BOLTS=[],EBOLTS=[],MISS=[];
+/* SALVO: 14 auto-aimed rounds from the shoulder pods at the nearest machines all around you (even behind), then a 12 s cooldown.
+   It does not use the gun's heat, and it works in the air, so you can hop away and salvo at the same time. */
+const SALVO={cd:0,cool:12,n:14,left:0,t:0,dmg:16,range:48};
 const BOLT={speed:150,range:170};
 let BM=null,EBM=null,MSM=null,MFL=null;
 const _v=new THREE.Vector3(),_w=new THREE.Vector3(),_m4=new THREE.Matrix4(),_q=new THREE.Quaternion(),_up=new THREE.Vector3(0,1,0),_z=new THREE.Vector3(0,0,1);
@@ -684,7 +687,24 @@ function rayAim(){
   AIM.e=null;AIM.x=ox+dx*t;AIM.y=oy+dy*t;AIM.z=oz+dz*t;AIM.dist=t;
 }
 function treeAt(x,z,y){const a=VEG.cols.get(colKey(x,z));if(!a)return false;for(const c of a){if(c.b){if(x>c.x0&&x<c.x1&&z>c.z0&&z<c.z1&&y<c.y0+c.h)return true;continue;}const dx=x-c.x,dz=z-c.z;if(dx*dx+dz*dz<(c.r+.25)*(c.r+.25)&&y<hgt(c.x,c.z)+(c.h||9))return true;}return false;}
+function updSalvo(c,dt){
+  SALVO.cd=Math.max(0,SALVO.cd-dt);
+  if(c.salvo&&!P.dead){if(SALVO.cd<=0&&SALVO.left<=0){for(const e of EN)e.pend=0;SALVO.left=SALVO.n;SALVO.t=0;SALVO.cd=SALVO.cool;HUD.msg('SALVO',.8);CAMS.shake=Math.max(CAMS.shake,.3);}else if(SALVO.left<=0)sClick();}
+  if(SALVO.left>0){SALVO.t-=dt;while(SALVO.left>0&&SALVO.t<=0){SALVO.t+=.065;SALVO.left--;salvoRound(SALVO.n-SALVO.left);}}
+}
+function salvoRound(i){
+  const near=EN.filter(e=>!e.dead&&e.spawnT<=0&&Math.hypot(e.x-P.x,e.z-P.z)<SALVO.range).sort((a,b)=>Math.hypot(a.x-P.x,a.z-P.z)-Math.hypot(b.x-P.x,b.z-P.z));
+  const pod=M.ready?M.pods[i%2]:null;if(pod)pod.getWorldPosition(_w);else _w.set(P.x,P.y+5,P.z);
+  let tx,ty,tz;
+  /* spread the rounds: the nearest machine that is not already going to die from rounds in the air */
+  let tg=null;if(near.length){const e=tg=near.find(o=>o.hp-(o.pend||0)>0)||near[0];e.pend=(e.pend||0)+SALVO.dmg;tx=e.x+(Math.random()-.5)*.4;ty=e.y+e.d.cy;tz=e.z+(Math.random()-.5)*.4;}
+  else{const a=P.yaw+i/SALVO.n*TAU;tx=P.x-Math.sin(a)*14;tz=P.z-Math.cos(a)*14;ty=hgt(tx,tz);}
+  let ax=tx-_w.x,ay=ty-_w.y,az=tz-_w.z;const l=Math.hypot(ax,ay,az)||1;ax/=l;ay/=l;az/=l;
+  BOLTS.push({x:_w.x,y:_w.y,z:_w.z,vx:ax*170,vy:ay*170,vz:az*170,life:(l+8)/170,dmg:SALVO.dmg,tg});
+  part({x:_w.x+ax*.6,y:_w.y+ay*.6,z:_w.z+az*.6,vx:0,vy:0,vz:0,life:.07,s0:1.5,s1:.6,a:2.4,col:[1,.75,.4],glow:true});MFL.position.copy(_w);GUN.flash=1;sGun(2);
+}
 function updGun(c,dt){
+  updSalvo(c,dt);
   GUN.cd-=dt;GUN.ventCd=Math.max(0,GUN.ventCd-dt);GUN.flash=Math.max(0,GUN.flash-dt*12);GUN.hitT=Math.max(0,GUN.hitT-dt);
   if(M.ready)setTier(M,GUN.tier);
   const firing=c.fire&&!GUN.over&&!P.dead;
@@ -728,12 +748,13 @@ function updGun(c,dt){
 }
 /* move bolts and missiles, test hits */
 function updShots(dt){
-  for(let i=BOLTS.length-1;i>=0;i--){const b=BOLTS[i];b.life-=dt;if(b.life<=0){BOLTS.splice(i,1);continue;}
+  const drop=(i)=>{const b=BOLTS[i];if(b.tg)b.tg.pend=Math.max(0,(b.tg.pend||0)-b.dmg);BOLTS.splice(i,1);};
+  for(let i=BOLTS.length-1;i>=0;i--){const b=BOLTS[i];b.life-=dt;if(b.life<=0){drop(i);continue;}
     const nx=b.x+b.vx*dt,ny=b.y+b.vy*dt,nz=b.z+b.vz*dt;let hit=null,ht=1;
     for(const e of EN){if(e.dead||e.spawnT>0)continue;const t=segSphere(b.x,b.y,b.z,nx,ny,nz,e.x,e.y+e.d.cy,e.z,e.d.r);if(t>=0&&t<ht){ht=t;hit=e;}}
     const hx=lerp(b.x,nx,ht),hy=lerp(b.y,ny,ht),hz=lerp(b.z,nz,ht);
-    if(hit){hurtEnemy(hit,b.dmg,hx,hy,hz);GUN.hitT=.12;sparks(hx,hy,hz,5,[1,.75,.35]);BOLTS.splice(i,1);continue;}
-    if(ny<hgt(nx,nz)||treeAt(nx,nz,ny)){sparks(nx,Math.max(ny,hgt(nx,nz)+.1),nz,4,[1,.7,.3]);part({x:nx,y:Math.max(ny,hgt(nx,nz)+.2),z:nz,vx:0,vy:1,vz:0,life:.8,s0:.5,s1:1.6,a:.3,col:DUST,drag:1.5});BOLTS.splice(i,1);continue;}
+    if(hit){drop(i);hurtEnemy(hit,b.dmg,hx,hy,hz);GUN.hitT=.12;sparks(hx,hy,hz,5,[1,.75,.35]);continue;}
+    if(ny<hgt(nx,nz)||treeAt(nx,nz,ny)){sparks(nx,Math.max(ny,hgt(nx,nz)+.1),nz,4,[1,.7,.3]);part({x:nx,y:Math.max(ny,hgt(nx,nz)+.2),z:nz,vx:0,vy:1,vz:0,life:.8,s0:.5,s1:1.6,a:.3,col:DUST,drag:1.5});drop(i);continue;}
     b.x=nx;b.y=ny;b.z=nz;}
   for(let i=MISS.length-1;i>=0;i--){const m=MISS[i];m.t+=dt;m.life-=dt;if(m.t<m.delay)continue;
     if(m.tg&&m.tg.dead)m.tg=null;
@@ -1027,11 +1048,13 @@ function camFov(base){/* portrait: open the view up so there is enough to see at
 let CAMX=null;   /* test/showcase camera: {a (angle around the mech), d (distance), h (height), ly (look height)} */
 function updCam(dt,p,view){
   if(CAMX){const a=p.yaw+CAMX.a;cam.position.set(p.x-Math.sin(a)*CAMX.d,p.y+CAMX.h,p.z-Math.cos(a)*CAMX.d);cam.lookAt(p.x,p.y+(CAMX.ly||3),p.z);if(cam.fov!==50){cam.fov=50;cam.updateProjectionMatrix();}SKY.position.copy(cam.position);return;}
-  const V=VIEWS[view],fx=-Math.sin(p.yaw),fz=-Math.cos(p.yaw),rx=Math.cos(p.yaw),rz=-Math.sin(p.yaw),sd=V.side*(cam.aspect<1?.45:1);
+  const V=VIEWS[view],fx=-Math.sin(p.yaw),fz=-Math.cos(p.yaw),rx=Math.cos(p.yaw),rz=-Math.sin(p.yaw),sd=V.side*(cam.aspect<1?.45:1)+Math.max(0,-p.pitch-.2)*3;
   /* the body height follows the mech with a little lag in the air, so jet hops feel big */
   const by=p.y;CAMS.ty+=(by-CAMS.ty)*damp(p.air?(view==='close'?7:3.2):9,dt);if(!CAMS.ready){CAMS.ty=by;}
   /* portrait screens are narrow: step back a little so the mech does not fill them */
   const pt=Math.max(0,1-cam.aspect),back=V.back+pt*(view==='close'?2.2:3),up=V.up+pt*(view==='close'?.7:1.2);
+  /* looking steeply down: slide the camera further right so you can see past the mech to your own feet */
+  const down=Math.max(0,-p.pitch-.2);
   const pit=p.pitch;let tx=p.x-fx*back+rx*sd,tz=p.z-fz*back+rz*sd,ty=CAMS.ty+up-pit*(view==='close'?1.2:2.2);
   /* if a container or building sits between the mech and the camera, pull the camera in front of it */
   {const hx=p.x,hy=p.y+5,hz=p.z;for(let t=.15;t<=1.001;t+=.05){const x=lerp(hx,tx,t),y=lerp(hy,ty,t),z=lerp(hz,tz,t);if(boxAt(x,z,y+.6)){const k=Math.max(.1,t-.08);tx=lerp(hx,tx,k);ty=lerp(hy,ty,k)+(1-k)*1.5;tz=lerp(hz,tz,k);break;}}}
@@ -1074,6 +1097,8 @@ const HUD={_c:{},
     this.set('heatb','width',GUN.heat.toFixed(0)+'%');this.set('heat','cls',GUN.over?'over':GUN.heat>70?'warm':'');
     this.set('cross','cls',GUN.hitT>0?'hit':AIM.e?'on':'');
     this.set('bvent','cls','tb'+(GUN.ventCd>0?' cool':GUN.over?' hot':''));
+    const sr=SALVO.cd<=0;this.set('bsalvo','cls','tb'+(sr?'':' cool'));this.set('bsalvo','text',sr?'SALVO':String(Math.ceil(SALVO.cd)));
+    this.set('salvoc','text',sr?'SALVO Q':'SALVO '+Math.ceil(SALVO.cd));this.set('salvoc','cls',sr?'rdy':'');
     /* arrows at the screen edge for machines you cannot see within 60 m */
     let k=0;const fx=-Math.sin(P.yaw),fz=-Math.cos(P.yaw);
     for(const e of EN){if(k>=6)break;if(e.dead||e.spawnT>0)continue;const dx=e.x-P.x,dz=e.z-P.z,d=Math.hypot(dx,dz);if(d>60)continue;
@@ -1092,7 +1117,7 @@ function setupHud(){
     const up=e=>{off&&off(e);b.classList.remove('on');};b.addEventListener('touchend',up);b.addEventListener('touchcancel',up);};
   hold('bjet',()=>{TS.jet=true;TS.jetHit=true;},()=>{TS.jet=false;});
   hold('bfire',e=>{const t=e.changedTouches[0];TS.fire=true;TS.fireId=t.identifier;TS.lx=t.clientX;TS.ly=t.clientY;},()=>{TS.fire=false;TS.fireId=-1;});
-  hold('bmsl',()=>{TS.msl=true;});hold('bvent',()=>{TS.vent=true;});
+  hold('bmsl',()=>{TS.msl=true;});hold('bvent',()=>{TS.vent=true;});hold('bsalvo',()=>{TS.salvo=true;});
   $('bview').onclick=e=>{e.stopPropagation();cycleView();};
   $('bpause').onclick=e=>{e.stopPropagation();if(G.mode==='play')setPause(!G.paused);};
   $('mresume').onclick=()=>setPause(false);
@@ -1114,7 +1139,7 @@ function setQuality(q){QL=q;QC=QUAL[q];DYN=1;resize();setShadow();S.fog.near=QC.
 function cycleView(){SET.view=SET.view==='close'?'far':'close';store.set('view',SET.view);HUD.view(SET.view);}
 function setPause(b){G.paused=b;HUD.menu();setVolume();if(!b&&!touchy&&G.mode==='play')lockMouse();if(b)jetLoop(0);}
 function clearFight(){for(const e of EN)S.remove(e.o);EN.length=0;BOLTS.length=EBOLTS.length=MISS.length=BEACONS.length=0;for(const p of PK)S.remove(p.g);PK.length=0;}
-function resetRun(){P=mkPlayer();CAMS.ready=false;clearFight();Object.assign(GUN,{tier:GUN.base,heat:0,over:false,cd:0,ventCd:0});MSL.ammo=12;
+function resetRun(){P=mkPlayer();CAMS.ready=false;clearFight();Object.assign(GUN,{tier:GUN.base,heat:0,over:false,cd:0,ventCd:0});MSL.ammo=12;SALVO.cd=0;SALVO.left=0;
   Object.assign(G,{score:0,kills:0,combo:0,lastKill:-9,wave:0,hpK:1,breakT:3});if(M)M.root.visible=true;$('down').style.display='none';}
 function playerDown(){if(P.dead)return;P.dead=true;P.thrust=0;boom(P.x,P.y+2.5,P.z,2);boom(P.x+1,P.y+3.5,P.z-1,1.2);if(M)M.root.visible=false;
   G.mode='down';G.downT=2.4;const best=+store.get('best',0);if(G.score>best)store.set('best',G.score);
@@ -1201,7 +1226,7 @@ addEventListener('message',e=>{const m=e.data;if(!m||m.src!=='hyperdot-arcade')r
   else if(m.cmd==='mute'){ARC.muted=true;setVolume();}
   else if(m.cmd==='unmute'){ARC.muted=false;setVolume();}
 });
-if(DEV)window.__ih3={S,KEY,SKY,PFX,GUN,MSL,EN,PK,AIM,startWave,spawnEnemy,dropPickup,hurtPlayer,rt(n=3){const t0=performance.now();for(let i=0;i<n;i++){R.render(S,cam);R.getContext().finish();}return +((performance.now()-t0)/n).toFixed(1);},G,get P(){return P;},get M(){return M;},VEG,get VEGN(){return VEGN;},R,cam,CAMS,SET,QUAL,setQuality,cycleView,startPlay,startDemo,setPause,
+if(DEV)window.__ih3={S,KEY,SKY,PFX,GUN,MSL,SALVO,EN,PK,AIM,startWave,spawnEnemy,dropPickup,hurtPlayer,rt(n=3){const t0=performance.now();for(let i=0;i<n;i++){R.render(S,cam);R.getContext().finish();}return +((performance.now()-t0)/n).toFixed(1);},G,get P(){return P;},get M(){return M;},VEG,get VEGN(){return VEGN;},R,cam,CAMS,SET,QUAL,setQuality,cycleView,startPlay,startDemo,setPause,
   ctl(o){CTLX=o;},showcase(o){CAMX=o;},
   /* run the game forward t seconds at 60 steps a second without drawing (for tests) */
   ff(t){const n=Math.round(t*60);for(let i=0;i<n;i++)tick(1/60);},

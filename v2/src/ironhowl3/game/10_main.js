@@ -5,7 +5,7 @@ function setQuality(q){QL=q;QC=QUAL[q];DYN=1;resize();setShadow();S.fog.near=QC.
 function cycleView(){SET.view=SET.view==='close'?'far':'close';store.set('view',SET.view);HUD.view(SET.view);}
 function setPause(b){G.paused=b;HUD.menu();setVolume();if(!b&&!touchy&&G.mode==='play')lockMouse();if(b)jetLoop(0);}
 function clearFight(){for(const e of EN)S.remove(e.o);EN.length=0;BOLTS.length=EBOLTS.length=MISS.length=BEACONS.length=0;for(const p of PK)S.remove(p.g);PK.length=0;}
-function resetRun(){P=mkPlayer();CAMS.ready=false;clearFight();Object.assign(GUN,{tier:GUN.base,heat:0,over:false,cd:0,ventCd:0});MSL.ammo=12;
+function resetRun(){P=mkPlayer();CAMS.ready=false;clearFight();Object.assign(GUN,{tier:GUN.base,heat:0,over:false,cd:0,ventCd:0});MSL.ammo=12;SALVO.cd=0;SALVO.left=0;
   Object.assign(G,{score:0,kills:0,combo:0,lastKill:-9,wave:0,hpK:1,breakT:3});if(M)M.root.visible=true;$('down').style.display='none';}
 function playerDown(){if(P.dead)return;P.dead=true;P.thrust=0;boom(P.x,P.y+2.5,P.z,2);boom(P.x+1,P.y+3.5,P.z-1,1.2);if(M)M.root.visible=false;
   G.mode='down';G.downT=2.4;const best=+store.get('best',0);if(G.score>best)store.set('best',G.score);
@@ -92,7 +92,7 @@ addEventListener('message',e=>{const m=e.data;if(!m||m.src!=='hyperdot-arcade')r
   else if(m.cmd==='mute'){ARC.muted=true;setVolume();}
   else if(m.cmd==='unmute'){ARC.muted=false;setVolume();}
 });
-if(DEV)window.__ih3={S,KEY,SKY,PFX,GUN,MSL,EN,PK,AIM,startWave,spawnEnemy,dropPickup,hurtPlayer,rt(n=3){const t0=performance.now();for(let i=0;i<n;i++){R.render(S,cam);R.getContext().finish();}return +((performance.now()-t0)/n).toFixed(1);},G,get P(){return P;},get M(){return M;},VEG,get VEGN(){return VEGN;},R,cam,CAMS,SET,QUAL,setQuality,cycleView,startPlay,startDemo,setPause,
+if(DEV)window.__ih3={S,KEY,SKY,PFX,GUN,MSL,SALVO,EN,PK,AIM,startWave,spawnEnemy,dropPickup,hurtPlayer,rt(n=3){const t0=performance.now();for(let i=0;i<n;i++){R.render(S,cam);R.getContext().finish();}return +((performance.now()-t0)/n).toFixed(1);},G,get P(){return P;},get M(){return M;},VEG,get VEGN(){return VEGN;},R,cam,CAMS,SET,QUAL,setQuality,cycleView,startPlay,startDemo,setPause,
   ctl(o){CTLX=o;},showcase(o){CAMX=o;},
   /* run the game forward t seconds at 60 steps a second without drawing (for tests) */
   ff(t){const n=Math.round(t*60);for(let i=0;i<n;i++)tick(1/60);},

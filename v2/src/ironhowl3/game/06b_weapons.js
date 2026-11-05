@@ -4,6 +4,9 @@ const GUN={tier:1,base:1,heat:0,over:false,cd:0,side:0,cool:0,ventCd:0,flash:0,h
 const HEAT={shot:2.3,cool:30,delay:.45,resume:38};
 const MSL={ammo:12,max:24,salvo:2,cd:0};
 const BOLTS=[],EBOLTS=[],MISS=[];
+/* SALVO: 14 auto-aimed rounds from the shoulder pods at the nearest machines all around you (even behind), then a 12 s cooldown.
+   It does not use the gun's heat, and it works in the air, so you can hop away and salvo at the same time. */
+const SALVO={cd:0,cool:12,n:14,left:0,t:0,dmg:16,range:48};
 const BOLT={speed:150,range:170};
 let BM=null,EBM=null,MSM=null,MFL=null;
 const _v=new THREE.Vector3(),_w=new THREE.Vector3(),_m4=new THREE.Matrix4(),_q=new THREE.Quaternion(),_up=new THREE.Vector3(0,1,0),_z=new THREE.Vector3(0,0,1);
@@ -34,7 +37,24 @@ function rayAim(){
   AIM.e=null;AIM.x=ox+dx*t;AIM.y=oy+dy*t;AIM.z=oz+dz*t;AIM.dist=t;
 }
 function treeAt(x,z,y){const a=VEG.cols.get(colKey(x,z));if(!a)return false;for(const c of a){if(c.b){if(x>c.x0&&x<c.x1&&z>c.z0&&z<c.z1&&y<c.y0+c.h)return true;continue;}const dx=x-c.x,dz=z-c.z;if(dx*dx+dz*dz<(c.r+.25)*(c.r+.25)&&y<hgt(c.x,c.z)+(c.h||9))return true;}return false;}
+function updSalvo(c,dt){
+  SALVO.cd=Math.max(0,SALVO.cd-dt);
+  if(c.salvo&&!P.dead){if(SALVO.cd<=0&&SALVO.left<=0){for(const e of EN)e.pend=0;SALVO.left=SALVO.n;SALVO.t=0;SALVO.cd=SALVO.cool;HUD.msg('SALVO',.8);CAMS.shake=Math.max(CAMS.shake,.3);}else if(SALVO.left<=0)sClick();}
+  if(SALVO.left>0){SALVO.t-=dt;while(SALVO.left>0&&SALVO.t<=0){SALVO.t+=.065;SALVO.left--;salvoRound(SALVO.n-SALVO.left);}}
+}
+function salvoRound(i){
+  const near=EN.filter(e=>!e.dead&&e.spawnT<=0&&Math.hypot(e.x-P.x,e.z-P.z)<SALVO.range).sort((a,b)=>Math.hypot(a.x-P.x,a.z-P.z)-Math.hypot(b.x-P.x,b.z-P.z));
+  const pod=M.ready?M.pods[i%2]:null;if(pod)pod.getWorldPosition(_w);else _w.set(P.x,P.y+5,P.z);
+  let tx,ty,tz;
+  /* spread the rounds: the nearest machine that is not already going to die from rounds in the air */
+  let tg=null;if(near.length){const e=tg=near.find(o=>o.hp-(o.pend||0)>0)||near[0];e.pend=(e.pend||0)+SALVO.dmg;tx=e.x+(Math.random()-.5)*.4;ty=e.y+e.d.cy;tz=e.z+(Math.random()-.5)*.4;}
+  else{const a=P.yaw+i/SALVO.n*TAU;tx=P.x-Math.sin(a)*14;tz=P.z-Math.cos(a)*14;ty=hgt(tx,tz);}
+  let ax=tx-_w.x,ay=ty-_w.y,az=tz-_w.z;const l=Math.hypot(ax,ay,az)||1;ax/=l;ay/=l;az/=l;
+  BOLTS.push({x:_w.x,y:_w.y,z:_w.z,vx:ax*170,vy:ay*170,vz:az*170,life:(l+8)/170,dmg:SALVO.dmg,tg});
+  part({x:_w.x+ax*.6,y:_w.y+ay*.6,z:_w.z+az*.6,vx:0,vy:0,vz:0,life:.07,s0:1.5,s1:.6,a:2.4,col:[1,.75,.4],glow:true});MFL.position.copy(_w);GUN.flash=1;sGun(2);
+}
 function updGun(c,dt){
+  updSalvo(c,dt);
   GUN.cd-=dt;GUN.ventCd=Math.max(0,GUN.ventCd-dt);GUN.flash=Math.max(0,GUN.flash-dt*12);GUN.hitT=Math.max(0,GUN.hitT-dt);
   if(M.ready)setTier(M,GUN.tier);
   const firing=c.fire&&!GUN.over&&!P.dead;
@@ -78,12 +98,13 @@ function updGun(c,dt){
 }
 /* move bolts and missiles, test hits */
 function updShots(dt){
-  for(let i=BOLTS.length-1;i>=0;i--){const b=BOLTS[i];b.life-=dt;if(b.life<=0){BOLTS.splice(i,1);continue;}
+  const drop=(i)=>{const b=BOLTS[i];if(b.tg)b.tg.pend=Math.max(0,(b.tg.pend||0)-b.dmg);BOLTS.splice(i,1);};
+  for(let i=BOLTS.length-1;i>=0;i--){const b=BOLTS[i];b.life-=dt;if(b.life<=0){drop(i);continue;}
     const nx=b.x+b.vx*dt,ny=b.y+b.vy*dt,nz=b.z+b.vz*dt;let hit=null,ht=1;
     for(const e of EN){if(e.dead||e.spawnT>0)continue;const t=segSphere(b.x,b.y,b.z,nx,ny,nz,e.x,e.y+e.d.cy,e.z,e.d.r);if(t>=0&&t<ht){ht=t;hit=e;}}
     const hx=lerp(b.x,nx,ht),hy=lerp(b.y,ny,ht),hz=lerp(b.z,nz,ht);
-    if(hit){hurtEnemy(hit,b.dmg,hx,hy,hz);GUN.hitT=.12;sparks(hx,hy,hz,5,[1,.75,.35]);BOLTS.splice(i,1);continue;}
-    if(ny<hgt(nx,nz)||treeAt(nx,nz,ny)){sparks(nx,Math.max(ny,hgt(nx,nz)+.1),nz,4,[1,.7,.3]);part({x:nx,y:Math.max(ny,hgt(nx,nz)+.2),z:nz,vx:0,vy:1,vz:0,life:.8,s0:.5,s1:1.6,a:.3,col:DUST,drag:1.5});BOLTS.splice(i,1);continue;}
+    if(hit){drop(i);hurtEnemy(hit,b.dmg,hx,hy,hz);GUN.hitT=.12;sparks(hx,hy,hz,5,[1,.75,.35]);continue;}
+    if(ny<hgt(nx,nz)||treeAt(nx,nz,ny)){sparks(nx,Math.max(ny,hgt(nx,nz)+.1),nz,4,[1,.7,.3]);part({x:nx,y:Math.max(ny,hgt(nx,nz)+.2),z:nz,vx:0,vy:1,vz:0,life:.8,s0:.5,s1:1.6,a:.3,col:DUST,drag:1.5});drop(i);continue;}
     b.x=nx;b.y=ny;b.z=nz;}
   for(let i=MISS.length-1;i>=0;i--){const m=MISS[i];m.t+=dt;m.life-=dt;if(m.t<m.delay)continue;
     if(m.tg&&m.tg.dead)m.tg=null;

@@ -55,6 +55,8 @@ button:active{background:#ffb34733}
 #bjet{right:calc(max(18px,env(safe-area-inset-right)) + 108px);bottom:max(16px,env(safe-area-inset-bottom));width:74px;height:74px}
 #bmsl{right:calc(max(18px,env(safe-area-inset-right)) + 12px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 108px);width:68px;height:68px;color:#ffc080;font-size:11px}
 #bvent{right:calc(max(18px,env(safe-area-inset-right)) + 92px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 92px);width:56px;height:56px;font-size:10px;color:#e0e8f0}
+#bsalvo{right:calc(max(18px,env(safe-area-inset-right)) + 16px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 188px);width:60px;height:60px;font-size:10px;color:#ffe0a0;border-color:#ffd76a88}
+#bsalvo.cool{opacity:.4;color:#fff}#salvoc{color:#ffffff70}#salvoc.rdy{color:#ffd76a}.touch #salvoc{display:none}
 #bvent.cool{opacity:.35}#bvent.hot{border-color:#ff3b30;animation:bl .5s infinite}
 .touch #mslc{display:none}
 #maps{display:flex;gap:8px;margin-top:6px}#maps button{padding:9px 14px;color:#ffffffaa;border-color:#ffffff33}#maps button.sel{color:#ffb347;border-color:#ffb347;background:#ffb34722}
@@ -62,11 +64,11 @@ button:active{background:#ffb34733}
 #dev{position:fixed;left:12px;top:40px;font:11px monospace;color:#7f7;pointer-events:none;text-shadow:0 0 3px #000}
 </style></head><body>
 <canvas id="gl"></canvas>
-<div id="top"><div id="stat"><div class="bar"><b id="bshield"></b></div><div class="bar"><b id="bhull"></b></div><div id="fuel"></div><div id="gline"><span id="gtier">GUN I</span><span id="mslc">MSL 12</span></div></div><div class="btns"><button id="bview">CLOSE</button><button id="bpause">II</button></div></div>
+<div id="top"><div id="stat"><div class="bar"><b id="bshield"></b></div><div class="bar"><b id="bhull"></b></div><div id="fuel"></div><div id="gline"><span id="gtier">GUN I</span><span id="mslc">MSL 12</span><span id="salvoc" class="rdy">SALVO Q</span></div></div><div class="btns"><button id="bview">CLOSE</button><button id="bpause">II</button></div></div>
 <div id="mid"><div id="score">0</div><div id="combo"></div></div>
 <div id="vig"></div><div id="cross"></div><div id="heat"><div id="heatb"></div></div><div id="msg"></div><div id="banner"></div>
 <div class="dmg" id="dmg0"></div><div class="dmg" id="dmg1"></div><div class="dmg" id="dmg2"></div><div class="dmg" id="dmg3"></div><div class="ea" id="ea0"></div><div class="ea" id="ea1"></div><div class="ea" id="ea2"></div><div class="ea" id="ea3"></div><div class="ea" id="ea4"></div><div class="ea" id="ea5"></div>
-<button id="bfire" class="tb">FIRE</button><button id="bjet" class="tb">JET</button><button id="bmsl" class="tb">MSL</button><button id="bvent" class="tb">VENT</button>
+<button id="bfire" class="tb">FIRE</button><button id="bjet" class="tb">JET</button><button id="bmsl" class="tb">MSL</button><button id="bvent" class="tb">VENT</button><button id="bsalvo" class="tb">SALVO</button>
 <div id="stick"><div id="knob"></div></div>
 <div id="hint"></div>
 <div id="dev"></div>
@@ -75,7 +77,7 @@ button:active{background:#ffb34733}
 <div id="title" class="ov"><div class="logo">IRONHOWL 3</div><div class="sub">SANDBOX · PICK A PLACE</div>
   <div id="maps"><button data-map="woods">WOODS</button><button data-map="field">FIELD</button><button data-map="docks">DOCKS</button></div>
   <div class="go"><span class="desk-go">CLICK OR TAP TO START</span></div>
-  <div class="keys desk">WASD MOVE · MOUSE AIM · CLICK FIRE · RIGHT CLICK MISSILES · R VENT · SPACE JET HOP · V CAMERA</div>
+  <div class="keys desk">WASD MOVE · MOUSE AIM · CLICK FIRE · RIGHT CLICK MISSILES · Q SALVO · R VENT · SPACE JET HOP · V CAMERA</div>
   <div class="keys tch">LEFT THUMB MOVES · RIGHT THUMB AIMS · HOLD FIRE AND DRAG IT TO AIM · PLAY SIDEWAYS</div></div>
 <div id="load" class="ov"><div class="logo">IRONHOWL 3</div><div class="bar"><div id="ldbar"></div></div></div>
 <script src="js/three-ih3.min.js"></script>

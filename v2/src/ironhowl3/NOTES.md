@@ -60,6 +60,13 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
   - Heat: 2.3 per volley, cooling 30/s after 0.45 s. Overheat locks the gun until it cools to 38.
   - VENT: 8 s cooldown, 15 damage and a shove within 10 m.
 - Missiles: 12 to start, 24 max, 2 per salvo, 75 splash damage within 4.8 m.
+- SALVO (added after Christopher's feedback):
+  - Q or E on laptop, the X button on a gamepad, SALVO on phones.
+  - Fires 14 auto-aimed rounds (16 damage each, 170 m/s) from the shoulder pods at the machines within 48 m, all around, even behind. No targets means a ring around you.
+  - Spreads its rounds so it doesn't overkill. Measured: 6 of 6 Skitters in a ring killed, on the ground and mid-hop.
+  - Its own 12 s cooldown. No gun heat. Works in the air.
+- Aim reaches 0.85 rad (49°) down so you can shoot at your feet. The camera slides right (up to about 2 m more) when looking down, to see past the mech.
+- Jet hop (after feedback): tap is about 30 m and 0.95 s in the air; hold is about 58 m and 1.8 s. Each hop uses 1 cell plus about 0.5 when held. Refill 3.2 s per cell.
 - Pickups:
   - chip: gun tier +1, to IV
   - repair: +35 hull
@@ -113,6 +120,7 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
   - Art processed (46 images → 49 files, 8.2 MB).
   - Forest pack stored with its catalog, three.js bundle built.
   - `DESIGN.md` written; `preview.html` is the first look.
+- **Session 4b (5 Nov 2026):** after his playtest: longer jet hops, aim down at your feet, the SALVO auto-aim burst. Q and E no longer turn (the arrows still do).
 - **Session 4 (5 Nov 2026):** image set 2 processed, Howler 07 rebuilt from his turnaround sheet, and the woods, field and docks maps with a map picker.
 - **Session 3 (5 Nov 2026):** combat core.
   - New Howler 07 model from Blender, with 4 barrel sets shown by gun tier.

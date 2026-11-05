@@ -24,6 +24,8 @@ const HUD={_c:{},
     this.set('heatb','width',GUN.heat.toFixed(0)+'%');this.set('heat','cls',GUN.over?'over':GUN.heat>70?'warm':'');
     this.set('cross','cls',GUN.hitT>0?'hit':AIM.e?'on':'');
     this.set('bvent','cls','tb'+(GUN.ventCd>0?' cool':GUN.over?' hot':''));
+    const sr=SALVO.cd<=0;this.set('bsalvo','cls','tb'+(sr?'':' cool'));this.set('bsalvo','text',sr?'SALVO':String(Math.ceil(SALVO.cd)));
+    this.set('salvoc','text',sr?'SALVO Q':'SALVO '+Math.ceil(SALVO.cd));this.set('salvoc','cls',sr?'rdy':'');
     /* arrows at the screen edge for machines you cannot see within 60 m */
     let k=0;const fx=-Math.sin(P.yaw),fz=-Math.cos(P.yaw);
     for(const e of EN){if(k>=6)break;if(e.dead||e.spawnT>0)continue;const dx=e.x-P.x,dz=e.z-P.z,d=Math.hypot(dx,dz);if(d>60)continue;
@@ -42,7 +44,7 @@ function setupHud(){
     const up=e=>{off&&off(e);b.classList.remove('on');};b.addEventListener('touchend',up);b.addEventListener('touchcancel',up);};
   hold('bjet',()=>{TS.jet=true;TS.jetHit=true;},()=>{TS.jet=false;});
   hold('bfire',e=>{const t=e.changedTouches[0];TS.fire=true;TS.fireId=t.identifier;TS.lx=t.clientX;TS.ly=t.clientY;},()=>{TS.fire=false;TS.fireId=-1;});
-  hold('bmsl',()=>{TS.msl=true;});hold('bvent',()=>{TS.vent=true;});
+  hold('bmsl',()=>{TS.msl=true;});hold('bvent',()=>{TS.vent=true;});hold('bsalvo',()=>{TS.salvo=true;});
   $('bview').onclick=e=>{e.stopPropagation();cycleView();};
   $('bpause').onclick=e=>{e.stopPropagation();if(G.mode==='play')setPause(!G.paused);};
   $('mresume').onclick=()=>setPause(false);
