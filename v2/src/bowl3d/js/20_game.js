@@ -11,7 +11,7 @@ let BSTY=BSTYLES[0];
 const NBR=[1023,1023,1023,1023];                                    /* the neighbouring lanes' racks */
 const G={rolls:[],sheet:null,rs:null,ph:'aim',pt:0,x0:.18,kst:0,kph:0,kph2:0,kang:0,kpow:0,pang:0,pspd:0,spinI:1,shot:null,before:1023,after:1023,
   gut:false,hit:false,streak:0,fast:1,slowT:0,strobe:0,pinFlash:0,ai:null,mph:0,lastK:-1,crash:0,crashed:false,rph:0,wasSplit:false,over:false,
-  auto:false,autoSkill:.7,swipeAim:false};
+  auto:false,autoSkill:.7,swipeAim:false,pspin:0};
 const popc=m=>{let n=0;while(m){n+=m&1;m>>=1;}return n;};
 const jsh=i=>{const s=Math.sin(i*127.1+.7)*43758.5453;return s-Math.floor(s);};
 function gauss(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(TAU*v);}
@@ -31,8 +31,8 @@ function nbRack(){if(Math.random()<.45)return 1023;let m=0;for(let i=0;i<10;i++)
 function APP_start(){newGame(false);S.mode='play';S.paused=false;setTrack('play');SFX.confirm();}
 function APP_attract(){newGame(true);S.mode='title';setTrack('title');}
 function startAim(){
-  Object.assign(G,{ph:'aim',pt:0,kst:0,pang:0,pspd:0,gut:false,hit:false,crash:0,crashed:false,mph:0,fast:1,swipeAim:false,ai:null});
-  G.rs=rackState(G.rolls);ballToHand();G.before=standMask(PW);
+  Object.assign(G,{ph:'aim',pt:0,kst:0,pang:0,pspd:0,pspin:0,gut:false,hit:false,crash:0,crashed:false,mph:0,fast:1,swipeAim:false,ai:null});
+  G.rs=rackState(G.rolls);ballToHand();G.before=standMask(PW);GST.idle=0;
   if(Math.random()<.35){const j=Math.random()*4|0;NBR[j]=nbRack();}
   if(S.demo||G.auto)aiStart();
   if(S.mode==='play')setTrack(G.rs.f===9?'tenth':'play');
@@ -122,12 +122,19 @@ function aiTick(dt){const A=G.ai;if(!A)return;A.t+=dt;
   if(A.k<11){const m=(A.lo+A.hi)/2,x=aiPathX(A.x0,m,A.spd,A.spin,A.tz);if(!(x<A.tx))A.hi=m;else A.lo=m;A.k++;}
   else{A.ang=(A.lo+A.hi)/2+A.err;if(A.t>A.think&&Math.abs(G.x0-A.x0)<.004)throwBall(G.x0,A.ang,A.spd*(1+A.serr*.025),clamp(A.spin+A.serr*.15,-1,1));}
 }
-/* ---------- pointer gestures: drag sideways = move, swipe up = bowl (curl at the end = hook) ----------
-   Samples carry the events' own timestamps and include coalesced moves, so a busy frame never
-   flattens a flick. Power comes from the fastest forward-swing speed in the last 250 ms (a flick
-   that stops before release still counts); aim from the whole forward stroke; hook from how far
-   the last third of the stroke turns away from it. */
-const GST={down:false,id:null,pts:[],x0:0,y0:0,lowI:0,mode:'',rel:false,fresh:false,sx:0};
+/* ---------- the throw on a touch screen (and with a mouse) ----------
+   Put your thumb anywhere and the ball is in your hand: slide sideways and the ball follows your
+   thumb along the foul line. Push up and let go to bowl. The push can start from any point and
+   can follow a little back-swing; what counts is the stroke from the lowest point to the release.
+   - speed: the stroke's fastest moment, in screen heights per second, so every screen feels the same
+            (a pause before letting go doesn't lose it; slide back down to cancel a throw)
+   - aim:   the stroke's direction, gently: 10 degrees off straight moves the ball 6 cm at the pins
+   - hook:  curve the end of the stroke; a natural thumb arc still rolls straight (the turn from the
+            stroke's first half to its last third must pass 10 degrees)
+   While the stroke is under way the lane shows the ball's predicted path, from the real physics.
+   Samples carry the events' own timestamps (coalesced moves included), so a busy frame never
+   flattens a flick. */
+const GST={down:false,id:null,pts:[],x0:0,y0:0,lowI:0,mode:'',rel:false,fresh:false,sx:0,hint:'',hintT:0,idle:0};
 function gstPush(x,y,t){const P=GST.pts;if(P.length>=220){P.splice(0,60);GST.lowI=Math.max(0,GST.lowI-60);}P.push([x,y,t]);if(y>=P[GST.lowI][1])GST.lowI=P.length-1;}
 cv.addEventListener('pointerdown',e=>{GST.down=true;GST.id=e.pointerId;GST.pts.length=0;GST.lowI=0;gstPush(e.clientX,e.clientY,e.timeStamp);
   GST.x0=e.clientX;GST.y0=e.clientY;GST.mode='';GST.rel=false;GST.fresh=true;});
@@ -135,40 +142,61 @@ addEventListener('pointermove',e=>{if(!GST.down||e.pointerId!==GST.id)return;con
   if(ce&&ce.length)for(const c of ce)gstPush(c.clientX,c.clientY,c.timeStamp);else gstPush(e.clientX,e.clientY,e.timeStamp);});
 addEventListener('pointerup',e=>{if(!GST.down||e.pointerId!==GST.id)return;gstPush(e.clientX,e.clientY,e.timeStamp);GST.down=false;GST.rel=true;});
 addEventListener('pointercancel',e=>{if(e.pointerId===GST.id){GST.down=false;GST.rel=false;GST.mode='';}});
-/* the forward stroke: from the lowest point (end of any back-swing) to the latest sample */
+const wrapA=a=>a>Math.PI?a-TAU:a<-Math.PI?a+TAU:a;
+/* the forward stroke: from the lowest point (the end of any back-swing) to the latest sample */
 function stroke(){const P=GST.pts,n=P.length,lo=P[GST.lowI],l=P[n-1];if(!lo||!l)return null;
   const fx=l[0]-lo[0],fy=l[1]-lo[1];let peak=0;
-  for(let i=Math.max(GST.lowI+1,1);i<n;i++){let j=i-1;while(j>GST.lowI&&P[i][2]-P[j][2]<40)j--;const dt=P[i][2]-P[j][2];if(dt<8||l[2]-P[i][2]>250)continue;
+  for(let i=Math.max(GST.lowI+1,1);i<n;i++){let j=i-1;while(j>GST.lowI&&P[i][2]-P[j][2]<40)j--;const dt=P[i][2]-P[j][2];if(dt<8)continue;
     const v=-(P[i][1]-P[j][1])/dt*1000;if(v>peak)peak=v;}
   let len=0;for(let i=GST.lowI+1;i<n;i++)len+=Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]);
-  let k=n-1,acc=0;while(k>GST.lowI+1&&acc<len*.33){acc+=Math.hypot(P[k][0]-P[k-1][0],P[k][1]-P[k-1][1]);k--;}
-  const tx=l[0]-P[k][0],ty=l[1]-P[k][1],curl=Math.hypot(tx,ty)>4?Math.atan2(tx,-ty)-Math.atan2(fx,-fy):0;
-  return {fx,fy,peak,curl};}
-const swPow=v=>clamp((v-150)/1450,0,1);
+  /* the hook: how far the stroke turns, from its first half to its last third */
+  const at=f=>{let acc=0;for(let i=GST.lowI+1;i<n;i++){acc+=Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]);if(acc>=len*f)return P[i];}return l;};
+  const a=at(.45),c=at(.65),ax=a[0]-lo[0],ay=a[1]-lo[1],bx=l[0]-c[0],by=l[1]-c[1];
+  const curl=len>30&&Math.hypot(ax,ay)>4&&Math.hypot(bx,by)>4?wrapA(Math.atan2(bx,-by)-Math.atan2(ax,-ay)):0;
+  return {fx,fy,up:-fy,peak,curl,len};}
+const aimFrom=s=>{const d=Math.atan2(s.fx,-s.fy);return Math.sign(d)*clamp((Math.abs(d)-.07)*.03,0,.05);};
+const spinFrom=s=>Math.sign(s.curl)*clamp((Math.abs(s.curl)-.17)*1.1,0,.7);
+const powFrom=peak=>clamp((peak/Math.max(200,innerHeight)-.3)/3.4,0,1);
 /* sideways drag: metres per CSS pixel, so the ball stays under the finger at its distance from the camera */
 function dragK(){const hf=2*Math.atan(Math.tan(CAM3.fov*Math.PI/360)*CAM3.aspect);return 2*2.5*Math.tan(hf/2)/Math.max(1,RECT.w)*.9;}
 function gestureAim(){
-  if(GST.fresh){GST.fresh=false;GST.sx=G.x0;}
-  const P=GST.pts,last=P[P.length-1];if(!last)return;
-  if(GST.down){const dx=last[0]-GST.x0,dy=last[1]-GST.y0;
-    if(!GST.mode&&Math.hypot(dx,dy)>10)GST.mode=Math.abs(dx)>Math.abs(dy)*1.25?'slide':'swing';
-    if(GST.mode==='slide'){G.x0=clamp(GST.sx+dx*dragK(),-.42,.42);G.kst=0;}
-    if(GST.mode==='swing'){const s=stroke();if(s&&s.fy<-6){G.pang=clamp(Math.atan2(s.fx,-s.fy)*.1,-.07,.07);G.swipeAim=true;G.pspd+=(swPow(s.peak)-G.pspd)*.5;}}}
+  if(GST.fresh){GST.fresh=false;GST.sx=G.x0;GST.mode='hold';}
+  const P=GST.pts,last=P[P.length-1];if(!last){GST.idle+=1/60;return;}
+  const hh=Math.max(200,innerHeight),lo=P[GST.lowI],up=lo[1]-last[1],slide=ref=>clamp(GST.sx+(ref[0]-GST.x0)*dragK(),-.42,.42);
+  if(GST.down){GST.idle=0;
+    GST.mode=up>Math.max(14,hh*.025)?'throw':'hold';
+    const nx=slide(GST.mode==='throw'?lo:last);if(Math.abs(nx-G.x0)>1e-4){G.x0=nx;G.kst=0;}
+    if(GST.mode==='throw'){const s=stroke();G.pang=aimFrom(s);G.pspin=spinFrom(s);G.pspd+=(powFrom(s.peak)-G.pspd)*.5;G.swipeAim=true;}else G.swipeAim=false;}
+  else GST.idle+=1/60;
   if(GST.rel){GST.rel=false;
-    /* a flick that started and ended between two frames still counts */
-    if(!GST.mode){const dx=last[0]-GST.x0,dy=last[1]-GST.y0;if(Math.hypot(dx,dy)>10)GST.mode=Math.abs(dx)>Math.abs(dy)*1.25?'slide':'swing';
-      if(GST.mode==='slide')G.x0=clamp(GST.sx+dx*dragK(),-.42,.42);}
-    if(GST.mode==='swing'){const s=stroke();
-      if(s&&s.fy<-28&&s.peak>60){const ang=clamp(Math.atan2(s.fx,-s.fy)*.1,-.07,.07),spin=clamp(s.curl/.45,-1,1);
-        throwBall(G.x0,ang,spdFrom(swPow(s.peak)),Math.abs(spin)<.12?0:spin);}}
-    GST.mode='';G.swipeAim=false;G.pspd=0;}
+    const s=stroke(),far=up>Math.max(24,hh*.05);G.x0=slide(far?lo:last);
+    if(s&&far&&s.peak/hh>.35)throwBall(G.x0,aimFrom(s),spdFrom(powFrom(s.peak)),spinFrom(s));
+    else if(far){GST.hint='SWIPE A LITTLE FASTER';GST.hintT=1.8;SFX.back();}
+    GST.mode='';G.swipeAim=false;G.pspd=0;G.pspin=0;}
+  if(GST.hintT>0)GST.hintT-=1/60;
+}
+/* ---------- the predicted path, drawn on the lane while you aim ----------
+   The ball alone, rolled in a scratch world with the real physics; x sampled every half metre. */
+const PVW=mkWorld(),PATH=new Float32Array(37),PV={key:'',on:false,end:7,fade:5,al:0};
+function previewTick(){
+  if(G.ph!=='aim'||S.mode!=='play'||G.auto){PV.on=false;return;}
+  let ang=0,spd=spdFrom(.45),spin=0,full=false;
+  if(G.swipeAim){ang=G.pang;spin=G.pspin;spd=spdFrom(G.pspd);full=true;}
+  else if(G.kst===1){ang=G.kang;spin=SPIN[G.spinI];full=true;}
+  else if(G.kst===2){ang=G.kang;spin=SPIN[G.spinI];spd=spdFrom(G.kpow);full=true;}
+  else if(!touchy)spin=SPIN[G.spinI];
+  PV.on=true;PV.end=full?15.5:7;PV.fade=full?10:4.5;PV.al+=((full?1:.55)-PV.al)*.25;
+  const key=[G.x0.toFixed(3),ang.toFixed(4),spd.toFixed(2),spin.toFixed(2)].join();if(key===PV.key)return;PV.key=key;
+  const P=PVW;for(const p of P.pins)p.on=false;P.sw.on=false;launch(P,G.x0,ang,spd,spin,24+12*Math.abs(spin));let j=0,last=G.x0;
+  for(let i=0;i<HZ*5&&j<37;i++){physStep(P,1/HZ);P.nev=0;const b=P.ball;if(!b.on)break;last=b.x;while(j<37&&b.z>=.35+j*.5){PATH[j++]=b.x;}}
+  while(j<37)PATH[j++]=last;
 }
 function playerAim(dt,c,e){
   if(e.b){G.spinI=(G.spinI+1)%SPIN.length;SFX.select();}
   if(G.kst===0){if(Math.abs(c.x)>.2)G.x0=clamp(G.x0+c.x*dt*.5,-.42,.42);if(e.a){G.kst=1;G.kph=0;SFX.select();}}
   else if(G.kst===1){G.kph+=dt*2.3;G.kang=Math.sin(G.kph)*.052;if(e.a){G.kst=2;G.kph2=0;SFX.select();}else if(e.d){G.kst=0;SFX.back();}}
   else{G.kph2+=dt*2.7;G.kpow=.5-.5*Math.cos(G.kph2);if(e.a)throwBall(G.x0,G.kang,spdFrom(G.kpow),SPIN[G.spinI]);else if(e.d){G.kst=1;SFX.back();}}
-  gestureAim();
+  gestureAim();previewTick();
 }
 /* ---------- one simulation tick of the alley ---------- */
 function gameTick(dt,c,e,tap){

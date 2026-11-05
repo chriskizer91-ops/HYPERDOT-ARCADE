@@ -33,18 +33,22 @@ function hud(){
   const rs=G.rs||rackState(G.rolls),by=H-8;
   if(S.mode==='play'){
     if(!G.over)otxt3(g,'FRAME '+(rs.f+1)+'  BALL '+(rs.b+1),3,by,'#c8c0ff');
-    if(G.mph&&G.ph!=='aim')otxt3(g,G.mph.toFixed(1)+' MPH',3,by-8,'#ffd040');
+    if(G.mph&&G.ph!=='aim'){const sp=G.shot?G.shot.spin:0;otxt3(g,G.mph.toFixed(1)+' MPH'+(sp<-.02?'  HOOK <':sp>.02?'  HOOK >':''),3,by-8,'#ffd040');}
     drawPinDiagram(W-13,H-17-PADB,3);
   }
   if(playing&&G.ph==='aim'&&!G.auto){
     if(!touchy||G.kst)otxt3(g,(touchy?'':'SHIFT ')+'SPIN: '+SPINL[G.spinI],3,by-8,'#7ce8ff');
-    let hint=touchy?'SWIPE UP TO BOWL':'SWIPE UP, OR SPACE: SET LINE';
-    if(G.kst===1)hint='SPACE: LOCK AIM';else if(G.kst===2)hint='SPACE: BOWL';else if(G.swipeAim)hint='RELEASE TO BOWL - CURVE TO HOOK';
-    if(G.kst===0&&!touchy&&!G.swipeAim)hint='< > LINE  SPACE SET  OR SWIPE UP';
-    const hy=PORTRAIT?Math.round(H*.8):H-38;
-    otxt3(g,hint,Math.round(W/2),hy,(S.t*2|0)%2||G.kst||G.swipeAim?'#ffffff':'#ffb040',1,'c');
-    if(touchy&&!G.swipeAim&&G.rolls.length<2)otxt3(g,'CURVE IT TO HOOK - DRAG TO MOVE',Math.round(W/2),hy+8,'#a39cb4',1,'c');
-    if(G.kst===2||G.swipeAim){const v=G.kst===2?G.kpow:G.pspd,x=5,y0=Math.round(H*.3),hh=Math.round(H*.4);
+    const hy=PORTRAIT?Math.round(H*.8):H-38,held=GST.down&&GST.mode;
+    if(!held){
+      let hint=touchy?'SWIPE UP TO BOWL':'SWIPE UP, OR SPACE: SET LINE';
+      if(G.kst===1)hint='SPACE: LOCK AIM';else if(G.kst===2)hint='SPACE: BOWL';
+      if(G.kst===0&&!touchy)hint='< > LINE  SPACE SET  OR SWIPE UP';
+      if(GST.hintT>0)hint=GST.hint;
+      otxt3(g,hint,Math.round(W/2),hy,GST.hintT>0?'#ffb040':(S.t*2|0)%2||G.kst?'#ffffff':'#ffb040',1,'c');
+      if(touchy&&G.rolls.length<3&&GST.hintT<=0)otxt3(g,'SLIDE TO MOVE - CURVE THE END TO HOOK',Math.round(W/2),hy+8,'#a39cb4',1,'c');
+      if(G.kst===0&&(G.rolls.length<2||GST.idle>5))ghostSwipe();}
+    else strokeDots();
+    if(G.kst===2){const v=G.kpow,x=5,y0=Math.round(H*.3),hh=Math.round(H*.4);
       g.fillStyle='#000';g.fillRect(x-1,y0-1,5,hh+2);const fh=Math.round(hh*v);for(let i=0;i<fh;i++){const u=i/hh;g.fillStyle=u<.55?'#40ff80':u<.8?'#ffd040':'#ff4a6a';g.fillRect(x,y0+hh-1-i,3,1);}
       otxt3(g,'PWR',x+1,y0-8,'#ffffff',1,'c');}}
   if(playing&&!S.demo&&G.ph==='pins'&&G.pt>1.2&&G.fast===1)otxt3(g,touchy?'TAP TO SKIP':'SPACE TO SKIP',W/2,H-24,'#8a80c0',1,'c');
@@ -75,3 +79,26 @@ function overCard(){
   if(S.newHi&&(t*4|0)%2)otxt3(g,'NEW HIGH SCORE',W/2,y+28+8*big+4,'#6aff5a',1,'c');
   if(t>1.5)otxt3(g,touchy?'TAP TO CONTINUE':'PRESS START',W/2,H-9,(t*2|0)%2?'#ffffff':'#8a80c0',1,'c');
 }
+
+/* where the ball in hand sits on the HUD grid */
+const _bp=new THREE.Vector3();
+function ballHud(){const b=PW.ball;_bp.copy(V3(b.x,b.y,b.z)).project(CAM3);return [(_bp.x+1)/2*W,(1-_bp.y)/2*H];}
+/* the thumb's stroke, as LED dots: green to amber to red with speed; the speed and hook ride above it */
+function strokeDots(){
+  const P=GST.pts,n=P.length;if(!n)return;const sx=W/innerWidth,sy=H/innerHeight,t=GST.mode==='throw';
+  const v=G.pspd,col=v<.45?'#40ff80':v<.8?'#ffd040':'#ff4a6a';
+  const i0=t?GST.lowI:Math.max(0,n-24),dots=[];
+  for(let i=Math.max(i0,1);i<n;i++){const x0=P[i-1][0]*sx,y0=P[i-1][1]*sy,x1=P[i][0]*sx,y1=P[i][1]*sy,m=Math.max(1,Math.ceil(Math.hypot(x1-x0,y1-y0)));
+    for(let k=0;k<m;k++)dots.push([Math.round(x0+(x1-x0)*k/m),Math.round(y0+(y1-y0)*k/m),(i-i0)/Math.max(1,n-i0)]);}
+  g.fillStyle='#000';for(const [x,y] of dots)g.fillRect(x-1,y-1,3,3);
+  g.fillStyle=t?col:'#7ce8ff';for(const [x,y,a] of dots){g.globalAlpha=.3+.7*a;g.fillRect(x,y,1,1);}g.globalAlpha=1;
+  const l=P[n-1],lx=clamp(Math.round(l[0]*sx),24,W-24),ly=Math.max(PADT+sheetH()+6,Math.round(l[1]*sy)-14);
+  if(t){const mph=(spdFrom(G.pspd)*2.237).toFixed(0)+' MPH',hk=G.pspin<-.4?'HOOK <<':G.pspin<-.02?'HOOK <':G.pspin>.4?'HOOK >>':G.pspin>.02?'HOOK >':'STRAIGHT';
+    otxt3(g,mph,lx,ly,col,1,'c');otxt3(g,hk,lx,ly+7,G.pspin?'#ff9ad0':'#c8c0ff',1,'c');}
+  else{const [bx]=ballHud();otxt3(g,'<  MOVE  >',clamp(Math.round(bx),24,W-24),ly,'#7ce8ff',1,'c');}
+}
+/* a ghost swipe for the first balls: chevrons rising from the ball in hand */
+function ghostSwipe(){if(!touchy)return;const [bx,by0]=ballHud(),t=S.t*1.4%1;
+  for(let k=0;k<3;k++){const u=(t+k/3)%1,y=Math.round(by0-H*(.06+.22*u)),a=Math.sin(u*Math.PI);if(a<.05)continue;
+    g.globalAlpha=a;const x=Math.round(bx);g.fillStyle='#000';for(const [ox,oy] of [[-3,1],[-2,0],[-1,-1],[0,-2],[1,-1],[2,0],[3,1]])g.fillRect(x+ox-1,y+oy-1,3,3);
+    g.fillStyle='#ffd040';for(const [ox,oy] of [[-3,1],[-2,0],[-1,-1],[0,-2],[1,-1],[2,0],[3,1]])g.fillRect(x+ox,y+oy,1,1);g.globalAlpha=1;}}

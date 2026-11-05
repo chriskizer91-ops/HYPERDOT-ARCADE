@@ -65,7 +65,8 @@ function patch(mat,o){
 /* shared, per-frame uniforms */
 const U={uT:{value:0},uFx:{value:new THREE.Vector4(0,0,1,0)},uChase:{value:-9},tRefl:{value:null},uReflMat:{value:new THREE.Matrix4()},uReflOn:{value:0},
   uAim:{value:new THREE.Vector4(0,0,0,0)},uBallP:{value:new THREE.Vector4(0,0,0,0)},uBallA:{value:new THREE.Color()},uBallB:{value:new THREE.Color()},uSpots:{value:[new THREE.Vector4(),new THREE.Vector4(),new THREE.Vector4()]},
-  uSpotC:{value:[new THREE.Color(),new THREE.Color(),new THREE.Color()]},uStrobe:{value:0}};
+  uSpotC:{value:[new THREE.Color(),new THREE.Color(),new THREE.Color()]},uStrobe:{value:0},
+  uPath:{value:new Float32Array(37)},uPathOn:{value:new THREE.Vector4(0,7,4.5,0)}};
 const GLSL_SPOTS=`uniform vec4 uSpots[3];uniform vec3 uSpotC[3];
 vec3 spots(vec3 p){vec3 s=vec3(0.);for(int i=0;i<3;i++){vec2 d=p.xz-uSpots[i].xy;float dd=dot(d,d),r=uSpots[i].z;s+=uSpotC[i]*smoothstep(r*r,r*r*.05,dd)*uSpots[i].w;}return s;}`;
 
@@ -74,7 +75,7 @@ const LOIL=12.2,HW=LN.hw,GXc=LN.gx,GYc=LN.gy,GRc=LN.gr,WALLc=LN.wall,DECKZ=LN.de
 const laneMat=patch(new THREE.MeshStandardMaterial({color:0xffffff,roughness:.25,metalness:0,envMapIntensity:.15}),{key:'lane',
   uni:U,
   vh:'uniform mat4 uReflMat;varying vec4 vRefl;',vm:'vRefl=uReflMat*vec4(vWP,1.);',
-  fh:`uniform float uT;uniform vec4 uFx;uniform float uChase;uniform sampler2D tRefl;uniform float uReflOn;uniform vec4 uAim;uniform vec4 uBallP;varying vec4 vRefl;${GLSL_SPOTS}
+  fh:`uniform float uT;uniform vec4 uFx;uniform float uChase;uniform sampler2D tRefl;uniform float uReflOn;uniform vec4 uAim;uniform vec4 uBallP;uniform float uPath[37];uniform vec4 uPathOn;varying vec4 vRefl;${GLSL_SPOTS}
   float gloss=0.,rough=.3,bseed=0.;vec3 glowE=vec3(0.);
   vec3 laneGlow(vec3 p,float k){vec3 e=vec3(0.);float lx=p.x-k*${CELL.toFixed(2)},z=p.z;
     if(z>-.02&&z<.02)e+=vec3(1.,.15,.35)*2.2;
@@ -87,7 +88,13 @@ const laneMat=patch(new THREE.MeshStandardMaterial({color:0xffffff,roughness:.25
       e+=vec3(.95,.4,1.)*1.1*smoothstep(.011,.006,length(vec2(abs(lx)-(${HW.toFixed(3)}-(bb-.5)*.02703),zz-rz)));}}}
     /* the chase: a band of light runs down the lane after the release */
     if(uChase>-1.&&z>0.&&z<${DECKZ.toFixed(2)})e+=vec3(.5,.25,1.)*.55*smoothstep(1.2,0.,abs(z-uChase))*smoothstep(.0,.06,${HW.toFixed(3)}-abs(lx));
-    if(uAim.z>.5&&abs(k)<.1&&z>.3&&z<7.){float ax=uAim.x+tan(uAim.y)*(z-.35),s=(z-.35)/cos(uAim.y);
+    /* the predicted path while the player aims: x every half metre from z=.35; it fades out before the pins */
+    if(uPathOn.x>.5&&abs(k)<.1&&z>.35&&z<uPathOn.y){float fi=(z-.35)/.5;int i=min(int(fi),35);float px=mix(uPath[i],uPath[i+1],fi-float(i)),d=abs(lx-px);
+      float fade=(1.-smoothstep(uPathOn.z,uPathOn.y,z))*uPathOn.w,dash=step(fract((z-.35)*2.2-uT*1.6),.6);
+      e+=mix(vec3(.4,1.,.95),vec3(1.,.45,.95),smoothstep(5.,13.,z))*1.7*fade*(.35+.65*dash)*smoothstep(.013,.004,d);
+      e+=vec3(.25,.8,1.)*.12*fade*smoothstep(.045,.0,d);
+      if(abs(z-4.6)<.05)e+=vec3(1.,.8,.3)*2.2*fade*smoothstep(.04,.025,d)*step(.012,d);}
+    else if(uAim.z>.5&&abs(k)<.1&&z>.3&&z<7.){float ax=uAim.x+tan(uAim.y)*(z-.35),s=(z-.35)/cos(uAim.y);
       float on=step(fract(s*2.2-uT*1.6),.55)*smoothstep(6.5,1.,s)*uAim.w;
       e+=vec3(.4,1.,.95)*2.4*on*smoothstep(.016,.006,abs(lx-ax));
       if(abs(z-4.6)<.05)e+=vec3(1.,.8,.3)*2.2*uAim.w*smoothstep(.04,.025,abs(lx-ax))*step(.012,abs(lx-ax));}

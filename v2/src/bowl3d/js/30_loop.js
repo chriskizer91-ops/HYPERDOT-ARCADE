@@ -33,7 +33,8 @@ function syncWorld(){
   const nk=NBR.join(',');if(nk!==NBK){NBK=nk;nbSync();}
   U.uT.value=S.t;U.uFx.value.set(G.strobe,G.pinFlash,1,0);U.uStrobe.value=G.strobe>.4&&!reduce?((S.t*14|0)%2)*G.strobe:G.strobe*.3;
   U.uChase.value=G.chase!=null&&G.chase>=0?G.chase:-9;
-  U.uAim.value.set(AIMU.x,AIMU.a,AIMU.on?1:0,AIMU.al);U.uBallA.value.setRGB(BSTY.a[0],BSTY.a[1],BSTY.a[2]);U.uBallB.value.setRGB(BSTY.b[0],BSTY.b[1],BSTY.b[2]);
+  const pv=PV.on&&G.ph==='aim'&&S.mode==='play'&&!G.auto;U.uPathOn.value.set(pv?1:0,PV.end,PV.fade,PV.al);if(pv)U.uPath.value.set(PATH);
+  U.uAim.value.set(AIMU.x,AIMU.a,AIMU.on&&!pv?1:0,AIMU.al);U.uBallA.value.setRGB(BSTY.a[0],BSTY.a[1],BSTY.a[2]);U.uBallB.value.setRGB(BSTY.b[0],BSTY.b[1],BSTY.b[2]);
   M_COMP.uniforms.uFlash.value=reduce?0:Math.max(0,G.strobe-.7)*.5;
   spotsTick(S.t,G.strobe);
   if((LEDK++&1)===0){paintMask();if(LEDK%4===1)paintOverhead();}

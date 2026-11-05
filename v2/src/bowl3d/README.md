@@ -12,11 +12,19 @@ The 3D version of Strike Night, the bowling game in the redemption corner. The o
 
 | | Laptop | Phone | Gamepad |
 |---|---|---|---|
-| Move the ball | drag sideways, or ← → | drag sideways | stick / d-pad |
-| Bowl | swipe up (curve the end of the swipe to hook), or Space three times: line, aim, power | swipe up, curve it to hook | A three times |
-| Spin (keys) | Shift | (from the swipe) | B |
+| Move the ball | hold and drag sideways, or ← → | hold and slide sideways (the ball follows your thumb) | stick / d-pad |
+| Bowl | push up and let go, or Space three times: line, aim, power | push up and let go | A three times |
+| Hook | curve the end of the swipe, or Shift to pick a spin | curve the end of the swipe | B |
+| Cancel a swipe | slide back down before letting go | the same | B / down |
 | Skip the pin action | Space or click | tap | A |
 | Pause | Esc, or the Pause chip | the round II button | Start |
+
+**How the swipe is read.** The throw is the stroke from its lowest point to where you let go, so it can follow a little back-swing, and it can start anywhere on the screen.
+- **Speed** comes from the stroke's fastest moment, in screen heights per second, so every screen size feels the same. A relaxed swipe is about 16 mph, a quick flick about 19 to 20, and the top is 21.5.
+- **Aim** comes from the stroke's direction, but gently: a swipe 10° off straight moves the ball 6 cm at the pins, and 20° moves it about 15 cm. Lining up by sliding the ball is the main way to aim.
+- **Hook** is how far the stroke turns from its first half to its last third. A natural thumb arc (under 10°) still rolls straight; a deliberate 40° curve is a strong hook.
+
+While you swipe, your stroke shows as LED dots, with the speed and hook above your thumb. The lane shows the ball's predicted path, rolled with the real physics; it fades out about 15 m down the lane, before the pins. For the first balls a ghost swipe (rising chevrons over the ball) shows what to do.
 
 ## Arcade contract
 
