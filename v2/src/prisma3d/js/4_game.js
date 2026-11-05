@@ -146,7 +146,7 @@ function ambUpdate(){
   const load=kick?1:GBX.cutT>0||GBX.limCut?0:GBX.blipT>0?.8:thr<.5?0:ni>0?1:B.air?.8:(GBX.landT<.35?1:thr*(B.hitT>0?.4:.82+.18*Math.min(1,Math.abs(B.steer)*1.5)));
   /* leaning into a turn the rider rolls off a little and the revs ease; straighten up and it pulls again */
   GBX.lean=(GBX.lean||0)+(Math.min(1,Math.abs(B.steer)*1.3)-(GBX.lean||0))*Math.min(1,dt*3.5);const lean=ni>0||brk||B.air?0:GBX.lean;
-  if(AMB.eng)AMB.eng.update({rpm:r*BIKE_ENG.redline*(1-.07*lean),thr:thr*(1-.3*lean),load:load*(1-.35*lean),cut:GBX.cutT>0||GBX.limCut||crack,nos:B.nitroT>0,speed:B.vs,gear:GBX.g,vol,dist:VIEW.mode?1.7:3.2,pan:0,rear:1},dt);
+  if(AMB.eng)AMB.eng.update({rpm:r*BIKE_ENG.redline*(1-.07*lean),thr:thr*(1-.3*lean),load:load*(1-.35*lean),cut:GBX.cutT>0||GBX.limCut||crack,nos:B.nitroT>0,speed:B.vs,gear:GBX.g,vol,dist:[3.2,4.6,1.7][VIEW.mode],pan:0,rear:1},dt);
   /* the fans spool with the throttle and lag behind it */
   const fanT=clamp(.18+.6*sp*thr+.35*ni+(B.air?.4:0)+(over?.15:0),0,1.5);GBX.fan+=(fanT-GBX.fan)*Math.min(1,dt*(fanT>GBX.fan?1.6:.9));const fan=GBX.fan;
   set(AMB.f1.frequency,1100+2600*fan,.05);set(AMB.f2.frequency,(1100+2600*fan)*1.5,.05);set(AMB.fg.gain,vol*(.012+.028*fan),.08);

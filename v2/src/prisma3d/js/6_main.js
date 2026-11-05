@@ -12,7 +12,7 @@ function toggleSound(){AU.muted=!AU.muted;store.set('hd-prisma3d-mute',AU.muted?
 function pauseAct(i){
   const id=pauseItems()[i][1];SFX.confirm();
   if(id==='resume')setPause(false);
-  else if(id==='view')setView(VIEW.mode?0:1);
+  else if(id==='view')nextView();
   else if(id==='qual'){if(QS.auto)setQuality(0,false);else if(QS.i<2)setQuality(QS.i+1,false);else setQuality(touchy?1:2,true);}
   else if(id==='snd')toggleSound();
   else{setPause(false);if(EMBED)ARC.exit();APP_attract();}
@@ -20,7 +20,7 @@ function pauseAct(i){
 function tick(dt){
   const c=readCtl();c.view=K('KeyC')||K('KeyV');const e=edges(c),tap=PTR.pressed;S.t+=dt;
   if((S.mode==='play'||S.mode==='intro')&&e.pause){setPause(!S.paused);return;}
-  if(e.view&&!S.paused){setView(VIEW.mode?0:1);SFX.move();}
+  if(e.view&&!S.paused){nextView();SFX.move();}
   if(S.paused){
     const n=pauseItems().length;
     if(e.u){S.pauseI=(S.pauseI+n-1)%n;SFX.move();}if(e.d){S.pauseI=(S.pauseI+1)%n;SFX.move();}

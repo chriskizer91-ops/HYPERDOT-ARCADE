@@ -23,7 +23,7 @@ The build joins `shell.html`, `js/*.js` (in name order) and the art in `art/` in
 | `js/2f_render.js` | The frame: the mirror pass, the scene, glow, prism trails, the final picture, and quality levels. |
 | `js/3_world.js` | The original's game world (road curve, bike, traffic, van, drones). Only the save key changed. |
 | `js/4_game.js` | The original's game flow and scoring, plus the new superbike engine tuning. |
-| `js/5_view.js` | Cameras (chase and helmet) and the dot-matrix HUD. |
+| `js/5_view.js` | Cameras (close chase, far chase and helmet; C or the pause menu switches) and the dot-matrix HUD. |
 | `js/6_main.js` | The frame loop, the pause menu and boot. |
 | `js/2g_art.js` | Loads Christopher's images onto the GPU, and builds the carved vehicles. The code-made look stays as the fallback until each picture is decoded. |
 | `art/` | The processed images (see `art/README.md`). |

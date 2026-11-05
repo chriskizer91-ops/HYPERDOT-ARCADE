@@ -153,7 +153,7 @@ function drawVehicles(P,mirror){
   for(const d of DR){if(!d.on)continue;const q=trackOf([d.x,d.y,d.z]);gl.uniformMatrix4fv(u.uModel,false,modelMat(q[2],q[0],q[1],TG.yaw||0,Math.sin(S.clock*1.3)*.08,-.12));gl.uniform4f(u.uVeh,0,0,0,0);
     if(carved){projUniforms(u,VEHDATA.drone,2,TX.veh.drone);gl.uniform1f(u.uGloss,.4);drawVeh(TX.meshes.drone);}else drawMesh(MODELS.drone);}
   /* the bike (hidden in the helmet view, except in the mirror) */
-  if(VIEW.mode===0||mirror||S.mode!=='play'&&S.mode!=='intro'){
+  if(VIEW.mode!==2||mirror||S.mode!=='play'&&S.mode!=='intro'){
     gl.uniformMatrix4fv(u.uModel,false,modelMat(B.s,B.u,B.h+.05+Math.sin(S.clock*9)*.035,B.yaw,bikeLean(),bikePitch(),carved?1:1.08));gl.uniform3fv(u.uPaint,BIKE_PAINT);
     gl.uniform4f(u.uVeh,S.ctlBrake?1:0,0,B.nitroT>0?1:B.boostT>0?.5:0,0);
     if(carved){projUniforms(u,VEHDATA.bike,0,TX.veh.bike);gl.uniform1f(u.uGloss,.55);decalUniforms(u,(TX.on&TXF.DEC)!==0,TX.dec,BIKE_DECAL,[0,0,1,174/512],.35);drawVeh(TX.meshes.bike);gl.uniform1f(u.uDecOn,0);}
@@ -211,7 +211,7 @@ function buildFX(){
   const M=new MB(),B=BK,ni=B.nitroT>0?1:B.boostT>0?.5:0,t=S.clock;
   /* the bike's wake: two ribbons of spectrum off the thruster rings */
   const ph=t*(.6+B.vs/60);
-  if((S.mode==='play'||S.mode==='intro'||S.mode==='title')&&!(VIEW.mode===1&&S.mode==='play'))for(const r of RIB.bike)ribbon(M,r,.045+ni*.025,k=>{const c=hueRGB((k*.85+ph)%1);const I=(1.1+ni*1.6)*(1-k*.6);return [c[0]*I,c[1]*I,c[2]*I];},.8);
+  if((S.mode==='play'||S.mode==='intro'||S.mode==='title')&&!(VIEW.mode===2&&S.mode==='play'))for(const r of RIB.bike)ribbon(M,r,.045+ni*.025,k=>{const c=hueRGB((k*.85+ph)%1);const I=(1.1+ni*1.6)*(1-k*.6);return [c[0]*I,c[1]*I,c[2]*I];},.8);
   for(const r of RIB.van)ribbon(M,r,.12,()=>[4,.25,.15],1);
   for(const c of TR.cars){const r=RIB.cars.get(c);if(!r)continue;if(c.s-B.s<-6||c.s-B.s>160)continue;for(const q of r)ribbon(M,q,.07,()=>[2.4+c.brake*2,.12,.08],.8);}
   /* sparks: hot streaks; smoke: dim puffs */

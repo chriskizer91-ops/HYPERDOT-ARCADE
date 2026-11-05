@@ -2036,7 +2036,7 @@ function drawVehicles(P,mirror){
   for(const d of DR){if(!d.on)continue;const q=trackOf([d.x,d.y,d.z]);gl.uniformMatrix4fv(u.uModel,false,modelMat(q[2],q[0],q[1],TG.yaw||0,Math.sin(S.clock*1.3)*.08,-.12));gl.uniform4f(u.uVeh,0,0,0,0);
     if(carved){projUniforms(u,VEHDATA.drone,2,TX.veh.drone);gl.uniform1f(u.uGloss,.4);drawVeh(TX.meshes.drone);}else drawMesh(MODELS.drone);}
   /* the bike (hidden in the helmet view, except in the mirror) */
-  if(VIEW.mode===0||mirror||S.mode!=='play'&&S.mode!=='intro'){
+  if(VIEW.mode!==2||mirror||S.mode!=='play'&&S.mode!=='intro'){
     gl.uniformMatrix4fv(u.uModel,false,modelMat(B.s,B.u,B.h+.05+Math.sin(S.clock*9)*.035,B.yaw,bikeLean(),bikePitch(),carved?1:1.08));gl.uniform3fv(u.uPaint,BIKE_PAINT);
     gl.uniform4f(u.uVeh,S.ctlBrake?1:0,0,B.nitroT>0?1:B.boostT>0?.5:0,0);
     if(carved){projUniforms(u,VEHDATA.bike,0,TX.veh.bike);gl.uniform1f(u.uGloss,.55);decalUniforms(u,(TX.on&TXF.DEC)!==0,TX.dec,BIKE_DECAL,[0,0,1,174/512],.35);drawVeh(TX.meshes.bike);gl.uniform1f(u.uDecOn,0);}
@@ -2094,7 +2094,7 @@ function buildFX(){
   const M=new MB(),B=BK,ni=B.nitroT>0?1:B.boostT>0?.5:0,t=S.clock;
   /* the bike's wake: two ribbons of spectrum off the thruster rings */
   const ph=t*(.6+B.vs/60);
-  if((S.mode==='play'||S.mode==='intro'||S.mode==='title')&&!(VIEW.mode===1&&S.mode==='play'))for(const r of RIB.bike)ribbon(M,r,.045+ni*.025,k=>{const c=hueRGB((k*.85+ph)%1);const I=(1.1+ni*1.6)*(1-k*.6);return [c[0]*I,c[1]*I,c[2]*I];},.8);
+  if((S.mode==='play'||S.mode==='intro'||S.mode==='title')&&!(VIEW.mode===2&&S.mode==='play'))for(const r of RIB.bike)ribbon(M,r,.045+ni*.025,k=>{const c=hueRGB((k*.85+ph)%1);const I=(1.1+ni*1.6)*(1-k*.6);return [c[0]*I,c[1]*I,c[2]*I];},.8);
   for(const r of RIB.van)ribbon(M,r,.12,()=>[4,.25,.15],1);
   for(const c of TR.cars){const r=RIB.cars.get(c);if(!r)continue;if(c.s-B.s<-6||c.s-B.s>160)continue;for(const q of r)ribbon(M,q,.07,()=>[2.4+c.brake*2,.12,.08],.8);}
   /* sparks: hot streaks; smoke: dim puffs */
@@ -2664,7 +2664,7 @@ function ambUpdate(){
   const load=kick?1:GBX.cutT>0||GBX.limCut?0:GBX.blipT>0?.8:thr<.5?0:ni>0?1:B.air?.8:(GBX.landT<.35?1:thr*(B.hitT>0?.4:.82+.18*Math.min(1,Math.abs(B.steer)*1.5)));
   /* leaning into a turn the rider rolls off a little and the revs ease; straighten up and it pulls again */
   GBX.lean=(GBX.lean||0)+(Math.min(1,Math.abs(B.steer)*1.3)-(GBX.lean||0))*Math.min(1,dt*3.5);const lean=ni>0||brk||B.air?0:GBX.lean;
-  if(AMB.eng)AMB.eng.update({rpm:r*BIKE_ENG.redline*(1-.07*lean),thr:thr*(1-.3*lean),load:load*(1-.35*lean),cut:GBX.cutT>0||GBX.limCut||crack,nos:B.nitroT>0,speed:B.vs,gear:GBX.g,vol,dist:VIEW.mode?1.7:3.2,pan:0,rear:1},dt);
+  if(AMB.eng)AMB.eng.update({rpm:r*BIKE_ENG.redline*(1-.07*lean),thr:thr*(1-.3*lean),load:load*(1-.35*lean),cut:GBX.cutT>0||GBX.limCut||crack,nos:B.nitroT>0,speed:B.vs,gear:GBX.g,vol,dist:[3.2,4.6,1.7][VIEW.mode],pan:0,rear:1},dt);
   /* the fans spool with the throttle and lag behind it */
   const fanT=clamp(.18+.6*sp*thr+.35*ni+(B.air?.4:0)+(over?.15:0),0,1.5);GBX.fan+=(fanT-GBX.fan)*Math.min(1,dt*(fanT>GBX.fan?1.6:.9));const fan=GBX.fan;
   set(AMB.f1.frequency,1100+2600*fan,.05);set(AMB.f2.frequency,(1100+2600*fan)*1.5,.05);set(AMB.fg.gain,vol*(.012+.028*fan),.08);
@@ -2871,18 +2871,25 @@ const v3={sub:(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],add:(a,b)=>[a[0]+b[0],a[1]+
   norm:a=>{const l=Math.hypot(a[0],a[1],a[2])||1;return [a[0]/l,a[1]/l,a[2]/l];},lerp:(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t]};
 let CAMOV=null;
 const CAM={eye:[0,3,-8],f:[0,0,1],r:[1,0,0],u:[0,1,0],fov:1,lu:0,lh:0,roll:0,s:0,shT:0};
-const VIEW={mode:store.get('hd-prisma3d-view','0')==='1'?1:0};
-function setView(m){VIEW.mode=m;store.set('hd-prisma3d-view',String(m));}
+/* three views: 0 close chase, 1 far chase, 2 helmet. The old save ('0' chase / '1' helmet) still loads. */
+const VIEWS=['close','far','helmet'],VIEWN=['CLOSE CHASE','FAR CHASE','HELMET'];
+const VIEW={mode:(()=>{const v=store.get('hd-prisma3d-view','close');return v==='1'?2:Math.max(0,VIEWS.indexOf(v));})()};
+function setView(m){VIEW.mode=m;store.set('hd-prisma3d-view',VIEWS[m]);}
+function nextView(){setView((VIEW.mode+1)%3);if(!S.paused&&(S.mode==='play'||S.mode==='intro'))flashMsg(VIEWN[VIEW.mode],'#9fe8ff',1.2);}
 function lookAt(eye,at,roll){
   const f=v3.norm(v3.sub(at,eye));let r=v3.norm(v3.cross([0,1,0],f)),u=v3.cross(f,r);
   if(roll){const c=Math.cos(roll),s=Math.sin(roll),r2=v3.add(v3.mul(r,c),v3.mul(u,s)),u2=v3.sub(v3.mul(u,c),v3.mul(r,s));r=r2;u=u2;}
   CAM.eye=eye;CAM.f=f;CAM.r=r;CAM.u=u;CAM.s=eye[2];
 }
+/* chase views: close sits just behind and above the bike, far sits further back and higher.
+   CAM.cf slides between the two so switching glides instead of jumping. */
 function chasePose(dt){
   const B=BK;CAM.lu+=(B.u-CAM.lu)*Math.min(1,dt*7);CAM.lh+=(B.h-CAM.lh)*Math.min(1,dt*(B.air?3.5:8));
-  const sp=clamp(B.vs/100,0,1.4);
-  const back=5.1+sp*1.3+(B.nitroT>0?1.6:0),up=2.05-sp*.25;
-  return [W3(B.s-back,CAM.lu*.9,CAM.lh*.75+up),W3(B.s+14,B.u*.72+CAM.lu*.28,CAM.lh*.55+1.0)];
+  if(CAM.cf===undefined)CAM.cf=VIEW.mode===1?1:0;
+  CAM.cf+=((VIEW.mode===1?1:0)-CAM.cf)*Math.min(1,dt*4);const f=CAM.cf,L=(a,b)=>a+(b-a)*f;
+  const sp=clamp(B.vs/100,0,1.4),ni=B.nitroT>0?1:0;
+  const back=L(5.4,10.5)+sp*L(1.3,2.2)+ni*L(1.6,2.4),up=L(3.3,4.7)-sp*L(.2,.3);
+  return [W3(B.s-back,CAM.lu*L(.9,.8),CAM.lh*.75+up),W3(B.s+L(14,19),B.u*.72+CAM.lu*.28,CAM.lh*.55+L(.6,.55))];
 }
 function helmetPose(){
   const B=BK,ln=bikeLean(),yr=Math.atan2(B.vu,Math.max(1,B.vs));
@@ -2892,8 +2899,8 @@ function helmetPose(){
 const smooth=t=>t<=0?0:t>=1?1:t*t*(3-2*t);
 function updateCamera(dt){
   const B=BK,ni=B.nitroT>0?1:0,sp=clamp(B.vs/100,0,1.4);let eye,at,roll=B.bank*.3,fov=.86+B.vs/380+ni*.14+(B.boostT>0?.06:0);
-  const m=S.mode,helm=VIEW.mode===1&&(m==='play'||(m==='intro'&&S.t>3.6));
-  if(m==='intro'){const k=smooth((S.t-.3)/3.4),[ce,ca]=VIEW.mode===1?helmetPose():chasePose(dt);
+  const m=S.mode,helm=VIEW.mode===2&&(m==='play'||(m==='intro'&&S.t>3.6));
+  if(m==='intro'){const k=smooth((S.t-.3)/3.4),[ce,ca]=VIEW.mode===2?helmetPose():chasePose(dt);
     eye=v3.lerp(W3(B.s-34,-6,24),ce,k);at=v3.lerp(W3(B.s+70,0,3),ca,k);roll*=k;}
   else if(m==='caught'||m==='tally'||(TG.state==='caught'&&m==='title')){
     const a=S.clock*.32+.6,R=m==='tally'?16:12.5,room=limAt(TG.s)-(ST.id===2?.5:1.8);
@@ -3028,7 +3035,7 @@ function drawCenter(title,col,lines){
 }
 /* the pause menu: everything that isn't driving lives here, so the play screen stays clear */
 function pauseItems(){const q=QS.auto?'AUTO ('+qnow().name+')':qnow().name;
-  return [['RESUME','resume'],['VIEW: '+(VIEW.mode?'HELMET':'CHASE'),'view'],['QUALITY: '+q,'qual'],['SOUND: '+(AU.muted?'OFF':'ON'),'snd'],[EMBED?'EXIT':'QUIT TO TITLE','quit']];}
+  return [['RESUME','resume'],['VIEW: '+VIEWN[VIEW.mode],'view'],['QUALITY: '+q,'qual'],['SOUND: '+(AU.muted?'OFF':'ON'),'snd'],[EMBED?'EXIT':'QUIT TO TITLE','quit']];}
 const PAUSE_Y0=()=>Math.round(H*.38),PAUSE_DY=12;
 function drawPause(){
   g.fillStyle='rgba(0,0,0,.6)';g.fillRect(0,0,W,H);otxt5(g,'PAUSED',W/2,Math.round(H*.18),GR.steel,2,'c');
@@ -3063,7 +3070,7 @@ function toggleSound(){AU.muted=!AU.muted;store.set('hd-prisma3d-mute',AU.muted?
 function pauseAct(i){
   const id=pauseItems()[i][1];SFX.confirm();
   if(id==='resume')setPause(false);
-  else if(id==='view')setView(VIEW.mode?0:1);
+  else if(id==='view')nextView();
   else if(id==='qual'){if(QS.auto)setQuality(0,false);else if(QS.i<2)setQuality(QS.i+1,false);else setQuality(touchy?1:2,true);}
   else if(id==='snd')toggleSound();
   else{setPause(false);if(EMBED)ARC.exit();APP_attract();}
@@ -3071,7 +3078,7 @@ function pauseAct(i){
 function tick(dt){
   const c=readCtl();c.view=K('KeyC')||K('KeyV');const e=edges(c),tap=PTR.pressed;S.t+=dt;
   if((S.mode==='play'||S.mode==='intro')&&e.pause){setPause(!S.paused);return;}
-  if(e.view&&!S.paused){setView(VIEW.mode?0:1);SFX.move();}
+  if(e.view&&!S.paused){nextView();SFX.move();}
   if(S.paused){
     const n=pauseItems().length;
     if(e.u){S.pauseI=(S.pauseI+n-1)%n;SFX.move();}if(e.d){S.pauseI=(S.pauseI+1)%n;SFX.move();}

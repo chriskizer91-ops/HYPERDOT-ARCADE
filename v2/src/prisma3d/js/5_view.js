@@ -11,18 +11,25 @@ const v3={sub:(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],add:(a,b)=>[a[0]+b[0],a[1]+
   norm:a=>{const l=Math.hypot(a[0],a[1],a[2])||1;return [a[0]/l,a[1]/l,a[2]/l];},lerp:(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t]};
 let CAMOV=null;
 const CAM={eye:[0,3,-8],f:[0,0,1],r:[1,0,0],u:[0,1,0],fov:1,lu:0,lh:0,roll:0,s:0,shT:0};
-const VIEW={mode:store.get('hd-prisma3d-view','0')==='1'?1:0};
-function setView(m){VIEW.mode=m;store.set('hd-prisma3d-view',String(m));}
+/* three views: 0 close chase, 1 far chase, 2 helmet. The old save ('0' chase / '1' helmet) still loads. */
+const VIEWS=['close','far','helmet'],VIEWN=['CLOSE CHASE','FAR CHASE','HELMET'];
+const VIEW={mode:(()=>{const v=store.get('hd-prisma3d-view','close');return v==='1'?2:Math.max(0,VIEWS.indexOf(v));})()};
+function setView(m){VIEW.mode=m;store.set('hd-prisma3d-view',VIEWS[m]);}
+function nextView(){setView((VIEW.mode+1)%3);if(!S.paused&&(S.mode==='play'||S.mode==='intro'))flashMsg(VIEWN[VIEW.mode],'#9fe8ff',1.2);}
 function lookAt(eye,at,roll){
   const f=v3.norm(v3.sub(at,eye));let r=v3.norm(v3.cross([0,1,0],f)),u=v3.cross(f,r);
   if(roll){const c=Math.cos(roll),s=Math.sin(roll),r2=v3.add(v3.mul(r,c),v3.mul(u,s)),u2=v3.sub(v3.mul(u,c),v3.mul(r,s));r=r2;u=u2;}
   CAM.eye=eye;CAM.f=f;CAM.r=r;CAM.u=u;CAM.s=eye[2];
 }
+/* chase views: close sits just behind and above the bike, far sits further back and higher.
+   CAM.cf slides between the two so switching glides instead of jumping. */
 function chasePose(dt){
   const B=BK;CAM.lu+=(B.u-CAM.lu)*Math.min(1,dt*7);CAM.lh+=(B.h-CAM.lh)*Math.min(1,dt*(B.air?3.5:8));
-  const sp=clamp(B.vs/100,0,1.4);
-  const back=5.1+sp*1.3+(B.nitroT>0?1.6:0),up=2.05-sp*.25;
-  return [W3(B.s-back,CAM.lu*.9,CAM.lh*.75+up),W3(B.s+14,B.u*.72+CAM.lu*.28,CAM.lh*.55+1.0)];
+  if(CAM.cf===undefined)CAM.cf=VIEW.mode===1?1:0;
+  CAM.cf+=((VIEW.mode===1?1:0)-CAM.cf)*Math.min(1,dt*4);const f=CAM.cf,L=(a,b)=>a+(b-a)*f;
+  const sp=clamp(B.vs/100,0,1.4),ni=B.nitroT>0?1:0;
+  const back=L(5.4,10.5)+sp*L(1.3,2.2)+ni*L(1.6,2.4),up=L(3.3,4.7)-sp*L(.2,.3);
+  return [W3(B.s-back,CAM.lu*L(.9,.8),CAM.lh*.75+up),W3(B.s+L(14,19),B.u*.72+CAM.lu*.28,CAM.lh*.55+L(.6,.55))];
 }
 function helmetPose(){
   const B=BK,ln=bikeLean(),yr=Math.atan2(B.vu,Math.max(1,B.vs));
@@ -32,8 +39,8 @@ function helmetPose(){
 const smooth=t=>t<=0?0:t>=1?1:t*t*(3-2*t);
 function updateCamera(dt){
   const B=BK,ni=B.nitroT>0?1:0,sp=clamp(B.vs/100,0,1.4);let eye,at,roll=B.bank*.3,fov=.86+B.vs/380+ni*.14+(B.boostT>0?.06:0);
-  const m=S.mode,helm=VIEW.mode===1&&(m==='play'||(m==='intro'&&S.t>3.6));
-  if(m==='intro'){const k=smooth((S.t-.3)/3.4),[ce,ca]=VIEW.mode===1?helmetPose():chasePose(dt);
+  const m=S.mode,helm=VIEW.mode===2&&(m==='play'||(m==='intro'&&S.t>3.6));
+  if(m==='intro'){const k=smooth((S.t-.3)/3.4),[ce,ca]=VIEW.mode===2?helmetPose():chasePose(dt);
     eye=v3.lerp(W3(B.s-34,-6,24),ce,k);at=v3.lerp(W3(B.s+70,0,3),ca,k);roll*=k;}
   else if(m==='caught'||m==='tally'||(TG.state==='caught'&&m==='title')){
     const a=S.clock*.32+.6,R=m==='tally'?16:12.5,room=limAt(TG.s)-(ST.id===2?.5:1.8);
@@ -168,7 +175,7 @@ function drawCenter(title,col,lines){
 }
 /* the pause menu: everything that isn't driving lives here, so the play screen stays clear */
 function pauseItems(){const q=QS.auto?'AUTO ('+qnow().name+')':qnow().name;
-  return [['RESUME','resume'],['VIEW: '+(VIEW.mode?'HELMET':'CHASE'),'view'],['QUALITY: '+q,'qual'],['SOUND: '+(AU.muted?'OFF':'ON'),'snd'],[EMBED?'EXIT':'QUIT TO TITLE','quit']];}
+  return [['RESUME','resume'],['VIEW: '+VIEWN[VIEW.mode],'view'],['QUALITY: '+q,'qual'],['SOUND: '+(AU.muted?'OFF':'ON'),'snd'],[EMBED?'EXIT':'QUIT TO TITLE','quit']];}
 const PAUSE_Y0=()=>Math.round(H*.38),PAUSE_DY=12;
 function drawPause(){
   g.fillStyle='rgba(0,0,0,.6)';g.fillRect(0,0,W,H);otxt5(g,'PAUSED',W/2,Math.round(H*.18),GR.steel,2,'c');
