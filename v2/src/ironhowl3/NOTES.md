@@ -41,9 +41,11 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
 
 ## Numbers that matter
 
-- Mech (session 3 model):
-  - About 5 m tall to the ear tips, hip 2.4 m, thigh 1.35 m, shin 1.45 m, ankle 0.32 m, reverse knees.
-  - 21.7k triangles, 1 MB GLB.
+- Mech (session 4 model, after his turnaround sheet `art/masters/47-howler-07-turnaround.webp` and 48):
+  - About 6 m tall to the ear tips, with dog-like legs in three parts (`legIK3`).
+  - Hip 3.2 m, thigh 1.05 m (knee forward), shin 1.0 m back to the hock, foot bone 0.9 m at a fixed 15° forward lean (PHI 0.26), ankle 0.36 m.
+  - Three steel claws and a rear spur on each foot.
+  - 27k triangles, 1.3 MB GLB.
   - Collision radius 1.35 m. The stride grows from 1.0 m to 2.4 m with speed.
 - Enemies: about 1.9k, 2.9k and 3.4k triangles. Shown at 1.4×, 1.15× and 1.05× scale.
 
@@ -66,8 +68,8 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
   - Drop chance: skitter 12%, hound 40%, gunner always (55% of those are chips).
 - Waves loop through 6 mixes, then come back with 30% more HP. A new wave starts 4 s after a clear.
 - Tickets on 'over': floor(score/400) + waves, capped at 60. The best score is saved as `hd-ironhowl3-best`.
-- **Close camera:** 4.6 m back, 6.9 m up, 1.2 m to the right, looking 26 m ahead at 5.2 m, FOV 64. This is "just behind the mech, first person" (his words).
-- **Far camera:** 13 m back, 9.8 m up, 2.6 m to the right, looking 24 m ahead at 5.4 m, FOV 58. This is "lifted about one mech height and further back, still behind the neck" (his words).
+- **Close camera:** 5.0 m back, 7.4 m up, 1.3 m to the right, looking 26 m ahead at 5.8 m, FOV 64. This is "just behind the mech, first person" (his words).
+- **Far camera:** 14 m back, 10.9 m up, 2.8 m to the right, looking 24 m ahead at 6.2 m, FOV 58. This is "lifted about one mech height and further back, still behind the neck" (his words).
 - Portrait screens step both cameras back and widen the FOV.
 - Quality levels (draw distances in metres):
 
@@ -110,6 +112,7 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
   - Art processed (46 images → 49 files, 8.2 MB).
   - Forest pack stored with its catalog, three.js bundle built.
   - `DESIGN.md` written; `preview.html` is the first look.
+- **Session 4 start (5 Nov 2026):** image set 2 processed; Howler 07 rebuilt again from his turnaround sheet.
 - **Session 3 (5 Nov 2026):** combat core.
   - New Howler 07 model from Blender, with 4 barrel sets shown by gun tier.
   - Skitter, Hound and Gunner models.
@@ -140,11 +143,12 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
 - The jet flames are plain cones.
 - The autopilot test (`AUTO` in the shot steps) does not dodge, so it loses. A human hopping over Hound charges should do far better.
 
-## Waiting on
+## Image set 2 (arrived 5 Nov 2026)
 
-- Image set 2 (numbers 47–86, prompts in `IMAGES-SET2.md`, also in the project as `claude/ironhowl3-image-list-set2.md`). Christopher is generating them.
-  - 47–52 are reference sheets for modelling and never go in the game.
-  - When they arrive: unpack to a scratch folder and extend `SPEC` in `tools/process_art.py` for 47–86 (kinds: ref, tex, sky, strip, add, alpha_black, alpha_white). Then run it, so masters go to `src/ironhowl3/art/masters/` and game files to `games/ironhowl3/art/`.
+- Numbers 47–86 (prompts in `IMAGES-SET2.md`) are processed: masters are in `src/ironhowl3/art/masters/`, game files in `games/ironhowl3/art/`.
+- 47–52 are reference sheets (mech turnaround and details, enemies, bosses, Rook's truck). They stay masters only, as modelling guides.
+- 85 was split into 5 icons (`85-pickup-icons-1..5`: chip, wrench, shield, missile, flame).
+- `showcase({a,d,h,ly})` in the dev handle puts the camera around the mech for model shots (a = angle from behind; pass null to go back).
 
 ## Next: session 4 (places)
 

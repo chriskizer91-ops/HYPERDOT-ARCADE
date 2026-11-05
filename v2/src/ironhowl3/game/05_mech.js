@@ -1,6 +1,7 @@
 /* ===================== Howler 07, the player's mech (models/mech/howler07.glb, built in Blender: v2/src/ironhowl3/blender) =====================
    The model's empties are the joints: hips/thigh/knee/ankle (legs), torso, head, arm/gun/brl (guns), tier1..4 (barrel sets), muzzle, pod_*_mz, jet.
-   Legs are reverse-jointed (the knee bends backwards, like a wolf's hind leg). Shading is baked into the vertex colours. */
+   Legs are dog-like with three parts: thigh (knee forward), shin back to the hock, then the long foot bone down to the clawed foot.
+   Shading is baked into the vertex colours. */
 const MT={};
 function mechMats(){
   const k=(a)=>{a.vertexColors=true;return hookWorld(a);};
@@ -33,7 +34,7 @@ function mergeParts(root,keep){
       const mm=new THREE.Mesh(THREE.mergeGeometries(v.geos,false),mat);mm.castShadow=v.cast;mm.receiveShadow=true;g.add(mm);}
   }
 }
-const HIP=2.4,L1=1.35,L2=1.45,ANK=.32,HIPDROP=.05;
+const HIP=3.2,L1=1.05,L2=1.0,L3=.9,ANK=.36,PHI=.26,HIPDROP=.05;
 function buildMech(){
   mechMats();
   const M={root:new THREE.Group(),ready:false,phase:0,lean:0,roll:0,tier:0};S.add(M.root);
@@ -43,7 +44,7 @@ function buildMech(){
     M.cores=['L','R'].map(s=>N('core_'+s));
     mergeParts(sc,o=>M.cores.includes(o));
     M.root.add(sc);M.hips=N('hips');M.torso=N('torso');M.head=N('head');
-    M.legs=[-1,1].map(sd=>{const s=sd<0?'L':'R';return {thigh:N('thigh_'+s),knee:N('knee_'+s),ankle:N('ankle_'+s),sd,plant:true,gy:0};});
+    M.legs=[-1,1].map(sd=>{const s=sd<0?'L':'R';return {thigh:N('thigh_'+s),knee:N('knee_'+s),hock:N('hock_'+s),ankle:N('ankle_'+s),sd,plant:true,gy:0};});
     M.arms=[-1,1].map(sd=>{const s=sd<0?'L':'R';return {sh:N('arm_'+s),gun:N('gun_'+s),brl:N('brl_'+s),bz:N('brl_'+s).position.z,muzzle:N('muzzle_'+s),tiers:[1,2,3,4].map(t=>N('tier'+t+'_'+s)),sd,kick:0};});
     M.pods=['L','R'].map(s=>N('pod_'+s+'_mz'));
     M.jets=['L','R'].map((s,i)=>{const n=N('jet_'+s);n.rotation.x=-.55;
@@ -63,6 +64,12 @@ function legIK(L,ty,tz,footPitch,l1,l2,rev){
   const t1=rev?th-al:th+al,k=rev?Math.PI-ga:-(Math.PI-ga);
   L.thigh.rotation.x=t1;L.knee.rotation.x=k;L.ankle.rotation.x=-(t1+k)+(footPitch||0);
 }
+/* the mech's legs: the foot bone keeps a fixed forward lean (PHI), so place the hock behind and above the ankle, then solve hip->hock */
+function legIK3(L,ty,tz,footPitch,phi){
+  phi=phi==null?PHI:phi;const hy=ty+L3*Math.cos(phi),hz=tz+L3*Math.sin(phi);
+  legIK(L,hy,hz,0,L1,L2,false);const a=L.thigh.rotation.x+L.knee.rotation.x;
+  L.hock.rotation.x=phi-a;L.ankle.rotation.x=-phi+(footPitch||0);
+}
 /* pose the mech for this frame. st: {x,z,gy,legYaw,aimYaw,spd (m/s along the legs, minus = backwards),air,vy,land,thrust,pitch}
    returns foot-plant events [{x,z,side}] for sound, dust and shake */
 function poseMech(M,st,dt){
@@ -81,13 +88,13 @@ function poseMech(M,st,dt){
   const hy=hipY-HIPDROP;
   for(const L of M.legs){
     let tz=0,lift=0;
-    if(st.air){tz=-.2+L.sd*.08;lift=.7+(st.vy>0?.25:0);}
+    if(st.air){tz=-.15+L.sd*.08;lift=.75+(st.vy>0?.3:0);}
     else{let u=(M.phase+(L.sd>0?.5:0))%1;if(u<0)u+=1;
       if(u<.5){tz=lerp(-S_/2,S_/2,u/.5);}else{const s=(u-.5)/.5;tz=lerp(S_/2,-S_/2,s*s*(3-2*s));lift=Math.sin(Math.PI*s)*.5*w;}
       tz*=w;const nowPlant=u<.5;if(nowPlant&&!L.plant&&w>.3)ev.push({side:L.sd});L.plant=nowPlant;}
-    const ox=L.sd*1.02,fx=st.x+ox*cy+tz*sy,fz=st.z-ox*sy+tz*cy;L.gy=hgt(fx,fz);
-    const ty=(st.air?hy-2.0+lift:L.gy+ANK+lift)-hy;
-    legIK(L,ty,tz,st.air?.2:0,L1,L2,true);
+    const ox=L.sd*.88,fx=st.x+ox*cy+tz*sy,fz=st.z-ox*sy+tz*cy;L.gy=hgt(fx,fz);
+    const ty=(st.air?hy-2.3+lift:L.gy+ANK+lift)-hy;
+    legIK3(L,ty,tz,st.air?.35:0,st.air?.5:PHI);
     const e=ev[ev.length-1];if(e&&e.side===L.sd&&e.x===undefined){e.x=fx;e.z=fz;}
   }
   for(const A of M.arms){A.kick*=Math.exp(-dt*16);A.sh.rotation.x=st.pitch*.85+Math.sin(M.phase*TAU+(A.sd>0?Math.PI:0))*.04*w;A.brl.position.z=A.bz+A.kick*.32;}

@@ -134,7 +134,7 @@ function updEnemies(dt){
       want=face;
       if(seen&&dist<55&&e.cd<=0&&!P.dead){e.burst=3;e.cd=2.4+Math.random();e.bt=0;}
       if(e.burst>0){e.bt-=dt;if(e.bt<=0){e.bt=.18;e.burst--;const mz=e.burst%2?e.mzR:e.mzL;mz.getWorldPosition(_w);
-        const lead=dist/30*.6,tx=P.x+P.vx*lead,ty=P.y+2.6,tz=P.z+P.vz*lead;let ax=tx-_w.x,ay=ty-_w.y,az=tz-_w.z;const l=Math.hypot(ax,ay,az)||1;
+        const lead=dist/30*.6,tx=P.x+P.vx*lead,ty=P.y+3.2,tz=P.z+P.vz*lead;let ax=tx-_w.x,ay=ty-_w.y,az=tz-_w.z;const l=Math.hypot(ax,ay,az)||1;
         EBOLTS.push({x:_w.x,y:_w.y,z:_w.z,vx:ax/l*30,vy:ay/l*30,vz:az/l*30,life:2.4,dmg:8});sEShot();part({x:_w.x,y:_w.y,z:_w.z,vx:0,vy:0,vz:0,life:.08,s0:1.2,s1:.5,a:2,col:[1,.3,.1],glow:true});}}
     }
     /* move with separation from other machines, trunk collisions and knockback */

@@ -2,11 +2,13 @@
    close: just behind and above the head, so it feels like first person.
    far:   one mech height higher and further back, still looking along the mech over its neck (not down at the field). */
 /* side: the camera sits a little to the right so the crosshair is never hidden behind the mech */
-const VIEWS={close:{back:4.6,up:6.9,look:26,lookY:5.2,fov:64,side:1.2,pos:10},
-             far:{back:13,up:9.8,look:24,lookY:5.4,fov:58,side:2.6,pos:6}};
+const VIEWS={close:{back:5.0,up:7.4,look:26,lookY:5.8,fov:64,side:1.3,pos:10},
+             far:{back:14,up:10.9,look:24,lookY:6.2,fov:58,side:2.8,pos:6}};
 const CAMS={x:0,y:0,z:0,ty:0,shake:0,fovK:0,blend:1,ready:false};
 function camFov(base){/* portrait: open the view up so there is enough to see at the sides */const a=cam.aspect;return a>=1?base:Math.min(90,base+(1-a)*28);}
+let CAMX=null;   /* test/showcase camera: {a (angle around the mech), d (distance), h (height), ly (look height)} */
 function updCam(dt,p,view){
+  if(CAMX){const a=p.yaw+CAMX.a;cam.position.set(p.x-Math.sin(a)*CAMX.d,p.y+CAMX.h,p.z-Math.cos(a)*CAMX.d);cam.lookAt(p.x,p.y+(CAMX.ly||3),p.z);if(cam.fov!==50){cam.fov=50;cam.updateProjectionMatrix();}SKY.position.copy(cam.position);return;}
   const V=VIEWS[view],fx=-Math.sin(p.yaw),fz=-Math.cos(p.yaw),rx=Math.cos(p.yaw),rz=-Math.sin(p.yaw),sd=V.side*(cam.aspect<1?.45:1);
   /* the body height follows the mech with a little lag in the air, so jet hops feel big */
   const by=p.y;CAMS.ty+=(by-CAMS.ty)*damp(p.air?(view==='close'?7:3.2):9,dt);if(!CAMS.ready){CAMS.ty=by;}
