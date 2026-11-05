@@ -1,0 +1,66 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Ironhowl 3 - woods preview</title>
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden;font:600 13px/1 system-ui,sans-serif;color:#fff;touch-action:none}canvas{display:block}
+#ui{position:fixed;top:max(10px,env(safe-area-inset-top));right:10px;display:flex;gap:8px}
+button{background:rgba(0,0,0,.55);color:#ffb347;border:1px solid #ffb34766;border-radius:8px;padding:9px 12px;font:inherit;letter-spacing:.04em}
+#ld{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#ffb347;letter-spacing:.12em}
+#tag{position:fixed;left:12px;bottom:max(12px,env(safe-area-inset-bottom));color:#fff9;letter-spacing:.08em}</style></head><body>
+<div id="ld">LOADING 0%</div><div id="ui"><button id="bv">VIEW: CLOSE</button><button id="bm">WOODS</button></div><div id="tag">IRONHOWL 3 · PREVIEW · STAND-IN MECH</div>
+<script src="js/three-ih3.min.js"></script>
+<script>
+// Ironhowl 3, session 1 preview: the Field & Forest models at game scale, with a 4.5 m stand-in mech and both follow cameras.
+const Q=new URLSearchParams(location.search);
+let VIEW=Q.get('cam')||'close', MIX=Q.get('mix')||'woods', FROZEN=Q.has('still');
+const R=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});R.setPixelRatio(Math.min(devicePixelRatio,1.5));R.setSize(innerWidth,innerHeight);
+R.shadowMap.enabled=true;R.shadowMap.type=THREE.PCFShadowMap;R.toneMapping=THREE.ACESFilmicToneMapping;R.toneMappingExposure=1.15;R.outputColorSpace=THREE.SRGBColorSpace;document.body.appendChild(R.domElement);
+const S=new THREE.Scene(), SKY=0xb9c9d6;S.background=new THREE.Color(SKY);S.fog=new THREE.Fog(SKY,45,190);
+const cam=new THREE.PerspectiveCamera(62,innerWidth/innerHeight,.1,500);
+addEventListener('resize',()=>{R.setSize(innerWidth,innerHeight);cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();});
+const TL=new THREE.TextureLoader();
+function tex(n,rep){const t=TL.load('art/'+n+'.webp');t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(rep,rep);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;return t;}
+S.add(new THREE.HemisphereLight(0xdfeaff,0x5a4a36,1.5));
+const sun=new THREE.DirectionalLight(0xfff1dc,3.0);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-40,right:40,top:40,bottom:-40,near:1,far:220});sun.shadow.bias=-.0005;sun.shadow.normalBias=.04;S.add(sun,sun.target);
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(420,420),new THREE.MeshStandardMaterial({map:tex('06-dirt-and-gravel',80),roughness:.96}));ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;S.add(ground);
+// stand-in mech (4.5 m), faces -z
+const M=new THREE.Group(),arm=new THREE.MeshStandardMaterial({map:TL.load('art/22-howler-armour.webp'),roughness:.5,metalness:.35}),dk=new THREE.MeshStandardMaterial({map:TL.load('art/24-gunmetal.webp'),roughness:.55,metalness:.6});
+arm.map.colorSpace=dk.map.colorSpace=THREE.SRGBColorSpace;
+function bx(p,w,h,d,x,y,z,m){const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);b.position.set(x,y,z);b.castShadow=b.receiveShadow=true;p.add(b);return b;}
+const legs=[-.75,.75].map(x=>{const g=new THREE.Group();g.position.set(x,2.1,0);bx(g,.7,2.1,.8,0,-1.05,0,dk);M.add(g);return g;});
+bx(M,2.4,1.5,1.9,0,2.85,0,arm);bx(M,.9,.6,.9,0,3.95,.15,arm);bx(M,.5,.5,2.4,-1.5,3.0,-.6,dk);bx(M,.5,.5,2.4,1.5,3.0,-.6,dk);S.add(M);
+const L=new THREE.GLTFLoader(), CAT={}, GL={}, placed=[];let cat, rs=7;
+const rnd=()=>(rs=(rs*16807)%2147483647)/2147483647;
+const pick=o=>{let t=0;for(const k in o)t+=o[k];let r=rnd()*t;for(const k in o){r-=o[k];if(r<=0)return k;}return Object.keys(o)[0];};
+function load(id,lod){const k=id+':'+lod;if(GL[k])return Promise.resolve(GL[k]);return new Promise((ok,no)=>L.load('models/'+CAT[id].files[lod],g=>{g.scene.updateMatrixWorld(true);GL[k]=g.scene;ok(g.scene);},undefined,no));}
+// one InstancedMesh per model part: thousands of plants for a handful of draw calls
+function instance(scene,mats){const out=[];scene.traverse(o=>{if(!o.isMesh)return;const im=new THREE.InstancedMesh(o.geometry,o.material,mats.length);const t=new THREE.Matrix4();
+ mats.forEach((m,i)=>im.setMatrixAt(i,t.multiplyMatrices(m,o.matrixWorld)));const leaf=(o.material.userData.gameMat||'')==='LEAF'||o.material.name==='foliage';im.castShadow=true;im.receiveShadow=!leaf;im.frustumCulled=false;S.add(im);out.push(im);});return out;}
+async function build(){
+ placed.forEach(m=>S.remove(m));placed.length=0;rs=11;const mix=cat.biomes.find(b=>b.id===MIX);document.getElementById('bm').textContent=mix.name.toUpperCase();
+ const want={};const add=(id,lod,x,z,s)=>{const k=id+':'+lod;(want[k]=want[k]||[]).push(new THREE.Matrix4().compose(new THREE.Vector3(x,0,z),new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),rnd()*6.283),new THREE.Vector3(s,s,s)));};
+ const NT=Math.round(260*mix.rate.tree/6), NG=Math.round(1600*mix.rate.grass/28);
+ for(let i=0;i<NT;i++){const x=(rnd()-.5)*240,z=(rnd()-.5)*240;if(Math.abs(x)<7)continue;add(pick(mix.tree),Math.hypot(x,z)>70?'far':'near',x,z,.85+rnd()*.35);}
+ for(let i=0;i<NG;i++){const x=(rnd()-.5)*140,z=(rnd()-.5)*140;add(pick(mix.grass),'near',x,z,.8+rnd()*.7);}
+ for(let i=0;i<60;i++)add(rnd()<.6?'bush_sage':'bush_oleander','near',(rnd()-.5)*120,(rnd()-.5)*120,1+rnd()*.6);
+ ['prop_drum','prop_tires','prop_icechest','prop_drum'].forEach((id,i)=>add(id,'near',(i%2?-1:1)*(3.6+rnd()),40-i*27,1));
+ const keys=Object.keys(want);let done=0;
+ await Promise.all(keys.map(k=>{const [id,lod]=k.split(':');return load(id,lod).then(sc=>{placed.push(...instance(sc,want[k]));document.getElementById('ld').textContent='LOADING '+Math.round(100*++done/keys.length)+'%';});}));
+ document.getElementById('ld').style.display='none';document.title='ready';
+}
+fetch('models/catalog.json').then(r=>r.json()).then(c=>{cat=c;c.manifest.assets.forEach(a=>CAT[a.id]=a);build();});
+const MIXES=['woods','conifer','aspen','creek','dry','meadow'];
+document.getElementById('bm').onclick=()=>{MIX=MIXES[(MIXES.indexOf(MIX)+1)%MIXES.length];build();};
+const bv=document.getElementById('bv');bv.textContent='VIEW: '+VIEW.toUpperCase();bv.onclick=()=>{VIEW=VIEW==='close'?'far':'close';bv.textContent='VIEW: '+VIEW.toUpperCase();};
+let t=0,last=performance.now(),cy=0,cb=0,first=true;
+function loop(now){const dt=Math.min(.05,(now-last)/1000);last=now;if(!FROZEN)t+=dt;
+ const z=60-((t*4.2)%120), sw=Math.sin(t*4.2*1.1);M.position.set(Math.sin(t*.35)*1.5,Math.abs(Math.cos(t*4.2*1.1))*.08,z);M.rotation.y=-Math.cos(t*.35)*.08;
+ legs[0].rotation.x=sw*.35;legs[1].rotation.x=-sw*.35;
+ // close: just behind and above the head. far: one mech-height higher and further back, still behind the neck
+ const P=VIEW==='close'?{b:2.6,h:5.0,l:3.8,d:20}:{b:11,h:9.1,l:3.0,d:16};
+ if(first){cb=P.b;cy=P.h;first=false;}cb+=(P.b-cb)*Math.min(1,dt*4);cy+=(P.h-cy)*Math.min(1,dt*4);
+ cam.position.set(M.position.x*.6,cy,M.position.z+cb);cam.lookAt(M.position.x*.6,P.l,M.position.z-P.d);
+ sun.position.set(M.position.x-40,70,M.position.z-30);sun.target.position.set(M.position.x,0,M.position.z-10);
+ R.render(S,cam);requestAnimationFrame(loop);}
+requestAnimationFrame(loop);
+</script></body></html>
