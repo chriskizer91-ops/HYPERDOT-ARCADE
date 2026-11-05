@@ -1,6 +1,6 @@
 # IRONHOWL 3 — design plan
 
-*Version 1.2 · 5 Nov 2026 · designer: Claude, for Christopher (Hyperdot Arcade)*
+*Version 1.3 · 5 Nov 2026 · designer: Claude, for Christopher (Hyperdot Arcade)*
 
 Ironhowl 3 is a new game in the Ironhowl series, not a patch on Ironhowl 3D. You pilot one big mech, seen from behind, across 12 missions with checkpoints, upgrades between missions, and three kinds of places that take turns: **open fields**, **crowded docks**, and **woods**.
 
@@ -93,17 +93,17 @@ Prices go up per level, so by mission 12 a good player has maxed about three tra
 
 ## 7. Enemies
 
-All of them carry FORGE's mark. Each new type is introduced alone before it shows up in a mix.
+All of them carry FORGE's mark. Each new type is introduced alone before it shows up in a mix. Built so far: Skitter, Hound, Gunner, Lancer and the spawner pods. The Hornet, Tank, Mortar crawler and Bulwark come in session 7, so their first missions moved later.
 
 | Enemy | Role | First mission |
 |---|---|---|
 | Skitter | Small fast walker drones in packs. Weak, swarms you. | 1 |
 | Gunner | A bipedal walker your size. Strafes and fires bursts. | 1 |
-| Hornet | Flying drone. Dives from above. Hides in the forest canopy. | 3 |
+| Hornet | Flying drone. Dives from above. Hides in the forest canopy. | 9 |
 | Hound | Four-legged runner. Charges and rams. Hop over it. | 3 |
-| Tank | Tracked, heavy cannon, slow turret. Shoot it from the side. | 4 |
-| Mortar crawler | Long-range artillery with red ground circles before impact. | 5 |
-| Bulwark | Carries a front shield. Flank it, or missile over it. | 6 |
+| Tank | Tracked, heavy cannon, slow turret. Shoot it from the side. | 10 |
+| Mortar crawler | Long-range artillery with red ground circles before impact (the Thresher already fires this way). | 9 |
+| Bulwark | Carries a front shield. Flank it, or missile over it. | 10 |
 | Lancer | Sniper with a visible charging laser line. Break line of sight. | 8 |
 | Spawners | Factory pods that keep making Skitters until you destroy them. | 5 |
 
