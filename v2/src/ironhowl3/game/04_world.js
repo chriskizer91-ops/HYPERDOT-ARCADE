@@ -2,8 +2,8 @@
    PLAY = half-size of the ground you can walk on (260 x 260 m since session 5; it was 160). Beyond it the ground rises (or meets water). */
 const PLAY=130,WORLD=225;
 let MAPID='woods',MAPDEF=null,TRAIL=[],CLEAR=[],SPAWN={x:0,z:70,yaw:0};
-function pickMap(){const want=(Q.get('map')||store.get('map','woods')).toLowerCase();MAPID=MAPS[want]?want:'woods';MAPDEF=MAPS[MAPID];
-  TRAIL=MAPDEF.trail||[];CLEAR=MAPDEF.clear||[];SPAWN=MAPDEF.spawn;store.set('map',MAPID);}
+function pickMap(){const want=(MISSION?MISSION.map:(Q.get('map')||store.get('map','woods'))).toLowerCase();MAPID=MAPS[want]?want:'woods';MAPDEF=MAPS[MAPID];
+  TRAIL=MAPDEF.trail||[];CLEAR=MAPDEF.clear||[];SPAWN=MISSION?{x:MISSION.start[0],z:MISSION.start[1],yaw:MISSION.start[2]}:MAPDEF.spawn;if(!MISSION)store.set('map',MAPID);}
 function segD(px,pz,ax,az,bx,bz){const vx=bx-ax,vz=bz-az,t=clamp(((px-ax)*vx+(pz-az)*vz)/(vx*vx+vz*vz),0,1),dx=px-ax-vx*t,dz=pz-az-vz*t;return Math.sqrt(dx*dx+dz*dz);}
 function trailD(x,z){let d=1e9;for(let i=0;i<TRAIL.length-1;i++){const a=TRAIL[i],b=TRAIL[i+1];d=Math.min(d,segD(x,z,a[0],a[1],b[0],b[1]));}return d;}
 function clearD(x,z){let d=1e9;for(const c of CLEAR)d=Math.min(d,Math.hypot(x-c[0],z-c[1])-c[2]);return d;}

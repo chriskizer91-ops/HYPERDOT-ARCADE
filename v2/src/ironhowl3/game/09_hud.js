@@ -20,7 +20,7 @@ const HUD={_c:{},
     this.set('bshield','width',(P.shield/P.shieldMax*100).toFixed(0)+'%');this.set('bhull','width',(P.hull/P.hullMax*100).toFixed(0)+'%');
     this.set('bhull','cls',P.hull<30?'low':'');
     this.set('gtier','text','GUN '+ROMAN[GUN.tier]);this.set('mslc','text','MSL '+MSL.ammo);this.set('bmsl','text','MSL '+MSL.ammo);
-    this.set('score','text',G.score.toLocaleString('en-US'));const cm=G.t-G.lastKill<3&&G.combo>1;this.set('combo','text',cm?'x'+Math.min(3,1+.25*(G.combo-1)).toFixed(2).replace(/\.?0+$/,''):'');
+    this.set('score','text',G.score.toLocaleString('en-US'));if(!MISSION)this.set('obj','text','');const cm=G.t-G.lastKill<3&&G.combo>1;this.set('combo','text',cm?'x'+Math.min(3,1+.25*(G.combo-1)).toFixed(2).replace(/\.?0+$/,''):'');
     this.set('heatb','width',GUN.heat.toFixed(0)+'%');this.set('heat','cls',GUN.over?'over':GUN.heat>70?'warm':'');
     this.set('cross','cls',GUN.hitT>0?'hit':AIM.e?'on':'');
     this.set('bvent','cls','tb'+(GUN.ventCd>0?' cool':GUN.over?' hot':''));
@@ -31,6 +31,13 @@ const HUD={_c:{},
     for(const e of EN){if(k>=6)break;if(e.dead||e.spawnT>0)continue;const dx=e.x-P.x,dz=e.z-P.z,d=Math.hypot(dx,dz);if(d>60)continue;
       const rel=angD(Math.atan2(-dx,-dz),P.yaw);if(Math.abs(rel)<.75)continue;const el=$('ea'+k++);el.style.display='block';el.style.transform='rotate('+(-rel)+'rad)';el.style.opacity=d<25?1:.6;}
     for(;k<6;k++){const el=$('ea'+k);if(el.style.display!=='none')el.style.display='none';}
+    /* mission waypoint: a marker over the objective, pinned to the screen edge when it is off screen, with the distance */
+    const wp=$('wp');if(MISSION&&!MS.done&&G.mode==='play'){const s=MISSION.steps[MS.step],p=s&&stepPos(s);
+      if(p){const v=V3(p.x,hgt(p.x,p.z)+(s.masts?14:5),p.z).project(cam);let sx=(v.x*.5+.5)*innerWidth,sy=(-v.y*.5+.5)*innerHeight;const behind=v.z>1;
+        if(behind){sx=innerWidth-sx;sy=innerHeight-sy;}const m=46,off=behind||sx<m||sx>innerWidth-m||sy<m+40||sy>innerHeight-m;
+        if(off){const cx=innerWidth/2,cy=innerHeight/2;let dx=sx-cx,dy=sy-cy;if(behind&&Math.abs(dy)<1)dy=1;const k2=Math.min((cx-m)/Math.abs(dx||1e-3),(cy-m-20)/Math.abs(dy||1e-3));sx=cx+dx*k2;sy=cy+dy*k2;}
+        wp.style.display='block';wp.style.transform='translate('+sx.toFixed(0)+'px,'+sy.toFixed(0)+'px)';this.set('wpd','text',Math.round(Math.hypot(p.x-P.x,p.z-P.z))+' m');this.set('wp','cls',off?'off':'');}
+      else wp.style.display='none';}else if(wp.style.display!=='none')wp.style.display='none';
   },
   menu(){const m=$('menu');$('mview').textContent='VIEW: '+(SET.view==='close'?'CLOSE':'FAR');
     $('mqual').textContent='QUALITY: '+(SET.quality==='auto'?'AUTO ('+QL.toUpperCase()+')':SET.quality.toUpperCase());
@@ -54,6 +61,6 @@ function setupHud(){
   $('msound').onclick=()=>{SET.sound=!SET.sound;store.set('sound',SET.sound?1:0);HUD.menu();};
   $('msens').onclick=()=>{const o=[.6,.8,1,1.3,1.7];SET.sens=o[(o.indexOf(SET.sens)+1)%o.length]||1;store.set('sens',SET.sens);HUD.menu();};
   $('mexit').onclick=()=>ARC.exit();
-  $('down').addEventListener('click',()=>{if(G.mode==='down'&&G.downT<=0)startPlay();});
+  $('down').addEventListener('click',()=>{if(G.mode==='down'&&G.downT<=0){if(MISSION)repairAtCheckpoint();else startPlay();}});
   HUD.view(SET.view);
 }

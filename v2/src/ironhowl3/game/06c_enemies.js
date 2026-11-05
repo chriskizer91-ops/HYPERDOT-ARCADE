@@ -151,7 +151,7 @@ function updEnemies(dt){
     poseEnemy(e,dt,Math.hypot(e.vx,e.vz));
   }
   for(let i=EN.length-1;i>=0;i--)if(EN[i].dead)EN.splice(i,1);
-  if(G.mode==='play'&&!P.dead){if(alive===0&&BEACONS.length===0){G.breakT-=dt;if(G.breakT<=0){startWave();G.breakT=4;}}}
+  if(G.mode==='play'&&!P.dead&&!MISSION){if(alive===0&&BEACONS.length===0){G.breakT-=dt;if(G.breakT<=0){startWave();G.breakT=4;}}}
 }
 function poseEnemy(e,dt,sp){
   e.o.position.set(e.x,e.y,e.z);e.o.rotation.y=e.yaw;e.phase+=dt*(1.2+sp*(e.id==='skitter'?.9:e.id==='hound'?.42:.5));const ph=e.phase;

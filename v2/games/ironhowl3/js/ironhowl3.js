@@ -219,8 +219,8 @@ function applyLook(L){
    PLAY = half-size of the ground you can walk on (260 x 260 m since session 5; it was 160). Beyond it the ground rises (or meets water). */
 const PLAY=130,WORLD=225;
 let MAPID='woods',MAPDEF=null,TRAIL=[],CLEAR=[],SPAWN={x:0,z:70,yaw:0};
-function pickMap(){const want=(Q.get('map')||store.get('map','woods')).toLowerCase();MAPID=MAPS[want]?want:'woods';MAPDEF=MAPS[MAPID];
-  TRAIL=MAPDEF.trail||[];CLEAR=MAPDEF.clear||[];SPAWN=MAPDEF.spawn;store.set('map',MAPID);}
+function pickMap(){const want=(MISSION?MISSION.map:(Q.get('map')||store.get('map','woods'))).toLowerCase();MAPID=MAPS[want]?want:'woods';MAPDEF=MAPS[MAPID];
+  TRAIL=MAPDEF.trail||[];CLEAR=MAPDEF.clear||[];SPAWN=MISSION?{x:MISSION.start[0],z:MISSION.start[1],yaw:MISSION.start[2]}:MAPDEF.spawn;if(!MISSION)store.set('map',MAPID);}
 function segD(px,pz,ax,az,bx,bz){const vx=bx-ax,vz=bz-az,t=clamp(((px-ax)*vx+(pz-az)*vz)/(vx*vx+vz*vz),0,1),dx=px-ax-vx*t,dz=pz-az-vz*t;return Math.sqrt(dx*dx+dz*dz);}
 function trailD(x,z){let d=1e9;for(let i=0;i<TRAIL.length-1;i++){const a=TRAIL[i],b=TRAIL[i+1];d=Math.min(d,segD(x,z,a[0],a[1],b[0],b[1]));}return d;}
 function clearD(x,z){let d=1e9;for(const c of CLEAR)d=Math.min(d,Math.hypot(x-c[0],z-c[1])-c[2]);return d;}
@@ -420,8 +420,11 @@ field:{name:'FIELD',mix:'meadow',spawn:{x:0,z:115,yaw:0},
     const bim=new THREE.InstancedMesh(bg,[hay,hayEnd,hayEnd],bales.length);bales.forEach((m,k)=>bim.setMatrixAt(k,m));bim.castShadow=bim.receiveShadow=true;S.add(bim);
     /* radio relay masts: lattice towers with a red light (mission 1 targets) */
     const truss=tmat('74-crane-truss',{alpha:true,ds:true,rep:[4,6],r:.6,m:.5});
-    for(const [mx,mz] of MAPS.field.masts){const g0=hgt(mx,mz);put(new THREE.CylinderGeometry(.6,1.6,26,4,1,true),truss,mx,g0+13,mz,Math.PI/4);
-      const lamp=new THREE.Mesh(new THREE.SphereGeometry(.4,10,8),new THREE.MeshBasicMaterial({color:new THREE.Color(1,.1,.05).multiplyScalar(4)}));lamp.position.set(mx,g0+26.4,mz);S.add(lamp);addBox(mx-1.6,mz-1.6,mx+1.6,mz+1.6,26);}
+    MAPS.field.mastObjs=[];
+    for(const [mx,mz] of MAPS.field.masts){const g0=hgt(mx,mz),grp=new THREE.Group();grp.position.set(mx,g0,mz);grp.userData.keep=1;S.add(grp);   /* a pivot at the base so a destroyed mast can topple */
+      const tw=new THREE.Mesh(new THREE.CylinderGeometry(.6,1.6,26,4,1,true),truss);tw.position.y=13;tw.rotation.y=Math.PI/4;tw.castShadow=true;grp.add(tw);
+      const lamp=new THREE.Mesh(new THREE.SphereGeometry(.4,10,8),new THREE.MeshBasicMaterial({color:new THREE.Color(1,.1,.05).multiplyScalar(4)}));lamp.position.y=26.4;grp.add(lamp);addBox(mx-1.6,mz-1.6,mx+1.6,mz+1.6,26);
+      MAPS.field.mastObjs.push({x:mx,z:mz,y:g0,tower:grp,lamp,fall:0});}
   }},
 /* ---------------- docks: Harbor 9 at sunset, container stacks, cranes, a ship, warehouses ---------------- */
 docks:{name:'DOCKS',mix:'woods',spawn:{x:9,z:88,yaw:0},bounds:{x0:-128,x1:128,z0:-96,z1:96},quay:-100,
@@ -466,7 +469,12 @@ docks:{name:'DOCKS',mix:'woods',spawn:{x:9,z:88,yaw:0},bounds:{x0:-128,x1:128,z0
     const bb=new THREE.Mesh(new THREE.PlaneGeometry(9,9),tmat('46-hyperdot-arcade-billboard',{r:.5}));bb.position.set(121.1,7,108);bb.rotation.y=Math.PI/2;S.add(bb);
     /* lamp posts and bollards */
     const pole=tmat('24-gunmetal'),lampM=new THREE.MeshBasicMaterial({color:new THREE.Color(1,.85,.55).multiplyScalar(3)});
-    for(const x of MAPS.docks.lanesX)for(const z of [-88,-20,52,84]){put(new THREE.CylinderGeometry(.18,.25,13,8),pole,x+3.6,6.5,z);put(new THREE.BoxGeometry(1.6,.3,.7),lampM,x+3.6,13,z);addCol(x+3.6,z,.4,13);}
+    const night=MISSION&&MISSION.look&&MISSION.look.night;if(night)lampM.color.multiplyScalar(2.2);
+    const pool=night?poolTex():null;
+    for(const x of MAPS.docks.lanesX)for(const z of [-88,-20,52,84]){put(new THREE.CylinderGeometry(.18,.25,13,8),pole,x+3.6,6.5,z);put(new THREE.BoxGeometry(1.6,.3,.7),lampM,x+3.6,13,z);addCol(x+3.6,z,.4,13);
+      if(night){const g=new THREE.PlaneGeometry(22,22);g.rotateX(-Math.PI/2);g.translate(x+3.6,.06,z);(MAPS.docks._pools=MAPS.docks._pools||[]).push(g);}}
+    if(night&&MAPS.docks._pools){const p=new THREE.Mesh(THREE.mergeGeometries(MAPS.docks._pools),new THREE.MeshBasicMaterial({map:pool,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,color:new THREE.Color(1,.78,.45).multiplyScalar(.55)}));
+      p.renderOrder=2;p.userData.keep=1;p.frustumCulled=false;S.add(p);}
     for(let x=-124;x<=124;x+=9.5)put(new THREE.CylinderGeometry(.35,.42,.8,10),pole,x,.4,Qz+1.2);
   },
   tick(dt){if(MAPS.docks.wt){MAPS.docks.wt.offset.x+=dt*.004;MAPS.docks.wt.offset.y+=dt*.0025;}}},
@@ -477,6 +485,9 @@ function boulders(n,rnd){const m=tmat('83-mossy-boulder-rock',{rep:[2,2],r:.95,m
     const g=new THREE.IcosahedronGeometry(1,2),p=g.attributes.position,r=1.6+rnd()*2.6;
     for(let j=0;j<p.count;j++){const vx=p.getX(j),vy=p.getY(j),vz=p.getZ(j),f=1+(fbm(vx*1.7+i*3,vz*1.7+vy*1.3,3)-.5)*.7;p.setXYZ(j,vx*f*r,vy*f*r*.62,vz*f*r*(.8+rnd()*.1));}
     g.computeVertexNormals();put(g,m,x,hgt(x,z)+r*.15,z,rnd()*TAU);addCol(x,z,r*.85,r*1.1);}}
+/* a soft round glow for fake lamp light on the ground at night */
+function poolTex(){const c=document.createElement('canvas');c.width=c.height=128;const g=c.getContext('2d'),gr=g.createRadialGradient(64,64,0,64,64,64);
+  gr.addColorStop(0,'rgba(255,255,255,1)');gr.addColorStop(.35,'rgba(255,255,255,.45)');gr.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=gr;g.fillRect(0,0,128,128);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;}
 const BND=()=>MAPDEF.bounds||{x0:-PLAY-6,x1:PLAY+6,z0:-PLAY-6,z1:PLAY+6};
 function boxAt(x,z,y){const a=VEG.cols.get(colKey(x,z));if(!a)return false;for(const c of a)if(c.b&&x>c.x0&&x<c.x1&&z>c.z0&&z<c.z1&&y<c.y0+c.h)return true;return false;}
 /* after a map is built, join its fixed single-material meshes into one mesh per material (fences, posts, crane beams, lamps...) */
@@ -684,7 +695,10 @@ function rayAim(){
   for(const e of EN){if(e.dead||e.spawnT>0)continue;const ex=e.x-ox,ey=e.y+e.d.cy-oy,ez=e.z-oz,t=ex*dx+ey*dy+ez*dz;if(t<4||t>BOLT.range)continue;
     const px=ex-dx*t,py=ey-dy*t,pz=ez-dz*t,perp=Math.sqrt(px*px+py*py+pz*pz),ang=Math.max(0,perp-e.d.r)/t;
     if(ang<ba){ba=ang;hitE=e;best=t;}}
+  for(const tg of TARGETS){if(tg.dead)continue;for(const s0 of tg.spheres){const ex=s0[0]-ox,ey=s0[1]-oy,ez=s0[2]-oz,t=ex*dx+ey*dy+ez*dz;if(t<4||t>BOLT.range)continue;const px=ex-dx*t,py=ey-dy*t,pz=ez-dz*t,ang=Math.max(0,Math.sqrt(px*px+py*py+pz*pz)-s0[3])/t;
+    if(ang<ba){ba=ang;hitE=null;best=t;AIM.e=null;AIM.x=s0[0];AIM.y=s0[1];AIM.z=s0[2];AIM.dist=t;AIM.tg=1;}}}
   if(hitE){AIM.e=hitE;AIM.x=hitE.x;AIM.y=hitE.y+hitE.d.cy;AIM.z=hitE.z;AIM.dist=best;return;}
+  if(AIM.tg){AIM.tg=0;return;}
   /* otherwise march the ray against ground and tree trunks */
   let t=6;for(;t<BOLT.range;t+=2){const x=ox+dx*t,y=oy+dy*t,z=oz+dz*t;if(y<hgt(x,z)){t-=1;break;}if(treeAt(x,z,y))break;}
   AIM.e=null;AIM.x=ox+dx*t;AIM.y=oy+dy*t;AIM.z=oz+dz*t;AIM.dist=t;
@@ -757,6 +771,7 @@ function updShots(dt){
     for(const e of EN){if(e.dead||e.spawnT>0)continue;const t=segSphere(b.x,b.y,b.z,nx,ny,nz,e.x,e.y+e.d.cy,e.z,e.d.r);if(t>=0&&t<ht){ht=t;hit=e;}}
     const hx=lerp(b.x,nx,ht),hy=lerp(b.y,ny,ht),hz=lerp(b.z,nz,ht);
     if(hit){drop(i);hurtEnemy(hit,b.dmg,hx,hy,hz);GUN.hitT=.12;sparks(hx,hy,hz,5,[1,.75,.35]);continue;}
+    const tg=hitTargets(b.x,b.y,b.z,nx,ny,nz);if(tg){drop(i);hurtTarget(tg,b.dmg);GUN.hitT=.12;sparks(nx,ny,nz,6,[1,.75,.35]);continue;}
     if(ny<hgt(nx,nz)||treeAt(nx,nz,ny)){sparks(nx,Math.max(ny,hgt(nx,nz)+.1),nz,4,[1,.7,.3]);part({x:nx,y:Math.max(ny,hgt(nx,nz)+.2),z:nz,vx:0,vy:1,vz:0,life:.8,s0:.5,s1:1.6,a:.3,col:DUST,drag:1.5});drop(i);continue;}
     b.x=nx;b.y=ny;b.z=nz;}
   for(let i=MISS.length-1;i>=0;i--){const m=MISS[i];m.t+=dt;m.life-=dt;if(m.t<m.delay)continue;
@@ -795,7 +810,7 @@ function boom(x,y,z,k){sBoom(k);CAMS.shake=Math.max(CAMS.shake,Math.min(.9,.7*k*
   part({x,y,z,vx:0,vy:0,vz:0,life:.35,s0:4*k,s1:7*k,a:2.4,col:[1,.62,.28],glow:true});
   for(let i=0;i<10*k;i++){const a=Math.random()*TAU,s=2+Math.random()*5*k;part({x,y,z,vx:Math.cos(a)*s,vy:1+Math.random()*4,vz:Math.sin(a)*s,life:1.4+Math.random(),s0:1.2*k,s1:4.4*k,a:.45,col:[.32,.3,.29],drag:1.8,grav:-.6});}
   sparks(x,y,z,10*k,[1,.62,.25]);MFL.position.set(x,y+1,z);GUN.flash=Math.max(GUN.flash,1.4*k);}
-function splash(x,y,z,r,dmg){for(const e of EN){if(e.dead||e.spawnT>0)continue;const d=Math.hypot(e.x-x,e.y+e.d.cy-y,e.z-z);if(d<r+e.d.r)hurtEnemy(e,dmg*(1-.5*clamp(d/r,0,1)),e.x,e.y+e.d.cy,e.z);}}
+function splash(x,y,z,r,dmg){for(const t of TARGETS){if(t.dead)continue;const s=t.spheres[0];if(Math.hypot(s[0]-x,s[1]-y,s[2]-z)<r+s[3]+2)hurtTarget(t,dmg);}for(const e of EN){if(e.dead||e.spawnT>0)continue;const d=Math.hypot(e.x-x,e.y+e.d.cy-y,e.z-z);if(d<r+e.d.r)hurtEnemy(e,dmg*(1-.5*clamp(d/r,0,1)),e.x,e.y+e.d.cy,e.z);}}
 
 /* ---- 06c_enemies.js ---- */
 /* ===================== FORGE machines, path-finding, waves, pickups, damage and score ===================== */
@@ -951,7 +966,7 @@ function updEnemies(dt){
     poseEnemy(e,dt,Math.hypot(e.vx,e.vz));
   }
   for(let i=EN.length-1;i>=0;i--)if(EN[i].dead)EN.splice(i,1);
-  if(G.mode==='play'&&!P.dead){if(alive===0&&BEACONS.length===0){G.breakT-=dt;if(G.breakT<=0){startWave();G.breakT=4;}}}
+  if(G.mode==='play'&&!P.dead&&!MISSION){if(alive===0&&BEACONS.length===0){G.breakT-=dt;if(G.breakT<=0){startWave();G.breakT=4;}}}
 }
 function poseEnemy(e,dt,sp){
   e.o.position.set(e.x,e.y,e.z);e.o.rotation.y=e.yaw;e.phase+=dt*(1.2+sp*(e.id==='skitter'?.9:e.id==='hound'?.42:.5));const ph=e.phase;
@@ -964,6 +979,125 @@ function poseEnemy(e,dt,sp){
       legIK(L,-(1.85-.25-lift),tz,0,1,1,false);   /* gunner knees bend forward */});
     e.armR.rotation.x=e.armL.rotation.x=Math.atan2(P.y+2.6-(e.y+2.85),Math.hypot(P.x-e.x,P.z-e.z))*.9;}
 }
+
+/* ---- 06d_missions.js ---- */
+/* ===================== missions: steps (destroy / reach / clear / hold), checkpoints, radio, results =====================
+   ?mission=N loads that mission's map and look. Without it the game is the endless sandbox. Progress: hd-ironhowl3-save. */
+const NIGHT_DOCKS={sun:[-.3,.55,.45],sunCol:0x9fb4ff,sunK:.7,sky:0x3a4668,ground:0x141820,hemiK:1.0,zen:0x04070f,hor:0x1c2846,fog:0x0e1626,clouds:.15,
+  pano:'31-docks-night-sky',panoK:.9,ring:{tex:'33-harbor-skyline',h:60,lift:-8,tint:[1,1,1],copies:3},exp:1.45,night:true};
+const DUSK_FIELD={sun:[-.82,.16,-.3],sunCol:0xff8a50,sunK:2.4,sky:0x9a86b4,ground:0x4a3a30,hemiK:1.3,zen:0x22305c,hor:0xf09468,fog:0xb88078,clouds:.85,pano:null,
+  ring:{tex:'70-distant-hills',h:70,lift:-10,tint:[.55,.45,.55],copies:3},exp:1.2};
+const MISSIONS=[
+  {id:1,name:'SUNLINE',map:'field',start:[0,115,0],
+   brief:['FORGE steers its machines through the farm radio masts.','Knock out all three, then meet Rook at the truck by the barn.'],
+   steps:[{t:'destroy',label:'DESTROY THE RELAY MASTS',masts:[2],wave:{skitter:4},radio:[['ROOK','Masts first. Then we talk about the big one.'],['ROOK','Left thumb to move, right thumb to aim. JET if they swarm you.']]},
+          {t:'destroy',label:'DESTROY THE RELAY MASTS',masts:[0],wave:{skitter:5,gunner:1},cp:1,radio:[['FORGE','UNIT 07. YOU ARE OBSOLETE.'],['ROOK','Gunners keep their distance. Close in or hop around them.']]},
+          {t:'destroy',label:'DESTROY THE RELAY MASTS',masts:[1],wave:{skitter:5,gunner:2},cp:1,radio:[['ROOK','Last mast. Tip: SALVO clears whatever is at your feet.']]},
+          {t:'reach',label:'MEET ROOK AT THE TRUCK',at:[47,30],r:13,truck:1,radio:[['ROOK','That is the lot. Truck is by the barn.']]}]},
+  {id:2,name:'NIGHT SHIFT',map:'docks',look:NIGHT_DOCKS,start:[9,88,0],
+   brief:['Harbor 9, midnight. FORGE runs the container yard now.','Get through the lanes and cut the gate controls on the quay.'],
+   steps:[{t:'reach',label:'GET INTO THE YARD',at:[9,28],r:10,wave:{skitter:5},radio:[['ROOK','Stay in the lanes. The stacks are too tall to hop.']]},
+          {t:'clear',label:'CLEAR THE CROSSING',wave:{skitter:6,gunner:1},at:[9,28],cp:1,radio:[['FORGE','THE HARBOR IS MINE. LEAVE.']]},
+          {t:'destroy',label:'DESTROY THE GATE CONTROLS',consoles:[[-25,-88],[43,-88]],wave:{gunner:2,skitter:4},cp:1,radio:[['ROOK','Two control boxes on the quay, red lights. Burn them.']]},
+          {t:'reach',label:'GET TO THE MIDDLE CRANE',at:[9,-84],r:12,wave:{hound:1,skitter:4},radio:[['ROOK','Gate is dead. Head for the crane, I will lift you out.']]}]},
+  {id:3,name:'PINEWALL',map:'woods',start:[0,112,0],
+   brief:['A salvage convoy went quiet in the pine woods.','Find it and guard Rook while she pulls the cores out.'],
+   steps:[{t:'reach',label:'FIND THE CONVOY',at:[38,-18],r:16,wreck:1,wave:{skitter:4,hound:1},radio:[['ROOK','Convoy beacon is east of the trail. Watch the trees.'],['ROOK','Hounds charge in a straight line. Hop over them.']]},
+          {t:'hold',label:'GUARD ROOK',at:[38,-18],r:24,time:60,every:15,waves:[{hound:2,skitter:3},{skitter:6},{gunner:1,hound:1,skitter:3},{hound:3}],cp:1,radio:[['ROOK','Got the cores. One minute. Keep them off me.'],['FORGE','I SEE YOU, ROOK.']]},
+          {t:'reach',label:'REACH THE NORTH RIDGE',at:[-19,-118],r:16,wave:{gunner:1,hound:2},cp:1,radio:[['ROOK','Done. Meet me at the north ridge.']]}]},
+  {id:4,name:'HOLD THE FARM',map:'field',look:DUSK_FIELD,start:[0,115,0],
+   brief:['Dusk. A storm and a FORGE column are both heading for the farm.','Hold the farmhouse relay until Rook finishes the upload.'],
+   steps:[{t:'reach',label:'GET TO THE FARMHOUSE',at:[41,62],r:16,radio:[['ROOK','Storm is coming in. So is FORGE.']]},
+          {t:'hold',label:'DEFEND THE FARMHOUSE',at:[45,52],r:34,time:150,every:16,waves:[{skitter:6},{hound:2,skitter:4},{gunner:2,skitter:3},{gunner:1,hound:2,skitter:4},{gunner:2,hound:2},{gunner:3,skitter:6}],cp:1,
+           radio:[['ROOK','Two and a half minutes. Stay near the house.'],['FORGE','THE FIELDS BELONG TO THE FACTORY.']]}]},
+];
+const MID=parseInt(Q.get('mission')||'0',10),MISSION=MISSIONS.find(m=>m.id===MID)||null;
+const MS={step:-1,t:0,waveT:0,wi:0,hold:0,repairs:3,cp:null,kills0:0,time:0,done:false,objs:[],truck:null,zone:null};
+const SAVE={get(){try{return JSON.parse(store.get('save','{}'))||{};}catch(e){return {};}},put(o){store.set('save',JSON.stringify(o));}};
+function unlocked(){return Math.max(1,SAVE.get().unlocked||1);}
+/* ---- destructible objectives: radio masts (built by the field map), gate control boxes (made here) ---- */
+const TARGETS=[];
+function addTarget(o){o.hp=o.hpMax;o.dead=false;TARGETS.push(o);return o;}
+function hitTargets(x0,y0,z0,x1,y1,z1){for(const t of TARGETS){if(t.dead)continue;for(const s of t.spheres){if(segSphere(x0,y0,z0,x1,y1,z1,s[0],s[1],s[2],s[3])>=0)return t;}}return null;}
+function hurtTarget(t,d){if(t.dead)return;t.hp-=d;t.flash=1;if(t.hp<=0){t.dead=true;boom(t.x,t.y+3,t.z,1.8);setTimeout(()=>boom(t.x+1,t.y+6,t.z,1.2),250);addScore(300);if(t.die)t.die();}}
+function makeConsole(x,z){const y=hgt(x,z),g=new THREE.Group();g.position.set(x,y,z);
+  const body=new THREE.Mesh(sbox(2.6,3.2,1.8),tmat('12-rusted-steel-plate',{rep:[2,2]}));body.position.y=1.6;body.castShadow=body.receiveShadow=true;g.add(body);
+  const lamp=new THREE.MeshBasicMaterial({color:new THREE.Color(1,.12,.05).multiplyScalar(4)});
+  for(const dx of [-.7,0,.7]){const l=new THREE.Mesh(new THREE.BoxGeometry(.4,.25,.1),lamp);l.position.set(dx,2.6,.92);g.add(l);}
+  const ant=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,3,6),tmat('25-brushed-steel'));ant.position.set(.9,4.6,0);g.add(ant);S.add(g);
+  return addTarget({x,z,y,hpMax:170,spheres:[[x,y+1.6,z,1.9]],obj:g,die(){g.rotation.z=.5;g.position.y-=.8;lamp.color.setRGB(.15,.02,.01);}});}
+function mastTarget(i){const m=MAPS.field.mastObjs[i];return addTarget({x:m.x,z:m.z,y:m.y,hpMax:260,spheres:[[m.x,m.y+3,m.z,2.4],[m.x,m.y+8,m.z,2],[m.x,m.y+13,m.z,1.6]],obj:m.tower,
+  die(){m.fall=1;m.lamp.material.color.setRGB(.1,.02,.01);}});}
+/* Rook's truck: a quick boxy stand-in (the real model comes with the escort mission) */
+function makeTruck(x,z,yaw,burnt){const g=new THREE.Group(),y=hgt(x,z);g.position.set(x,y,z);g.rotation.y=yaw||0;
+  const body=burnt?tmat('12-rusted-steel-plate',{col:0x3a3330}):tmat('53-howler-armour-large-plates',{rep:[1,1]}),dark=tmat('24-gunmetal',{col:burnt?0x222222:0x666a70});
+  const add=(geo,m,px,py,pz)=>{const o=new THREE.Mesh(geo,m);o.position.set(px,py,pz);o.castShadow=o.receiveShadow=true;g.add(o);};
+  add(new THREE.BoxGeometry(2.6,2.2,2.4),body,0,2.1,2.6);add(new THREE.BoxGeometry(2.7,1.2,5.2),dark,0,1.5,-1.2);add(new THREE.BoxGeometry(2.4,.9,4.8),body,0,2.5,-1.2);
+  const wg=new THREE.CylinderGeometry(.62,.62,.5,14);wg.rotateZ(Math.PI/2);for(const wz of [2.6,-.4,-2.6])for(const wx of [-1.35,1.35])add(wg,tmat('57-rubber-and-cables'),wx,.62,wz);
+  add(new THREE.BoxGeometry(.3,2.6,.3),dark,.8,3.6,-2.8);S.add(g);addBox(x-2.5,z-4.5,x+2.5,z+4.5,3.5);return g;}
+/* a soft ring on the ground showing where to stand (hold steps) or go (reach steps) */
+function zoneRing(x,z,r,col){const g=new THREE.RingGeometry(r-.5,r,64);g.rotateX(-Math.PI/2);const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:new THREE.Color(...col),transparent:true,opacity:.55,blending:THREE.AdditiveBlending,depthWrite:false}));
+  m.position.set(x,hgt(x,z)+.25,z);m.renderOrder=3;S.add(m);return m;}
+/* ---- radio strip ---- */
+const RADIO=[];let radioT=0;
+function radio(lines){for(const l of lines)RADIO.push(l);}
+function updRadio(dt){radioT-=dt;if(radioT<=0){const el=$('radio');if(RADIO.length){const [who,txt]=RADIO.shift();el.innerHTML='<b class="'+(who==='FORGE'?'fg':'rk')+'">'+who+'</b> '+txt;el.style.opacity=1;radioT=3.8;if(who==='FORGE')sEShot();else sClick();}else if(el.style.opacity!=='0'){el.style.opacity=0;}}}
+/* ---- running a mission ---- */
+function spawnGroup(def,cx,cz,ring){for(const id in def){let x=cx,z=cz;
+    for(let k=0;k<30;k++){const a=Math.random()*TAU,d=(ring||[12,26]);x=cx+Math.cos(a)*(d[0]+Math.random()*(d[1]-d[0]));z=cz+Math.sin(a)*(d[0]+Math.random()*(d[1]-d[0]));const B=BND();x=clamp(x,B.x0+4,B.x1-4);z=clamp(z,B.z0+4,B.z1-4);
+      const c=navCell(x,z);if(c>=0&&!NAV.block[c]&&Math.hypot(x-P.x,z-P.z)>30)break;}
+    BEACONS.push({x,z,t:1.3});for(let i=0;i<def[id];i++){const a=Math.random()*TAU,r=Math.random()*5+(i?2:0),c=collide(x+Math.cos(a)*r,z+Math.sin(a)*r,EDEF[id].r);spawnEnemy(id,c[0],c[1]);}}}
+function stepPos(s){if(s.masts)return MAPS.field.mastObjs[s.masts[0]];if(s.consoles){const live=MS.objs.find(t=>!t.dead);return live||{x:s.consoles[0][0],z:s.consoles[0][1]};}if(s.at)return {x:s.at[0],z:s.at[1]};return null;}
+function beginStep(i){
+  MS.step=i;MS.t=0;MS.wi=0;MS.waveT=4;MS.hold=0;MS.objs=[];const s=MISSION.steps[i];if(!s)return finishMission(true);
+  if(MS.zone){S.remove(MS.zone);MS.zone=null;}
+  if(s.cp)MS.cp={step:i,x:P.x,z:P.z,yaw:P.yaw,tier:GUN.tier};
+  if(s.masts)MS.objs=s.masts.map(mastTarget);
+  if(s.consoles)MS.objs=s.consoles.map(c=>makeConsole(c[0],c[1]));
+  if(s.truck&&!MS.truck)MS.truck=makeTruck(s.at[0],s.at[1],-.6);
+  if(s.wreck&&!MS.wreck){MS.wreck=[makeTruck(s.at[0]+4,s.at[1]-3,.9,1),makeTruck(s.at[0]-6,s.at[1]+5,2.4,1)];}
+  if(s.t==='hold'||s.t==='reach')MS.zone=zoneRing(s.at[0],s.at[1],s.r,s.t==='hold'?[1,.6,.2]:[.4,.9,1]);
+  if(s.wave){const p=stepPos(s)||{x:P.x-Math.sin(P.yaw)*60,z:P.z-Math.cos(P.yaw)*60};spawnGroup(s.wave,p.x,p.z,s.t==='clear'?[8,22]:[10,26]);}
+  if(s.radio)radio(s.radio);
+  HUD.banner(s.label);if(i>0&&s.cp){HUD.msg('CHECKPOINT',1.6);sPickup();}
+}
+function updMission(dt){
+  if(!MISSION||G.mode!=='play'||MS.done)return;
+  MS.t+=dt;MS.time+=dt;const s=MISSION.steps[MS.step];if(!s)return;
+  for(const m of MAPS.field.mastObjs||[])if(m.fall&&m.fall<90){m.fall+=dt*60;m.tower.rotation.z=Math.min(1.5,(m.fall/60)*(m.fall/60)*1.5);}
+  let txt=s.label,ok=false;
+  if(s.t==='destroy'){const left=MS.objs.filter(t=>!t.dead).length;txt+=' '+(MS.objs.length-left)+'/'+MS.objs.length;
+    if(s.masts){const all=MISSION.steps.filter(q=>q.masts).length,doneN=MISSION.steps.indexOf(s);txt=s.label+' '+(doneN+(left?0:1))+'/'+all;}ok=left===0;}
+  else if(s.t==='reach'){ok=Math.hypot(P.x-s.at[0],P.z-s.at[1])<s.r;}
+  else if(s.t==='clear'){ok=MS.t>3&&EN.filter(e=>!e.dead).length===0&&BEACONS.length===0;}
+  else if(s.t==='hold'){const inside=Math.hypot(P.x-s.at[0],P.z-s.at[1])<s.r;if(inside)MS.hold+=dt;const left=Math.max(0,s.time-MS.hold);
+    txt+=' '+Math.floor(left/60)+':'+String(Math.floor(left%60)).padStart(2,'0')+(inside?'':' · GET BACK IN THE RING');
+    MS.waveT-=dt;if(MS.waveT<=0&&left>0){MS.waveT=s.every;const w=s.waves[MS.wi%s.waves.length];MS.wi++;const a=Math.random()*TAU;spawnGroup(w,s.at[0]+Math.cos(a)*70,s.at[1]+Math.sin(a)*70,[0,14]);}
+    ok=left<=0;}
+  HUD.set('obj','text',txt);
+  if(ok){addScore(500);beginStep(MS.step+1);}
+}
+function finishMission(won){if(MS.done)return;MS.done=true;G.mode='results';
+  const time=MS.time|0,bonus=won?2000+Math.max(0,600-time)*5+MS.repairs*400:0;if(won)addScore(bonus);
+  const sv=SAVE.get();sv.best=sv.best||{};if(won){sv.unlocked=Math.max(sv.unlocked||1,MISSION.id+1);}sv.best[MISSION.id]=Math.max(sv.best[MISSION.id]||0,G.score);SAVE.put(sv);
+  const tickets=Math.min(80,Math.floor(G.score/400)+(won?10:0));ARC.over(G.score,tickets);
+  $('rtitle').textContent=won?'MISSION COMPLETE':'MISSION FAILED';$('rtitle').className='logo'+(won?'':' bad');
+  $('rstats').innerHTML=[['MISSION',MISSION.id+' · '+MISSION.name],['SCORE',G.score.toLocaleString('en-US')],['TIME',Math.floor(time/60)+':'+String(time%60).padStart(2,'0')],['KILLS',G.kills],['REPAIRS LEFT',MS.repairs],['TICKETS',tickets]].map(r=>'<div><span>'+r[0]+'</span><b>'+r[1]+'</b></div>').join('');
+  $('rnext').style.display=won&&MISSIONS.find(m=>m.id===MISSION.id+1)?'':'none';$('results').style.display='flex';jetLoop(0);
+}
+/* falling in a mission: repair at the last checkpoint (3 repairs per mission), then the mission is lost */
+function missionDown(){if(MS.repairs<=0){setTimeout(()=>finishMission(false),2200);return false;}return true;}
+function repairAtCheckpoint(){MS.repairs--;const cp=MS.cp||{step:0,x:MISSION.start[0],z:MISSION.start[1],yaw:MISSION.start[2],tier:GUN.base};
+  clearFight();P=mkPlayer();P.x=cp.x;P.z=cp.z;P.y=hgt(cp.x,cp.z);P.yaw=P.legYaw=cp.yaw;CAMS.ready=false;if(M)M.root.visible=true;
+  GUN.tier=Math.max(GUN.base,(cp.tier||1)-1);GUN.heat=0;GUN.over=false;$('down').style.display='none';G.mode='play';
+  for(const t of MS.objs)if(!t.dead){t.hp=t.hpMax;}beginStep(cp.step);HUD.msg('REPAIRED · '+MS.repairs+' LEFT',2);}
+function startMission(){MS.done=false;MS.repairs=3;MS.cp=null;MS.time=0;RADIO.length=0;P.x=MISSION.start[0];P.z=MISSION.start[1];P.y=hgt(P.x,P.z);P.yaw=P.legYaw=MISSION.start[2];CAMS.ready=false;beginStep(0);}
+/* mission list on the title screen */
+function missionMenu(){const box=$('mlist'),u=unlocked(),best=SAVE.get().best||{};
+  box.querySelector('.cards').innerHTML=MISSIONS.map(m=>{const lock=m.id>u;return '<button class="mcard'+(lock?' lock':'')+'" data-id="'+m.id+'"'+(lock?' disabled':'')+'><b>'+m.id+' · '+m.name+'</b><span>'+
+    (lock?'LOCKED':MAPS[m.map].name+(m.look===NIGHT_DOCKS?' · NIGHT':m.look===DUSK_FIELD?' · DUSK':'')+(best[m.id]?' · BEST '+best[m.id].toLocaleString('en-US'):''))+'</span></button>';}).join('');
+  box.querySelectorAll('.mcard').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const q=new URLSearchParams(location.search);q.set('mission',b.dataset.id);q.delete('map');location.search=q.toString();}));
+  box.style.display='flex';}
 
 /* ---- 07_fx.js ---- */
 /* ===================== particles: one system, smoke blends normally, glow adds light (premultiplied alpha) ===================== */
@@ -1096,7 +1230,7 @@ const HUD={_c:{},
     this.set('bshield','width',(P.shield/P.shieldMax*100).toFixed(0)+'%');this.set('bhull','width',(P.hull/P.hullMax*100).toFixed(0)+'%');
     this.set('bhull','cls',P.hull<30?'low':'');
     this.set('gtier','text','GUN '+ROMAN[GUN.tier]);this.set('mslc','text','MSL '+MSL.ammo);this.set('bmsl','text','MSL '+MSL.ammo);
-    this.set('score','text',G.score.toLocaleString('en-US'));const cm=G.t-G.lastKill<3&&G.combo>1;this.set('combo','text',cm?'x'+Math.min(3,1+.25*(G.combo-1)).toFixed(2).replace(/\.?0+$/,''):'');
+    this.set('score','text',G.score.toLocaleString('en-US'));if(!MISSION)this.set('obj','text','');const cm=G.t-G.lastKill<3&&G.combo>1;this.set('combo','text',cm?'x'+Math.min(3,1+.25*(G.combo-1)).toFixed(2).replace(/\.?0+$/,''):'');
     this.set('heatb','width',GUN.heat.toFixed(0)+'%');this.set('heat','cls',GUN.over?'over':GUN.heat>70?'warm':'');
     this.set('cross','cls',GUN.hitT>0?'hit':AIM.e?'on':'');
     this.set('bvent','cls','tb'+(GUN.ventCd>0?' cool':GUN.over?' hot':''));
@@ -1107,6 +1241,13 @@ const HUD={_c:{},
     for(const e of EN){if(k>=6)break;if(e.dead||e.spawnT>0)continue;const dx=e.x-P.x,dz=e.z-P.z,d=Math.hypot(dx,dz);if(d>60)continue;
       const rel=angD(Math.atan2(-dx,-dz),P.yaw);if(Math.abs(rel)<.75)continue;const el=$('ea'+k++);el.style.display='block';el.style.transform='rotate('+(-rel)+'rad)';el.style.opacity=d<25?1:.6;}
     for(;k<6;k++){const el=$('ea'+k);if(el.style.display!=='none')el.style.display='none';}
+    /* mission waypoint: a marker over the objective, pinned to the screen edge when it is off screen, with the distance */
+    const wp=$('wp');if(MISSION&&!MS.done&&G.mode==='play'){const s=MISSION.steps[MS.step],p=s&&stepPos(s);
+      if(p){const v=V3(p.x,hgt(p.x,p.z)+(s.masts?14:5),p.z).project(cam);let sx=(v.x*.5+.5)*innerWidth,sy=(-v.y*.5+.5)*innerHeight;const behind=v.z>1;
+        if(behind){sx=innerWidth-sx;sy=innerHeight-sy;}const m=46,off=behind||sx<m||sx>innerWidth-m||sy<m+40||sy>innerHeight-m;
+        if(off){const cx=innerWidth/2,cy=innerHeight/2;let dx=sx-cx,dy=sy-cy;if(behind&&Math.abs(dy)<1)dy=1;const k2=Math.min((cx-m)/Math.abs(dx||1e-3),(cy-m-20)/Math.abs(dy||1e-3));sx=cx+dx*k2;sy=cy+dy*k2;}
+        wp.style.display='block';wp.style.transform='translate('+sx.toFixed(0)+'px,'+sy.toFixed(0)+'px)';this.set('wpd','text',Math.round(Math.hypot(p.x-P.x,p.z-P.z))+' m');this.set('wp','cls',off?'off':'');}
+      else wp.style.display='none';}else if(wp.style.display!=='none')wp.style.display='none';
   },
   menu(){const m=$('menu');$('mview').textContent='VIEW: '+(SET.view==='close'?'CLOSE':'FAR');
     $('mqual').textContent='QUALITY: '+(SET.quality==='auto'?'AUTO ('+QL.toUpperCase()+')':SET.quality.toUpperCase());
@@ -1130,12 +1271,13 @@ function setupHud(){
   $('msound').onclick=()=>{SET.sound=!SET.sound;store.set('sound',SET.sound?1:0);HUD.menu();};
   $('msens').onclick=()=>{const o=[.6,.8,1,1.3,1.7];SET.sens=o[(o.indexOf(SET.sens)+1)%o.length]||1;store.set('sens',SET.sens);HUD.menu();};
   $('mexit').onclick=()=>ARC.exit();
-  $('down').addEventListener('click',()=>{if(G.mode==='down'&&G.downT<=0)startPlay();});
+  $('down').addEventListener('click',()=>{if(G.mode==='down'&&G.downT<=0){if(MISSION)repairAtCheckpoint();else startPlay();}});
   HUD.view(SET.view);
 }
 
 /* ---- 10_main.js ---- */
 /* ===================== game flow ===================== */
+let NIGHT_ON=false;
 const G={mode:'load',paused:false,t:0,fdt:1/60,birdT:6,perf:{t:0,n:0,s:0},demoI:1,demoHop:4,score:0,kills:0,combo:0,lastKill:-9,wave:0,hpK:1,breakT:3,downT:0};
 let M=null,CTLX=null;
 function setQuality(q){QL=q;QC=QUAL[q];DYN=1;resize();setShadow();S.fog.near=QC.fog*.22;S.fog.far=QC.fog;}
@@ -1145,10 +1287,12 @@ function clearFight(){for(const e of EN)S.remove(e.o);EN.length=0;BOLTS.length=E
 function resetRun(){P=mkPlayer();CAMS.ready=false;clearFight();Object.assign(GUN,{tier:GUN.base,heat:0,over:false,cd:0,ventCd:0});MSL.ammo=12;SALVO.cd=0;SALVO.left=0;
   Object.assign(G,{score:0,kills:0,combo:0,lastKill:-9,wave:0,hpK:1,breakT:3});if(M)M.root.visible=true;$('down').style.display='none';}
 function playerDown(){if(P.dead)return;P.dead=true;P.thrust=0;boom(P.x,P.y+2.5,P.z,2);boom(P.x+1,P.y+3.5,P.z-1,1.2);if(M)M.root.visible=false;
-  G.mode='down';G.downT=2.4;const best=+store.get('best',0);if(G.score>best)store.set('best',G.score);
+  G.mode='down';G.downT=2.4;
+  if(MISSION){const can=missionDown();$('dscore').textContent=can?'REPAIRS LEFT '+MS.repairs:'NO REPAIRS LEFT';$('dgo').textContent=can?'TAP TO REPAIR AT THE CHECKPOINT':'';if(!can)G.downT=99;return;}
+  $('dgo').textContent='TAP TO GO AGAIN';const best=+store.get('best',0);if(G.score>best)store.set('best',G.score);
   $('dscore').textContent='SCORE '+G.score.toLocaleString('en-US')+'  ·  WAVE '+G.wave+'  ·  BEST '+Math.max(best,G.score).toLocaleString('en-US');
   ARC.over(G.score,Math.min(60,Math.floor(G.score/400)+G.wave));}
-function startPlay(){audioInit();resetRun();G.mode='play';G.paused=false;$('title').style.display='none';HUD.menu();ARC.begin();
+function startPlay(){audioInit();resetRun();G.mode='play';G.paused=false;$('title').style.display='none';$('mlist').style.display='none';HUD.menu();ARC.begin();if(MISSION)startMission();
   if(!touchy){lockMouse();HUD.hint('WASD MOVE · MOUSE AIM · SPACE JET HOP · V CAMERA · ESC PAUSE',9);}else HUD.hint('LEFT THUMB MOVES · RIGHT THUMB AIMS · JET TO HOP',7);}
 function startDemo(){resetRun();G.mode='demo';G.paused=false;G.demoI=1;$('title').style.display='none';HUD.menu();}
 /* attract mode: walk the trail, hop now and then */
@@ -1177,11 +1321,12 @@ function tick(dt){
     let c=G.mode==='demo'?demoCtl(dt):readCtl(dt);
     if(CTLX){Object.assign(c,CTLX);CTLX.jetHit=false;CTLX.view=false;if(CTLX.turnOnce){c.turn=CTLX.turnOnce;CTLX.turnOnce=0;}}
     if(c.view)cycleView();if(c.pause&&G.mode==='play')setPause(true);
-    rayAim();updPlayer(c,dt);if(G.mode==='play')updGun(c,dt);handleEvents();
+    rayAim();updPlayer(c,dt);if(G.mode==='play')updGun(c,dt);handleEvents();updMission(dt);
   }else if(G.mode==='play'){const c=readCtl(dt);if(c.pause)setPause(false);}
   else readCtl(dt);
   const fight=(G.mode==='play'&&!G.paused)||G.mode==='down';
   if(fight){updShots(dt);updEnemies(dt);updPickups(dt);}
+  updRadio(dt);if(NIGHT_ON&&M&&M.ready&&!M.lamp){M.lamp=new THREE.SpotLight(0xfff2d8,1600,110,.55,.6,1.4);M.lamp.position.set(0,.3,-.4);M.head.add(M.lamp);const t=new THREE.Object3D();t.position.set(0,-3,-30);M.head.add(t);M.lamp.target=t;}
   if(G.mode==='down'){G.downT-=dt;if(G.downT<=0&&$('down').style.display!=='flex'){$('down').style.display='flex';}
     if(Math.random()<dt*20)part({x:P.x+(Math.random()-.5)*2,y:P.y+1+Math.random()*2,z:P.z+(Math.random()-.5)*2,vx:0,vy:2.5,vz:0,life:2.4,s0:1.2,s1:5,a:.4,col:[.2,.2,.21],drag:.6,grav:-.5});}
   if(M){const ev=poseMech(M,{x:P.x,z:P.z,gy:P.y,legYaw:P.legYaw,aimYaw:P.yaw,spd:live?P.spd:0,air:P.air,vy:P.vy,land:P.land,thrust:P.thrust,pitch:P.pitch},live?dt:0);
@@ -1207,7 +1352,7 @@ function frame(now){
   tick(dt);autoQ(dt);R.render(S,cam);HUD.dev();requestAnimationFrame(frame);
 }
 function boot(){
-  pickMap();setupHud();setQuality(QL);applyLook(MAPDEF.look);U.tCloud.value=tex('34-fog',{srgb:false});
+  pickMap();setupHud();setQuality(QL);const LK=MISSION&&MISSION.look?Object.assign({},MAPDEF.look,MISSION.look):MAPDEF.look;NIGHT_ON=!!LK.night;applyLook(LK);setupTitle();U.tCloud.value=tex('34-fog',{srgb:false});
   buildGround();const before=new Set(S.children);MAPDEF.build();mergeStatic(before);M=buildMech();buildFX();buildWeapons();P=mkPlayer();
   const done=()=>{G.mode=G.mode==='load'?'title':G.mode;$('load').style.display='none';$('title').style.display=G.mode==='title'?'flex':'none';document.title='IRONHOWL 3';ARC.post('ready',{title:ARC.title});};
   let vegDone=false,texDone=false;LM.onLoad=()=>{texDone=true;if(vegDone)done();};
@@ -1222,18 +1367,30 @@ cv.addEventListener('click',()=>{if(G.mode==='play'&&!G.paused&&!touchy&&!MOUSE.
 addEventListener('keydown',e=>{if(G.mode==='title'&&(e.code==='Enter'||e.code==='Space'))startPlay();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&G.mode==='play'&&!G.paused)setPause(true);});
 addEventListener('message',e=>{const m=e.data;if(!m||m.src!=='hyperdot-arcade')return;
-  if(m.cmd==='start'){if(G.mode==='title'||G.mode==='demo'||G.mode==='down')startPlay();else if(G.paused)setPause(false);}
+  if(m.cmd==='start'){if(G.mode==='title'||G.mode==='demo'||G.mode==='down'&&!MISSION||G.mode==='results')startPlay();else if(G.paused)setPause(false);}
   else if(m.cmd==='pause'){if(G.mode==='play'&&!G.paused)setPause(true);}
   else if(m.cmd==='resume'){if(G.mode==='play'&&G.paused)setPause(false);}
   else if(m.cmd==='attract'){ARC.live=false;if(G.mode!=='load')startDemo();else G.mode='demo';}
   else if(m.cmd==='mute'){ARC.muted=true;setVolume();}
   else if(m.cmd==='unmute'){ARC.muted=false;setVolume();}
 });
-if(DEV)window.__ih3={S,KEY,SKY,PFX,GUN,MSL,SALVO,EN,PK,AIM,startWave,spawnEnemy,dropPickup,hurtPlayer,rt(n=3){const t0=performance.now();for(let i=0;i<n;i++){R.render(S,cam);R.getContext().finish();}return +((performance.now()-t0)/n).toFixed(1);},G,get P(){return P;},get M(){return M;},VEG,get VEGN(){return VEGN;},R,cam,CAMS,SET,QUAL,setQuality,cycleView,startPlay,startDemo,setPause,
+if(DEV)window.__ih3={S,KEY,SKY,PFX,GUN,MSL,SALVO,MS,MISSION,TARGETS,hurtTarget,beginStep,finishMission,repairAtCheckpoint,EN,PK,AIM,startWave,spawnEnemy,dropPickup,hurtPlayer,rt(n=3){const t0=performance.now();for(let i=0;i<n;i++){R.render(S,cam);R.getContext().finish();}return +((performance.now()-t0)/n).toFixed(1);},G,get P(){return P;},get M(){return M;},VEG,get VEGN(){return VEGN;},R,cam,CAMS,SET,QUAL,setQuality,cycleView,startPlay,startDemo,setPause,
   ctl(o){CTLX=o;},showcase(o){CAMX=o;},
   /* run the game forward t seconds at 60 steps a second without drawing (for tests) */
   ff(t){const n=Math.round(t*60);for(let i=0;i<n;i++)tick(1/60);},
   info(){const i=R.info.render;return {calls:i.calls,tris:i.triangles,veg:VEGN.inst,ql:QL,mode:G.mode,x:+P.x.toFixed(1),z:+P.z.toFixed(1),air:P.air,fuel:+P.fuel.toFixed(2),hull:+P.hull.toFixed(0),shield:+P.shield.toFixed(0),tier:GUN.tier,heat:+GUN.heat.toFixed(0),over:GUN.over,msl:MSL.ammo,score:G.score,kills:G.kills,wave:G.wave,enemies:EN.filter(e=>!e.dead).length,bolts:BOLTS.length,ebolts:EBOLTS.length};}};
+/* title screen: mission briefing when a mission is loaded, otherwise the sandbox map buttons and the mission list */
+function setupTitle(){
+  if(MISSION){$('maps').style.display='none';$('bmis').style.display='none';$('tsub').textContent='MISSION '+MISSION.id+' · '+MISSION.name;
+    $('tbrief').innerHTML=MISSION.brief.map(l=>'<div>'+l+'</div>').join('')+'<div class="objs">'+MISSION.steps.filter((s,i,a)=>a.findIndex(q=>q.label===s.label)===i).map(s=>'· '+s.label).join('<br>')+'</div>';
+    $('tgo').textContent='TAP TO DEPLOY';$('bmenu').style.display='';}
+  $('bmis').onclick=e=>{e.stopPropagation();missionMenu();};
+  $('bmenu').onclick=e=>{e.stopPropagation();const q=new URLSearchParams(location.search);q.delete('mission');location.search=q.toString();};
+  $('mlback').onclick=e=>{e.stopPropagation();$('mlist').style.display='none';};
+  $('rnext').onclick=()=>{const q=new URLSearchParams(location.search);q.set('mission',MISSION.id+1);location.search=q.toString();};
+  $('rretry').onclick=()=>location.reload();
+  $('rmenu').onclick=()=>{const q=new URLSearchParams(location.search);q.delete('mission');location.search=q.toString();};
+}
 boot();
 document.querySelectorAll('#maps button').forEach(b=>b.classList.toggle('sel',b.dataset.map===MAPID));
 

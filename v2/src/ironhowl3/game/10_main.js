@@ -1,4 +1,5 @@
 /* ===================== game flow ===================== */
+let NIGHT_ON=false;
 const G={mode:'load',paused:false,t:0,fdt:1/60,birdT:6,perf:{t:0,n:0,s:0},demoI:1,demoHop:4,score:0,kills:0,combo:0,lastKill:-9,wave:0,hpK:1,breakT:3,downT:0};
 let M=null,CTLX=null;
 function setQuality(q){QL=q;QC=QUAL[q];DYN=1;resize();setShadow();S.fog.near=QC.fog*.22;S.fog.far=QC.fog;}
@@ -8,10 +9,12 @@ function clearFight(){for(const e of EN)S.remove(e.o);EN.length=0;BOLTS.length=E
 function resetRun(){P=mkPlayer();CAMS.ready=false;clearFight();Object.assign(GUN,{tier:GUN.base,heat:0,over:false,cd:0,ventCd:0});MSL.ammo=12;SALVO.cd=0;SALVO.left=0;
   Object.assign(G,{score:0,kills:0,combo:0,lastKill:-9,wave:0,hpK:1,breakT:3});if(M)M.root.visible=true;$('down').style.display='none';}
 function playerDown(){if(P.dead)return;P.dead=true;P.thrust=0;boom(P.x,P.y+2.5,P.z,2);boom(P.x+1,P.y+3.5,P.z-1,1.2);if(M)M.root.visible=false;
-  G.mode='down';G.downT=2.4;const best=+store.get('best',0);if(G.score>best)store.set('best',G.score);
+  G.mode='down';G.downT=2.4;
+  if(MISSION){const can=missionDown();$('dscore').textContent=can?'REPAIRS LEFT '+MS.repairs:'NO REPAIRS LEFT';$('dgo').textContent=can?'TAP TO REPAIR AT THE CHECKPOINT':'';if(!can)G.downT=99;return;}
+  $('dgo').textContent='TAP TO GO AGAIN';const best=+store.get('best',0);if(G.score>best)store.set('best',G.score);
   $('dscore').textContent='SCORE '+G.score.toLocaleString('en-US')+'  ·  WAVE '+G.wave+'  ·  BEST '+Math.max(best,G.score).toLocaleString('en-US');
   ARC.over(G.score,Math.min(60,Math.floor(G.score/400)+G.wave));}
-function startPlay(){audioInit();resetRun();G.mode='play';G.paused=false;$('title').style.display='none';HUD.menu();ARC.begin();
+function startPlay(){audioInit();resetRun();G.mode='play';G.paused=false;$('title').style.display='none';$('mlist').style.display='none';HUD.menu();ARC.begin();if(MISSION)startMission();
   if(!touchy){lockMouse();HUD.hint('WASD MOVE · MOUSE AIM · SPACE JET HOP · V CAMERA · ESC PAUSE',9);}else HUD.hint('LEFT THUMB MOVES · RIGHT THUMB AIMS · JET TO HOP',7);}
 function startDemo(){resetRun();G.mode='demo';G.paused=false;G.demoI=1;$('title').style.display='none';HUD.menu();}
 /* attract mode: walk the trail, hop now and then */
@@ -40,11 +43,12 @@ function tick(dt){
     let c=G.mode==='demo'?demoCtl(dt):readCtl(dt);
     if(CTLX){Object.assign(c,CTLX);CTLX.jetHit=false;CTLX.view=false;if(CTLX.turnOnce){c.turn=CTLX.turnOnce;CTLX.turnOnce=0;}}
     if(c.view)cycleView();if(c.pause&&G.mode==='play')setPause(true);
-    rayAim();updPlayer(c,dt);if(G.mode==='play')updGun(c,dt);handleEvents();
+    rayAim();updPlayer(c,dt);if(G.mode==='play')updGun(c,dt);handleEvents();updMission(dt);
   }else if(G.mode==='play'){const c=readCtl(dt);if(c.pause)setPause(false);}
   else readCtl(dt);
   const fight=(G.mode==='play'&&!G.paused)||G.mode==='down';
   if(fight){updShots(dt);updEnemies(dt);updPickups(dt);}
+  updRadio(dt);if(NIGHT_ON&&M&&M.ready&&!M.lamp){M.lamp=new THREE.SpotLight(0xfff2d8,1600,110,.55,.6,1.4);M.lamp.position.set(0,.3,-.4);M.head.add(M.lamp);const t=new THREE.Object3D();t.position.set(0,-3,-30);M.head.add(t);M.lamp.target=t;}
   if(G.mode==='down'){G.downT-=dt;if(G.downT<=0&&$('down').style.display!=='flex'){$('down').style.display='flex';}
     if(Math.random()<dt*20)part({x:P.x+(Math.random()-.5)*2,y:P.y+1+Math.random()*2,z:P.z+(Math.random()-.5)*2,vx:0,vy:2.5,vz:0,life:2.4,s0:1.2,s1:5,a:.4,col:[.2,.2,.21],drag:.6,grav:-.5});}
   if(M){const ev=poseMech(M,{x:P.x,z:P.z,gy:P.y,legYaw:P.legYaw,aimYaw:P.yaw,spd:live?P.spd:0,air:P.air,vy:P.vy,land:P.land,thrust:P.thrust,pitch:P.pitch},live?dt:0);
@@ -70,7 +74,7 @@ function frame(now){
   tick(dt);autoQ(dt);R.render(S,cam);HUD.dev();requestAnimationFrame(frame);
 }
 function boot(){
-  pickMap();setupHud();setQuality(QL);applyLook(MAPDEF.look);U.tCloud.value=tex('34-fog',{srgb:false});
+  pickMap();setupHud();setQuality(QL);const LK=MISSION&&MISSION.look?Object.assign({},MAPDEF.look,MISSION.look):MAPDEF.look;NIGHT_ON=!!LK.night;applyLook(LK);setupTitle();U.tCloud.value=tex('34-fog',{srgb:false});
   buildGround();const before=new Set(S.children);MAPDEF.build();mergeStatic(before);M=buildMech();buildFX();buildWeapons();P=mkPlayer();
   const done=()=>{G.mode=G.mode==='load'?'title':G.mode;$('load').style.display='none';$('title').style.display=G.mode==='title'?'flex':'none';document.title='IRONHOWL 3';ARC.post('ready',{title:ARC.title});};
   let vegDone=false,texDone=false;LM.onLoad=()=>{texDone=true;if(vegDone)done();};
@@ -85,17 +89,29 @@ cv.addEventListener('click',()=>{if(G.mode==='play'&&!G.paused&&!touchy&&!MOUSE.
 addEventListener('keydown',e=>{if(G.mode==='title'&&(e.code==='Enter'||e.code==='Space'))startPlay();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&G.mode==='play'&&!G.paused)setPause(true);});
 addEventListener('message',e=>{const m=e.data;if(!m||m.src!=='hyperdot-arcade')return;
-  if(m.cmd==='start'){if(G.mode==='title'||G.mode==='demo'||G.mode==='down')startPlay();else if(G.paused)setPause(false);}
+  if(m.cmd==='start'){if(G.mode==='title'||G.mode==='demo'||G.mode==='down'&&!MISSION||G.mode==='results')startPlay();else if(G.paused)setPause(false);}
   else if(m.cmd==='pause'){if(G.mode==='play'&&!G.paused)setPause(true);}
   else if(m.cmd==='resume'){if(G.mode==='play'&&G.paused)setPause(false);}
   else if(m.cmd==='attract'){ARC.live=false;if(G.mode!=='load')startDemo();else G.mode='demo';}
   else if(m.cmd==='mute'){ARC.muted=true;setVolume();}
   else if(m.cmd==='unmute'){ARC.muted=false;setVolume();}
 });
-if(DEV)window.__ih3={S,KEY,SKY,PFX,GUN,MSL,SALVO,EN,PK,AIM,startWave,spawnEnemy,dropPickup,hurtPlayer,rt(n=3){const t0=performance.now();for(let i=0;i<n;i++){R.render(S,cam);R.getContext().finish();}return +((performance.now()-t0)/n).toFixed(1);},G,get P(){return P;},get M(){return M;},VEG,get VEGN(){return VEGN;},R,cam,CAMS,SET,QUAL,setQuality,cycleView,startPlay,startDemo,setPause,
+if(DEV)window.__ih3={S,KEY,SKY,PFX,GUN,MSL,SALVO,MS,MISSION,TARGETS,hurtTarget,beginStep,finishMission,repairAtCheckpoint,EN,PK,AIM,startWave,spawnEnemy,dropPickup,hurtPlayer,rt(n=3){const t0=performance.now();for(let i=0;i<n;i++){R.render(S,cam);R.getContext().finish();}return +((performance.now()-t0)/n).toFixed(1);},G,get P(){return P;},get M(){return M;},VEG,get VEGN(){return VEGN;},R,cam,CAMS,SET,QUAL,setQuality,cycleView,startPlay,startDemo,setPause,
   ctl(o){CTLX=o;},showcase(o){CAMX=o;},
   /* run the game forward t seconds at 60 steps a second without drawing (for tests) */
   ff(t){const n=Math.round(t*60);for(let i=0;i<n;i++)tick(1/60);},
   info(){const i=R.info.render;return {calls:i.calls,tris:i.triangles,veg:VEGN.inst,ql:QL,mode:G.mode,x:+P.x.toFixed(1),z:+P.z.toFixed(1),air:P.air,fuel:+P.fuel.toFixed(2),hull:+P.hull.toFixed(0),shield:+P.shield.toFixed(0),tier:GUN.tier,heat:+GUN.heat.toFixed(0),over:GUN.over,msl:MSL.ammo,score:G.score,kills:G.kills,wave:G.wave,enemies:EN.filter(e=>!e.dead).length,bolts:BOLTS.length,ebolts:EBOLTS.length};}};
+/* title screen: mission briefing when a mission is loaded, otherwise the sandbox map buttons and the mission list */
+function setupTitle(){
+  if(MISSION){$('maps').style.display='none';$('bmis').style.display='none';$('tsub').textContent='MISSION '+MISSION.id+' · '+MISSION.name;
+    $('tbrief').innerHTML=MISSION.brief.map(l=>'<div>'+l+'</div>').join('')+'<div class="objs">'+MISSION.steps.filter((s,i,a)=>a.findIndex(q=>q.label===s.label)===i).map(s=>'· '+s.label).join('<br>')+'</div>';
+    $('tgo').textContent='TAP TO DEPLOY';$('bmenu').style.display='';}
+  $('bmis').onclick=e=>{e.stopPropagation();missionMenu();};
+  $('bmenu').onclick=e=>{e.stopPropagation();const q=new URLSearchParams(location.search);q.delete('mission');location.search=q.toString();};
+  $('mlback').onclick=e=>{e.stopPropagation();$('mlist').style.display='none';};
+  $('rnext').onclick=()=>{const q=new URLSearchParams(location.search);q.set('mission',MISSION.id+1);location.search=q.toString();};
+  $('rretry').onclick=()=>location.reload();
+  $('rmenu').onclick=()=>{const q=new URLSearchParams(location.search);q.delete('mission');location.search=q.toString();};
+}
 boot();
 document.querySelectorAll('#maps button').forEach(b=>b.classList.toggle('sel',b.dataset.map===MAPID));

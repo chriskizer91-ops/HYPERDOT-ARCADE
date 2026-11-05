@@ -80,8 +80,11 @@ field:{name:'FIELD',mix:'meadow',spawn:{x:0,z:115,yaw:0},
     const bim=new THREE.InstancedMesh(bg,[hay,hayEnd,hayEnd],bales.length);bales.forEach((m,k)=>bim.setMatrixAt(k,m));bim.castShadow=bim.receiveShadow=true;S.add(bim);
     /* radio relay masts: lattice towers with a red light (mission 1 targets) */
     const truss=tmat('74-crane-truss',{alpha:true,ds:true,rep:[4,6],r:.6,m:.5});
-    for(const [mx,mz] of MAPS.field.masts){const g0=hgt(mx,mz);put(new THREE.CylinderGeometry(.6,1.6,26,4,1,true),truss,mx,g0+13,mz,Math.PI/4);
-      const lamp=new THREE.Mesh(new THREE.SphereGeometry(.4,10,8),new THREE.MeshBasicMaterial({color:new THREE.Color(1,.1,.05).multiplyScalar(4)}));lamp.position.set(mx,g0+26.4,mz);S.add(lamp);addBox(mx-1.6,mz-1.6,mx+1.6,mz+1.6,26);}
+    MAPS.field.mastObjs=[];
+    for(const [mx,mz] of MAPS.field.masts){const g0=hgt(mx,mz),grp=new THREE.Group();grp.position.set(mx,g0,mz);grp.userData.keep=1;S.add(grp);   /* a pivot at the base so a destroyed mast can topple */
+      const tw=new THREE.Mesh(new THREE.CylinderGeometry(.6,1.6,26,4,1,true),truss);tw.position.y=13;tw.rotation.y=Math.PI/4;tw.castShadow=true;grp.add(tw);
+      const lamp=new THREE.Mesh(new THREE.SphereGeometry(.4,10,8),new THREE.MeshBasicMaterial({color:new THREE.Color(1,.1,.05).multiplyScalar(4)}));lamp.position.y=26.4;grp.add(lamp);addBox(mx-1.6,mz-1.6,mx+1.6,mz+1.6,26);
+      MAPS.field.mastObjs.push({x:mx,z:mz,y:g0,tower:grp,lamp,fall:0});}
   }},
 /* ---------------- docks: Harbor 9 at sunset, container stacks, cranes, a ship, warehouses ---------------- */
 docks:{name:'DOCKS',mix:'woods',spawn:{x:9,z:88,yaw:0},bounds:{x0:-128,x1:128,z0:-96,z1:96},quay:-100,
@@ -126,7 +129,12 @@ docks:{name:'DOCKS',mix:'woods',spawn:{x:9,z:88,yaw:0},bounds:{x0:-128,x1:128,z0
     const bb=new THREE.Mesh(new THREE.PlaneGeometry(9,9),tmat('46-hyperdot-arcade-billboard',{r:.5}));bb.position.set(121.1,7,108);bb.rotation.y=Math.PI/2;S.add(bb);
     /* lamp posts and bollards */
     const pole=tmat('24-gunmetal'),lampM=new THREE.MeshBasicMaterial({color:new THREE.Color(1,.85,.55).multiplyScalar(3)});
-    for(const x of MAPS.docks.lanesX)for(const z of [-88,-20,52,84]){put(new THREE.CylinderGeometry(.18,.25,13,8),pole,x+3.6,6.5,z);put(new THREE.BoxGeometry(1.6,.3,.7),lampM,x+3.6,13,z);addCol(x+3.6,z,.4,13);}
+    const night=MISSION&&MISSION.look&&MISSION.look.night;if(night)lampM.color.multiplyScalar(2.2);
+    const pool=night?poolTex():null;
+    for(const x of MAPS.docks.lanesX)for(const z of [-88,-20,52,84]){put(new THREE.CylinderGeometry(.18,.25,13,8),pole,x+3.6,6.5,z);put(new THREE.BoxGeometry(1.6,.3,.7),lampM,x+3.6,13,z);addCol(x+3.6,z,.4,13);
+      if(night){const g=new THREE.PlaneGeometry(22,22);g.rotateX(-Math.PI/2);g.translate(x+3.6,.06,z);(MAPS.docks._pools=MAPS.docks._pools||[]).push(g);}}
+    if(night&&MAPS.docks._pools){const p=new THREE.Mesh(THREE.mergeGeometries(MAPS.docks._pools),new THREE.MeshBasicMaterial({map:pool,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,color:new THREE.Color(1,.78,.45).multiplyScalar(.55)}));
+      p.renderOrder=2;p.userData.keep=1;p.frustumCulled=false;S.add(p);}
     for(let x=-124;x<=124;x+=9.5)put(new THREE.CylinderGeometry(.35,.42,.8,10),pole,x,.4,Qz+1.2);
   },
   tick(dt){if(MAPS.docks.wt){MAPS.docks.wt.offset.x+=dt*.004;MAPS.docks.wt.offset.y+=dt*.0025;}}},
@@ -137,6 +145,9 @@ function boulders(n,rnd){const m=tmat('83-mossy-boulder-rock',{rep:[2,2],r:.95,m
     const g=new THREE.IcosahedronGeometry(1,2),p=g.attributes.position,r=1.6+rnd()*2.6;
     for(let j=0;j<p.count;j++){const vx=p.getX(j),vy=p.getY(j),vz=p.getZ(j),f=1+(fbm(vx*1.7+i*3,vz*1.7+vy*1.3,3)-.5)*.7;p.setXYZ(j,vx*f*r,vy*f*r*.62,vz*f*r*(.8+rnd()*.1));}
     g.computeVertexNormals();put(g,m,x,hgt(x,z)+r*.15,z,rnd()*TAU);addCol(x,z,r*.85,r*1.1);}}
+/* a soft round glow for fake lamp light on the ground at night */
+function poolTex(){const c=document.createElement('canvas');c.width=c.height=128;const g=c.getContext('2d'),gr=g.createRadialGradient(64,64,0,64,64,64);
+  gr.addColorStop(0,'rgba(255,255,255,1)');gr.addColorStop(.35,'rgba(255,255,255,.45)');gr.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=gr;g.fillRect(0,0,128,128);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;}
 const BND=()=>MAPDEF.bounds||{x0:-PLAY-6,x1:PLAY+6,z0:-PLAY-6,z1:PLAY+6};
 function boxAt(x,z,y){const a=VEG.cols.get(colKey(x,z));if(!a)return false;for(const c of a)if(c.b&&x>c.x0&&x<c.x1&&z>c.z0&&z<c.z1&&y<c.y0+c.h)return true;return false;}
 /* after a map is built, join its fixed single-material meshes into one mesh per material (fences, posts, crane beams, lamps...) */

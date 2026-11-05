@@ -120,6 +120,7 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
   - Art processed (46 images → 49 files, 8.2 MB).
   - Forest pack stored with its catalog, three.js bundle built.
   - `DESIGN.md` written; `preview.html` is the first look.
+- **Session 5 (5 Nov 2026):** arenas 1.6× bigger, mission system and missions 1–4.
 - **Session 4b (5 Nov 2026):** after his playtest: longer jet hops, aim down at your feet, the SALVO auto-aim burst. Q and E no longer turn (the arrows still do).
 - **Session 4 (5 Nov 2026):** image set 2 processed, Howler 07 rebuilt from his turnaround sheet, and the woods, field and docks maps with a map picker.
 - **Session 3 (5 Nov 2026):** combat core.
@@ -187,7 +188,39 @@ This file is the memory between sessions. Read it, together with `DESIGN.md`, be
   - Docks: about 100k triangles, about 240 calls.
   - Each enemy adds about 25 calls, counting its shadow.
 
-## Next: session 5 (missions)
+## Done in session 5 (missions)
+
+- `06d_missions.js`. `?mission=N` loads that mission's map and look. The title screen becomes a briefing card (TAP TO DEPLOY, MENU). In the sandbox the title has a MISSIONS button: a list with locks and best scores.
+- Steps:
+  - `destroy`: field radio masts (`MAPS.field.mastObjs`, they topple) or docks gate control boxes (`makeConsole`).
+  - `reach`: a blue ring.
+  - `clear`: kill everything.
+  - `hold`: an orange ring; the timer runs only while you are inside, and waves arrive every N seconds from 70 m away.
+- A step with `cp:1` saves a checkpoint (position and gun tier) when it starts. Falling costs a repair (3 per mission): back to the checkpoint, gun one tier down. With none left the mission fails.
+- HUD:
+  - Objective line under the score.
+  - Radio strip (ROOK amber, FORGE red, 3.8 s each).
+  - Waypoint diamond with distance, pinned to the edge when off screen.
+  - Results screen: score, time, kills, repairs, tickets; NEXT MISSION, PLAY AGAIN, MENU.
+- Scoring: +300 per target, +500 per step, and on a win +2000 plus a time bonus (5 per second under 10 minutes) and +400 per repair left.
+- Tickets: floor(score/400), +10 on a win, capped at 80. `ARC.over` is sent once, at the results.
+- Save: `hd-ironhowl3-save` = {unlocked, best:{id:score}}.
+- Missions:
+  1. Sunline: field, day. 3 masts, then the truck by the barn.
+  2. Night Shift: docks, night. Night look `NIGHT_DOCKS`, fake lamp light pools, a mech headlight `SpotLight`.
+  3. Pinewall: woods. Find the burnt convoy, guard Rook for 60 s, reach the north ridge.
+  4. Hold the Farm: field, dusk. `DUSK_FIELD` uses the procedural sky; defend the farmhouse for 150 s.
+- Tested: mission 1 played through in fast-forward (all steps, a fall and checkpoint repair, the results screen); mission 3's guard step finishes after 60 s.
+- Not done yet: the Hornet and Tank enemies from the plan, a real model for Rook's truck (a box stand-in for now), a storm or rain effect for mission 4.
+
+## Next: session 6
+
+- Hangar between missions: scrap from wrecks, six upgrade tracks, saves.
+- Missions 5–8, and the Thresher boss.
+- New enemies: Hornet (flying), Tank, Mortar crawler, Spawner pods, Lancer. Models via the Blender kit, from his sheets 50 and 51.
+- Rook's truck model from sheet 52.
+
+## (old) session 5 plan
 
 - Mission system: objectives, fight zones, 2–3 checkpoints, briefing and results screens, radio lines (Rook and FORGE).
 - Missions 1–4:
