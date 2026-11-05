@@ -19,6 +19,8 @@ let NP=0;
 const BOD=[];let BID=0;
 /* the case: set by the machine (x across, y up, z toward the glass); the chute is the front-left corner */
 const CASE={x0:-.45,x1:.45,z0:-.35,z1:.35,top:1,cx:-.2,cz:.1,ch:.2,cw:.006,deep:-.6};
+/* the machine's size relative to Wildwood (Sugar Claw .45, Titan 2.4): distances that are not part of a toy scale with it */
+let UNIT=1;
 
 /* ---------- per type: rest shape, springs, the stretch matrix (built once per toy design) ---------- */
 function prepType(T){
@@ -147,7 +149,7 @@ function pairC(i,j){
   const bi=PB[i],bj=PB[j];if(bi===bj||(PS[i]&PS[j]))return;
   const dx=PX[j]-PX[i],dy=PY[j]-PY[i],dz=PZ[j]-PZ[i],rr=PR[i]+PR[j],d2=dx*dx+dy*dy+dz*dz;if(d2>=rr*rr)return;
   const d=Math.sqrt(d2)||1e-6,pen=rr-d,nx=dx/d,ny=dy/d,nz=dz/d;
-  if(PS[i]|PS[j]){if(pen>.004){wake(BOD[PS[i]?bi:bj]);}}
+  if(PS[i]|PS[j]){if(pen>.004*UNIT){wake(BOD[PS[i]?bi:bj]);}}
   const wi=PS[i]?0:PW[i],wj=PS[j]?0:PW[j],w=wi+wj;if(!w)return;
   const cc=pen/w;PX[i]-=nx*cc*wi;PY[i]-=ny*cc*wi;PZ[i]-=nz*cc*wi;PX[j]+=nx*cc*wj;PY[j]+=ny*cc*wj;PZ[j]+=nz*cc*wj;
   BOD[bi].touch=1;BOD[bj].touch=1;
@@ -230,5 +232,5 @@ function physTick(clawStep){
   /* a toy that has crept less than 6 mm/s on average (no ball faster than 4 cm/s) for half a second goes to sleep */
   for(const b of BOD){if(b.sleep||b.state!=='pit')continue;let mv=0,av=0;
     for(let i=b.i0,e=b.i0+b.n;i<e;i++){const dx=PX[i]-OX[i],dy=PY[i]-OY[i],dz=PZ[i]-OZ[i],v=Math.sqrt(dx*dx+dy*dy+dz*dz);av+=v;if(v>mv)mv=v;}
-    if(SLEEPOK&&av/b.n/HS<.006&&mv/HS<.04&&!b.pc){if(++b.calm>30)setSleep(b,true);}else b.calm=0;}
+    if(SLEEPOK&&av/b.n/HS<.006*UNIT&&mv/HS<.04*UNIT&&!b.pc){if(++b.calm>30)setSleep(b,true);}else b.calm=0;}
 }

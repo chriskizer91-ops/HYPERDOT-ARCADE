@@ -7,8 +7,11 @@
 import os, re, sys, glob, json, base64
 D = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.normpath(os.path.join(D, '..', '..', 'games', 'claw3d.html'))
-MACHINES = {'wild': ['frog', 'hedgehog', 'toadstool', 'fox', 'redpanda', 'owl', 'moth', 'hare']}
-ART = ['machine/wild_wall.webp', 'machine/wild_marquee.webp', 'fabric/felt.webp', 'extra/reflect.webp']
+MACHINES = {'sugar': ['mochi', 'berry', 'toast', 'onigiri', 'pudding', 'boba', 'cupcake', 'donut'],
+            'wild': ['frog', 'hedgehog', 'toadstool', 'fox', 'redpanda', 'owl', 'moth', 'hare'],
+            'titan': ['whale', 'dino', 'sloth', 'dragon']}
+ART = ['machine/%s_%s.webp' % (m, k) for m in MACHINES for k in ('wall', 'marquee', 'side')] + \
+      ['fabric/felt.webp', 'fabric/minky.webp', 'fabric/velvet.webp', 'extra/reflect.webp']
 
 def three_iife_body():
     src = open(os.path.join(D, 'vendor', 'three.module.min.js'), encoding='utf-8').read()
@@ -22,6 +25,16 @@ def three_iife_body():
     assert 'import.meta' not in body and not re.search(r'^\s*import\s', body, re.M)
     return body
 
+def piles():
+    """the settled piles (tools/bake_piles.js); baked again when the physics, claw or machines have changed"""
+    out = os.path.join(D, 'models', 'piles.json')
+    deps = [os.path.join(D, 'js', f) for f in ('10_phys.js', '11_claw.js', '20_machine.js')] + [os.path.join(D, 'models', 'index.json')]
+    if not os.path.exists(out) or os.path.getmtime(out) < max(os.path.getmtime(f) for f in deps) or '--bake' in sys.argv:
+        import subprocess
+        txt = subprocess.run(['node', os.path.join(D, 'tools', 'bake_piles.js'), '3'], check=True, capture_output=True, text=True).stdout
+        json.loads(txt); open(out, 'w').write(txt); print('baked the piles ->', os.path.relpath(out, os.getcwd()))
+    return open(out).read().strip()
+
 def assets():
     idx = json.load(open(os.path.join(D, 'models', 'index.json')))
     data, sizes, n = {}, {}, 0
@@ -34,7 +47,8 @@ def assets():
         key = 'img/' + a.split('/')[0].replace('machine', 'mach').replace('fabric', 'fab') + '/' + os.path.splitext(os.path.basename(a))[0]
         data[key] = base64.b64encode(open(os.path.join(D, 'art', a), 'rb').read()).decode()
     raw = sum(len(v) for v in data.values()) * 3 // 4
-    js = 'const ASSET_DATA=' + json.dumps(data, separators=(',', ':')) + ';\nconst PLUSHIDX=' + json.dumps(sizes) + ';'
+    bulbs = open(os.path.join(D, 'art', 'machine', 'bulbs.json')).read().strip()
+    js = 'const ASSET_DATA=' + json.dumps(data, separators=(',', ':')) + ';\nconst PLUSHIDX=' + json.dumps(sizes) + ';\nconst MBULBS=' + bulbs + ';\nconst PILES=' + piles() + ';'
     return js, raw
 
 def build(dev_path=None):

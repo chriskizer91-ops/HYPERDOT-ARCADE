@@ -25,8 +25,8 @@ window.T={
     const ph0=g.M.ph;g.ffUntil(()=>g.M.ph!==ph0,5);return {want,got:axis==='x'?g.M.xLock:g.CL.gz};},
   hold(ms){const g=__game,x0=g.CL.gx;g.TS.A=true;g.TS.Ap=true;for(let k=0;k<Math.round(ms/1000*60);k++){g.tick(1/60);g.TS.Ap=false;}g.TS.A=false;g.tick(1/60);g.endInput();
     const ph0=g.M.ph;g.ffUntil(()=>g.M.ph!==ph0,3);return {from:x0,to:g.M.xLock};},
-  world(axis,x,y){const C=__game.CASE,w=__game.screenToWorld(x,y,axis),lo=axis==='x'?C.x0+.07:C.z0+.07,hi=axis==='x'?C.x1-.07:C.z1-.07;return Math.min(hi,Math.max(lo,w));},
-  newCredit(){const g=__game;g.setPause(false);g.S.mode='title';g.start();g.ffUntil(()=>g.M.ph==='aimX',12);g.camSnap();}
+  world(axis,x,y){const C=__game.CASE,e=__game.CS.edge,w=__game.screenToWorld(x,y,axis),lo=axis==='x'?C.x0+e:C.z0+e,hi=axis==='x'?C.x1-e:C.z1-e;return Math.min(hi,Math.max(lo,w));},
+  newCredit(m){const g=__game;g.setPause(false);if(g.S.mode!=='title'){g.S.mode='over';g.attract();}if(m)g.switchMachine(m);g.ff(.2);g.start();g.ffUntil(()=>g.M.ph==='aimX',14);g.camSnap();}
 };'''
 async def main():
     async with async_playwright() as p:
@@ -36,23 +36,29 @@ async def main():
         await pg.goto(URL); await pg.wait_for_function('window.__game&&__game.S.mode==="title"&&document.getElementById("ld").hidden', timeout=240000)
         await pg.add_script_tag(content=JS)
         cm = lambda v: '%+.1f' % (v * 100)
-        print('DRAGS (finger lifts at a spot; the claw should stop under it)')
-        for ms in (150, 400, 1000):
-            await pg.evaluate('T.newCredit()')
-            rx = await pg.evaluate(f'T.drag("x",90,300,520,{ms})')
-            rz = await pg.evaluate(f'T.drag("z",300,140,520,{ms})')
-            print(f'  {ms:4d} ms drag   left-right: finger {cm(rx["want"])} cm, claw {cm(rx["got"])} cm, off by {abs(rx["want"]-rx["got"])*100:.1f} cm, set: {rx["locked"]}'
-                  f'   |  depth: finger {cm(rz["want"])} cm, claw {cm(rz["got"])} cm, off by {abs(rz["want"]-rz["got"])*100:.1f} cm')
-        print('TAPS (tap = go there and set)')
-        for x in (110, 206, 300):
-            await pg.evaluate('T.newCredit()')
-            r = await pg.evaluate(f'T.tap("x",{x},520)')
-            print(f'  tap at {x:3d} px: aimed {cm(r["want"])} cm, claw set at {cm(r["got"])} cm, off by {abs(r["want"]-r["got"])*100:.1f} cm')
-        print('HOLD GO (hold to travel right, let go to set)')
-        for ms in (100, 300, 700, 1500):
-            await pg.evaluate('T.newCredit()')
-            r = await pg.evaluate(f'T.hold({ms})')
-            print(f'  held {ms:4d} ms: claw moved {abs(r["to"]-r["from"])*100:5.1f} cm and set')
+        for mid in ('sugar', 'wild', 'titan'):
+            w = await pg.evaluate(f'(()=>{{const M=__game.MACHINES["{mid}"].box;return M.x1-M.x0;}})()')
+            print(f'== {mid.upper()} (case {w*100:.0f} cm wide)')
+            print('DRAGS (finger lifts at a spot; the claw should stop under it)')
+            for ms in (150, 400, 1000):
+                await pg.evaluate(f'T.newCredit("{mid}")')
+                rx = await pg.evaluate(f'T.drag("x",90,300,520,{ms})')
+                rz = await pg.evaluate(f'T.drag("z",300,140,520,{ms})')
+                ex, ez = abs(rx["want"]-rx["got"]), abs(rz["want"]-rz["got"])
+                print(f'  {ms:4d} ms drag   left-right: off by {ex*100:.1f} cm ({ex/w*100:.1f}% of the case), set: {rx["locked"]}'
+                      f'   |  depth: off by {ez*100:.1f} cm ({ez/w*100:.1f}%)')
+            print('TAPS (tap = go there and set)')
+            for x in (110, 206, 300):
+                await pg.evaluate(f'T.newCredit("{mid}")')
+                r = await pg.evaluate(f'T.tap("x",{x},520)')
+                e = abs(r["want"]-r["got"])
+                print(f'  tap at {x:3d} px: aimed {cm(r["want"])} cm, claw set at {cm(r["got"])} cm, off by {e*100:.1f} cm ({e/w*100:.1f}%)')
+            print('HOLD GO (hold to travel right, let go to set)')
+            for ms in (100, 300, 700, 1500):
+                await pg.evaluate(f'T.newCredit("{mid}")')
+                r = await pg.evaluate(f'T.hold({ms})')
+                d = abs(r["to"]-r["from"])
+                print(f'  held {ms:4d} ms: claw moved {d*100:5.1f} cm ({d/w*100:.0f}% of the case) and set')
         print('errors:', errs or 'none')
         await b.close()
 asyncio.run(main())

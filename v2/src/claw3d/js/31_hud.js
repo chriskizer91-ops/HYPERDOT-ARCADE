@@ -21,6 +21,8 @@ function ledText(str,dot,col,ghost){
 }
 function led(str,x,y,dot,col,al,ghost){const c=ledText(str,dot*HUD.dpr,col,ghost),g=HUD.g,w=c.width,h=c.height,p=c.pw;
   let X=x*HUD.dpr;if(al==='c')X-=w/2;else if(al==='r')X-=w-p;else X-=p;g.drawImage(c,Math.round(X),Math.round(y*HUD.dpr-p));}
+/* a big LED message on a dark plate, so it reads over any back wall */
+function ledBig(str,x,y,dot,col){const w=tw5(str)*dot+dot*8,h=dot*11;panel(x-w/2,y-dot*2,w,h,dot*2);led(str,x,y,dot,col,'c');}
 function panel(x,y,w,h,r){const g=HUD.g,k=HUD.dpr;g.beginPath();g.roundRect(x*k,y*k,w*k,h*k,r*k);g.fillStyle='rgba(10,6,14,.72)';g.fill();g.strokeStyle='rgba(255,210,140,.22)';g.lineWidth=k;g.stroke();}
 function hudDraw(dt){
   const g=HUD.g;if(!g)return;g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,HUD.cv.width,HUD.cv.height);
@@ -36,7 +38,7 @@ function hudDraw(dt){
       g.beginPath();g.arc((cx+i*14)*HUD.dpr,(top+sh/2)*HUD.dpr,4.2*HUD.dpr,0,TAU);g.fillStyle=used?'#3a2a40':cur?((S.t*3|0)%2?'#ffd040':'#ff9a10'):'#ffd040';g.fill();}
     led(fmt(S.tickets),sx+sw-12,ty,d,'#ffd040','r');led('TIX',sx+sw-12-tw5(fmt(S.tickets))*d-8,ty,d*.75,'#b8a4d8','r');
   }else{
-    led('HI '+fmt(S.hi),sx+12,ty,d*.75,'#b8a4d8');led(MC.name,W/2,ty,d,'#ffcf8a','c');led(S.mode==='over'?'THANK YOU':'FREE PLAY',sx+sw-12,ty,d*.75,'#b8a4d8','r');
+    led('HI '+fmt(S.hi),sx+12,ty,d*.75,'#b8a4d8');led(S.mode==='over'?MC.name:'PLUSH PANIC 3D',W/2,ty,d*.8,S.mode==='over'?MC.col:'#ff6ac0','c');led(S.mode==='over'?'THANKS':'FREE',sx+sw-12,ty,d*.75,'#b8a4d8','r');
   }
   /* strength meter (and grip while holding) on the left */
   if(S.mode==='play'){
@@ -50,17 +52,21 @@ function hudDraw(dt){
     let pr='';if(!S.demo){if(M.ph==='aimX')pr=touchy?'DRAG OR HOLD GO':'HOLD SPACE OR > TO MOVE';else if(M.ph==='aimZ')pr=touchy?'DEPTH: DRAG OR HOLD GO':'DEPTH: HOLD SPACE OR UP';
       else if(M.ph==='drop')pr='DROP!';else if(M.ph==='grab')pr='GRAB!';else if(M.ph==='lift'||M.ph==='carry')pr=CL.grip>.05?'HOLD ON...':'';}
     if(pr)led(pr,W/2,top+sh+10,small?1.7:2,'#ffffff','c');
-    if(M.ph==='roll'){const big=small?4:6,cy=H*.3;led('CREDIT '+S.credit,W/2,cy,big,'#ffd040','c');const pc=Math.round(M.roll*100);
-      led('STRENGTH '+pc+'%',W/2,cy+big*10,big*.55,pc>75?'#6aff5a':pc>55?'#ffd040':'#ff5a5a','c');
+    if(M.ph==='roll'){const big=small?4:6,cy=H*.3;ledBig('CREDIT '+S.credit,W/2,cy,big,'#ffd040');const pc=Math.round(M.roll*100);
+      ledBig('STRENGTH '+pc+'%',W/2,cy+big*10,big*.55,pc>75?'#6aff5a':pc>55?'#ffd040':'#ff5a5a');
       if(S.credit===MC.credits&&S.prizes.length===0&&M.S>=MC.boost)led('LAST CHANCE BOOST',W/2,cy+big*16,big*.4,'#6aff5a','c');}
-    if(M.msgT>0&&M.msg){const big=small?3.4:5;led(M.msg,W/2,H*.34,big,M.msg==='TIME!'?'#ff4a4a':'#ff6ac0','c');}
-    if(M.ph==='result'&&M.wins.length&&((S.winT*6|0)%2||S.winT>1)){const big=small?4.5:7;led(M.wins.some(b=>b.T.rar===4)?'JACKPOT!':'WINNER!',W/2,H*.24,big,'#ffd040','c');
-      led(M.wins.map(b=>b.T.name).join(' + '),W/2,H*.24+big*10,big*.45,RAR[M.wins[0].T.rar].c,'c');}
+    if(M.msgT>0&&M.msg){const big=small?3.4:5;ledBig(M.msg,W/2,H*.34,big,M.msg==='TIME!'?'#ff4a4a':'#ff6ac0');}
+    if(M.ph==='result'&&M.wins.length&&((S.winT*6|0)%2||S.winT>1)){const big=small?4.5:7;ledBig(M.wins.some(b=>b.T.rar===4)?'JACKPOT!':'WINNER!',W/2,H*.24,big,'#ffd040');
+      ledBig(M.wins.map(b=>b.T.name).join(' + '),W/2,H*.24+big*10,big*.45,RAR[M.wins[0].T.rar].c);}
   }
   /* title: the machine's marquee is the big sign; the game's name and the prompt sit low, under the case */
-  if(S.mode==='title'){const big=small?3.2:4.5,y=H*(small?.8:.76);panel(W/2-Math.min(W*.45,330),y-big*3,Math.min(W*.9,660),big*30,14);
-    led('PLUSH PANIC 3D',W/2,y,big,'#ff6ac0','c');led(MC.name+' . '+MC.sub,W/2,y+big*10,big*.45,'#ffcf8a','c');
-    if((S.t*2|0)%2)led(touchy?'TAP TO PLAY':'PRESS START',W/2,y+big*17,big*.6,'#ffd040','c');}
+  /* title: the machine in front of you, which of the three it is, and how hard */
+  if(S.mode==='title'){const big=small?3.4:4.4,y=H*(small?.835:.8),pw=Math.min(W*.9,560);panel(W/2-pw/2,y-big*5.5,pw,big*29,14);
+    const n=MORDER.length,i=MORDER.indexOf(MC.id);for(let k=0;k<n;k++){g.beginPath();g.arc((W/2+(k-(n-1)/2)*16)*HUD.dpr,(y-big*2.6)*HUD.dpr,(k===i?4.2:3)*HUD.dpr,0,TAU);g.fillStyle=k===i?MC.col:'rgba(255,255,255,.25)';g.fill();}
+    led(MC.name,W/2,y,big,MC.col,'c');
+    const lc=MC.level==='EASY'?'#6aff5a':MC.level==='HARD'?'#ff5a5a':'#ffd040';
+    led(MC.sub+' . '+MC.what,W/2,y+big*9.5,big*.42,'#e8dcc8','c');led(MC.level,W/2,y+big*14,big*.42,lc,'c');
+    if((S.t*2|0)%2)led(touchy?'TAP TO PLAY':'PRESS START',W/2,y+big*19.2,big*.56,'#ffd040','c');}
   if(S.mode==='over'){const big=small?4:6,y=H*.2;led(S.prizes.length?'YOUR HAUL':'GAME OVER',W/2,y,big,S.prizes.length?'#ffd040':'#ff6ac0','c');
     S.prizes.forEach((id,i)=>led(CAST[id].name+'  +'+CAST[id].tix,W/2,y+big*10+i*big*5,big*.45,RAR[CAST[id].rar].c,'c'));
     if(!S.prizes.length)led('NO PRIZE THIS TIME',W/2,y+big*10,big*.45,'#c8c0e0','c');

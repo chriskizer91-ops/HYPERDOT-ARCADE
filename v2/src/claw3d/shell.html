@@ -61,6 +61,12 @@ body.paused .keys,body.playing .keys{opacity:0}
 body.touch.playing .tb{display:grid}
 body.touch.playing #pz{left:max(12px,env(safe-area-inset-left,0px));right:auto;bottom:max(30px,env(safe-area-inset-bottom,0px))}
 body.playing.paused .tb{display:none}
+/* the machine picker's arrows, on the title screen only */
+.pk{position:fixed;top:44%;width:46px;height:64px;margin-top:-32px;border-radius:14px;border:1px solid var(--edge);background:rgba(16,12,26,.55);color:#fff;
+  font:400 40px/1 var(--f);display:none;place-items:center;cursor:pointer;backdrop-filter:blur(4px);touch-action:none;padding:0 0 6px}
+#pL{left:max(8px,env(safe-area-inset-left,0px))}#pR{right:max(8px,env(safe-area-inset-right,0px))}
+body.title .pk{display:grid}.pk.off{opacity:.18;pointer-events:none}
+body.paused .pk{display:none}
 #ld{position:fixed;inset:0;display:grid;place-items:center;background:radial-gradient(60% 60% at 50% 45%,#2a1606,#07060b);transition:opacity .5s;z-index:8;text-align:center}
 #ld.gone{opacity:0;pointer-events:none}
 #ld b{display:block;font:700 22px/1.1 var(--f);letter-spacing:.24em;color:#fff;text-shadow:0 0 14px #ff6ac0}
@@ -78,12 +84,15 @@ body.playing.paused .tb{display:none}
   <div class="opts"><button class="chip" id="snd" type="button">Sound on</button><button class="chip" id="pauseBtn" type="button">Pause</button></div>
 </div>
 <button id="pz" type="button" aria-label="Pause">II</button>
+<button class="pk" id="pL" type="button" aria-label="Previous machine">&#8249;</button>
+<button class="pk" id="pR" type="button" aria-label="Next machine">&#8250;</button>
 <button class="tb" id="bDrop" type="button" aria-label="Drop the claw now">DROP</button>
 <button class="tb" id="bGo" type="button" aria-label="Hold to move the claw, let go to set">GO</button>
 <div id="menu" hidden><div class="card">
   <h2>PAUSED</h2>
   <button class="mb big" id="mRes" type="button">Resume</button>
   <button class="mb" id="mRe" type="button">New game</button>
+  <button class="mb" id="mMach" type="button">Pick a machine</button>
   <div><button class="mb sm" id="mQ" type="button">Graphics: auto</button><button class="mb sm" id="mSnd" type="button">Sound: on</button></div>
   <button class="mb" id="mEx" type="button">Exit to arcade</button>
 </div></div>
@@ -99,7 +108,7 @@ const THREE=(()=>{
 'use strict';
 const CAB={
   id:'claw3d',title:'PLUSH PANIC 3D',tickets:true,
-  keys:'<b>Hold Space</b> or <b>arrows</b> to move, let go to set · <b>Drag</b> the claw · <b>Shift</b> drop now · <b>Esc</b> pause'
+  keys:'<b>&larr; &rarr;</b> pick a machine · <b>Enter</b> play · in play: <b>hold Space</b> or <b>arrows</b> to move, let go to set · <b>Shift</b> drop now · <b>Esc</b> pause'
 };
 /*@@ASSETS@@*/
 /*@@GAME@@*/

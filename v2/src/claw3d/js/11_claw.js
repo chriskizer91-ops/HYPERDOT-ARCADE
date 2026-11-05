@@ -9,7 +9,8 @@
    ===================================================================================== */
 const CS={npr:3,piv:.032,vh:.012,L1:.12,L2:.055,A0:.2,HOOK:1.55,RC:.008,RH:.042,
   MHI:1/1.3,IPI:1100,VCL:.0055,VOP:.01,DM:.0055,KM:.35,PHMIN:.04,PHMAX:.98,MAXPEN:.006,mu:1,
-  GY:.95,LMIN:.12,LMAX:.9,home:[-.33,.23]};
+  GY:.95,LMIN:.12,LMAX:.9,home:[-.33,.23],edge:.07};
+const CS0=Object.assign({},CS);   /* the defaults; each machine overrides what it needs */
 const CL={gx:0,gz:0,gvx:0,gvz:0,hx:0,hy:0,hz:0,ox:0,oy:0,oz:0,L:.12,winch:0,
   ph:new Float64Array(3),oph:new Float64Array(3),pt:new Float64Array(3),motor:-1,S:1,
   ux:0,uy:1,uz:0,slack:0,touch:0,cnt:0,cap:0,dem:0,load:0,grip:0};
@@ -44,7 +45,7 @@ function clawIntegrate(){
   const dx=CL.hx-CL.gx,dy=CL.hy-CS.GY,dz=CL.hz-CL.gz,d=Math.sqrt(dx*dx+dy*dy+dz*dz)||1e-9;CL.slack=CL.L-d;
   if(d>CL.L){const k=CL.L/d;CL.hx=CL.gx+dx*k;CL.hy=CS.GY+dy*k;CL.hz=CL.gz+dz*k;}
   /* the claw hangs along the cable (less so when the cable is slack and it sits on the pile) */
-  let ux=-dx/d,uy=-dy/d,uz=-dz/d;const tk=CL.slack>.01?.35:1;ux*=tk;uz*=tk;uy=1-(1-uy)*tk;
+  let ux=-dx/d,uy=-dy/d,uz=-dz/d;const tk=CL.slack>.01*UNIT?.35:1;ux*=tk;uz*=tk;uy=1-(1-uy)*tk;
   CL.ux+=(ux-CL.ux)*.25;CL.uy+=(uy-CL.uy)*.25;CL.uz+=(uz-CL.uz)*.25;const ul=Math.hypot(CL.ux,CL.uy,CL.uz);CL.ux/=ul;CL.uy/=ul;CL.uz/=ul;
   /* prong servos: the set-point sweeps at the rated speed but may lead the real prong by at most S*DM;
      a stiff spring (KM) pulls the prong to it. Free, a prong closes at rated speed; stalled, it squeezes with S. */
@@ -78,17 +79,17 @@ function clawContacts(){
   const C=CASE;
   /* prong tips can't go through the floor (except over the chute hole) */
   for(let s=0;s<CS.npr;s++){const g=s*9+6,ty=PG[g+1];if(ty<CS.RC&&!(PG[g]<C.cx&&PG[g+2]>C.cz)){CL.hy+=CS.RC-ty;}}
-  if(CL.hy<.05)CL.hy=.05;
+  if(CL.hy<.05*UNIT)CL.hy=.05*UNIT;
   clawFrame();
-  const reach=CS.L1+CS.L2+CS.piv+.03;
+  const reach=CS.L1+CS.L2+CS.piv+.03*UNIT;
   CL.touch=0;
   for(const b of BOD){b.pc=0;if(b.state!=='pit')continue;
-    if(b.x1<CL.hx-reach||b.x0>CL.hx+reach||b.z1<CL.hz-reach||b.z0>CL.hz+reach||b.y0>CL.hy+.06||b.y1<CL.hy-reach)continue;
+    if(b.x1<CL.hx-reach||b.x0>CL.hx+reach||b.z1<CL.hz-reach||b.z0>CL.hz+reach||b.y0>CL.hy+.06*UNIT||b.y1<CL.hy-reach)continue;
     wake(b);
     const mu=.95*(b.T.fric||1)*CS.mu;
     for(let i=b.i0,e=b.i0+b.n;i<e;i++){const r=PR[i];
       /* housing: a ball round the head, pushes only */
-      {const hx=CL.hx+CL.ux*.01,hy=CL.hy+CL.uy*.01,hz=CL.hz+CL.uz*.01,dx=PX[i]-hx,dy=PY[i]-hy,dz=PZ[i]-hz,d2=dx*dx+dy*dy+dz*dz,rr=CS.RH+r;
+      {const hx=CL.hx+CL.ux*.01*UNIT,hy=CL.hy+CL.uy*.01*UNIT,hz=CL.hz+CL.uz*.01*UNIT,dx=PX[i]-hx,dy=PY[i]-hy,dz=PZ[i]-hz,d2=dx*dx+dy*dy+dz*dz,rr=CS.RH+r;
         if(d2<rr*rr){const d=Math.sqrt(d2)||1e-9,pen=Math.min(CS.MAXPEN,rr-d),nx=dx/d,ny=dy/d,nz=dz/d,wp=PW[i],l=pen/(wp+CS.MHI);
           PX[i]+=nx*l*wp;PY[i]+=ny*l*wp;PZ[i]+=nz*l*wp;CL.hx-=nx*l*CS.MHI;CL.hy-=ny*l*CS.MHI;CL.hz-=nz*l*CS.MHI;CL.touch++;b.pc++;}}
       /* the prongs: two capsules each (arm, hook) */
@@ -109,7 +110,7 @@ const GT={tx:null,tz:null,vx:0,vz:0,vm:.32,vmz:.24,ac:1.4,carry:false};
 function gantryTick(dt){
   const ac=GT.carry?.8:GT.ac;
   for(let ax=0;ax<2;ax++){const pos=ax?CL.gz:CL.gx,vel=ax?CL.gvz:CL.gvx,tg=ax?GT.tz:GT.tx,cmd=ax?GT.vz:GT.vx,vm=(ax?GT.vmz:GT.vm)*(GT.carry?.7:1);
-    const lo=ax?CASE.z0+.07:CASE.x0+.07,hi=ax?CASE.z1-.07:CASE.x1-.07;
+    const lo=ax?CASE.z0+CS.edge:CASE.x0+CS.edge,hi=ax?CASE.z1-CS.edge:CASE.x1-CS.edge;
     const want=tg!=null?clamp((tg-pos)*3.2,-vm,vm):cmd*vm,dv=clamp(want-vel,-ac*dt,ac*dt);let v=vel+dv,p=pos+v*dt;
     if(p<lo){p=lo;v=0;}else if(p>hi){p=hi;v=0;}
     if(ax){CL.gz=p;CL.gvz=v;}else{CL.gx=p;CL.gvx=v;}}
