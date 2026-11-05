@@ -143,7 +143,7 @@ function heartReset(){HEART.heat=100;HEART.beat=0;HEART.pulse=0;HEART.latched=0;
 function heartStep(dt,live){
   const H_=HEART;H_.ign=Math.min(1,H_.ign+dt*.45);
   /* however many cling to it, the heart loses at most 7 heat a second: a swarm is deadly, not instant */
-  if(H_.drain>0){H_.heat=Math.max(0,H_.heat-Math.min(H_.drain,7*dt));H_.drain=0;}
+  if(H_.drain>0){H_.heat=Math.max(0,H_.heat-Math.min(H_.drain,RUN.drainCap*dt));H_.drain=0;}
   /* the pedestal is heated from the cradle down: dull red under the core, black iron at its foot */
   const cells=H_.cells,kk=H_.k;for(let n=0;n<cells.length;n++)T[cells[n]]=((330+H_.heat*(1.2+4.6*kk[n]*kk[n]))*(1-H_.frost*.3))*H_.ign+AMB_T*(1-H_.ign);
   /* the housing drinks the lava that touches it */
@@ -151,6 +151,7 @@ function heartStep(dt,live){
   for(const i of H_.edge){for(const o of [-1,1,-W,W]){const j=i+o,mj=M[j];
     if(mj===LAVA&&(r32()&3)===0){M[j]=AIR;T[j]=600;fed++;}
     else if((mj===IRON||mj===SLAG||mj===RUBBLE)&&(r32()&63)===0){M[j]=AIR;T[j]=300;fed+=.3;AWAKE[((j/W|0)>>CSH)*NCX+((j%W)>>CSH)]=1;}}}   /* the forge reclaims iron that sets against it */
+  if(live&&RUN.mend>0&&!H_.latched&&H_.heat>0)H_.heat=Math.min(100,H_.heat+RUN.mend*dt);   /* II: the Ember Heart upgrade */
   if(fed&&live){H_.heat=Math.min(100,H_.heat+fed*.028);H_.fed+=fed;H_.pulse=Math.min(1.5,H_.pulse+fed*.03);}
   /* heartbeat: faster and harder as it cools */
   const bpm=58+(100-H_.heat)*.75+H_.latched*6;H_.beatT+=dt*bpm/60;if(H_.beatT>=1){H_.beatT-=1;H_.beat=1;if(live&&H_.ign>.5)SFX.heartbeat(H_.heat);}
@@ -167,8 +168,8 @@ function crReset(full){CR.x=full?40:CR.x;CR.vx=0;CR.ax=0;CR.sw=0;CR.sww=0;CR.rod
    and the stream from its bottom nozzle carries the swing's velocity */
 function crStep(dt,ctl,live){
   const v0=CR.vx;
-  if(ctl.tx!=null){const k=40,dx=ctl.tx-CR.x;CR.vx+=(dx*k-CR.vx*2*Math.sqrt(k))*dt*4;CR.vx=clamp(CR.vx,-230,230);}
-  else{const want=ctl.x*200,a=Math.abs(want)>Math.abs(CR.vx)?1300:1700;CR.vx+=clamp(want-CR.vx,-a*dt,a*dt);}
+  if(ctl.tx!=null){const k=40,dx=ctl.tx-CR.x;CR.vx+=(dx*k-CR.vx*2*Math.sqrt(k))*dt*4;CR.vx=clamp(CR.vx,-230*RUN.spd,230*RUN.spd);}
+  else{const want=ctl.x*200*RUN.spd,a=Math.abs(want)>Math.abs(CR.vx)?1300:1700;CR.vx+=clamp(want-CR.vx,-a*dt,a*dt);}
   CR.x+=CR.vx*dt;if(CR.x<12){CR.x=12;CR.vx=0;}if(CR.x>W-13){CR.x=W-13;CR.vx=0;}
   CR.ax=(CR.vx-v0)/dt;if(Math.abs(CR.vx)>25)CR.face=CR.vx>0?1:-1;
   const Lp=NOZ*.7;CR.sww+=(-(GRAV/Lp)*Math.sin(CR.sw)-CR.ax/Lp*Math.cos(CR.sw)-CR.sww*5.5)*dt;CR.sw=clamp(CR.sw+CR.sww*dt,-.5,.5);
@@ -177,14 +178,14 @@ function crStep(dt,ctl,live){
   CR.rod+=((want?1:0)-CR.rod)*Math.min(1,dt*14);
   CR.pouring=want&&CR.fill>1;
   CR.refill=Math.abs(CR.x-FURN_X)<6&&!want&&CR.fill<CR.cap-1&&live;
-  if(!want)CR.fill=Math.min(CR.cap,CR.fill+(CR.refill?170:16)*dt);
+  if(!want)CR.fill=Math.min(CR.cap,CR.fill+(CR.refill?170*RUN.refill:16)*dt);
   /* nozzle position and velocity (trolley + swing) */
   const s=Math.sin(CR.sw),c=Math.cos(CR.sw);CR.nx=CR.x+s*NOZ;CR.ny=PIV_Y+c*NOZ;CR.nvx=CR.vx+c*NOZ*CR.sww;
   CR.flow+=((CR.pouring?1:0)-CR.flow)*Math.min(1,dt*10);
   if(CR.pouring&&CR.rod>.4){
-    CR.acc+=dt*160*CR.flow;
+    CR.acc+=dt*160*CR.flow*RUN.flow;
     while(CR.acc>=1&&CR.fill>0){CR.acc-=1;CR.fill-=1;CR.poured++;
-      spawnP(CR.nx+rnd(-.35,.35),CR.ny+rnd(0,.8),CR.nvx+rnd(-2,2),rnd(16,26),LAVA,T_POUR+rnd(-30,30),9,PF_POUR);}
+      spawnP(CR.nx+rnd(-.35,.35),CR.ny+rnd(0,.8),CR.nvx+rnd(-2,2),rnd(16,26),LAVA,RUN.pourT+rnd(-30,30),9,PF_POUR);}
   }else CR.acc=0;
 }
 /* slag bombs */

@@ -67,7 +67,7 @@ function drawSprites(){
 const TITLE={cells:[],bottom:[],pool:[],t:0,poolY:160};
 function titleSetup(){
   ST=STAGES[0];AMB_T=16;clearGrid();PROT.fill(0);EN.length=0;BOMBS.length=0;LIGHTS.length=0;BOSS.on=false;HEART.cells=[];HEART.edge=[];heartReset();HEART.ign=1;crReset(true);CR.x=FURN_X;
-  Object.assign(SU,{uTint:[.55,.42,.36],uBackA:[.032,.024,.022],uBackB:[.082,.06,.05],uCryst:[1.1,.6,.22],uIce:[.55,.78,.95]});
+  Object.assign(SU,{uTint:[.55,.42,.36],uBackA:[.032,.024,.022],uBackB:[.082,.06,.05],uCryst:[1.1,.6,.22],uIce:[.55,.78,.95],uMagma:1});
   for(let i=0;i<N;i++)M[i]=ROCK;
   for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){const dx=(x-160)/154,dy=(y-96)/86,n=(fbm(x*.06,y*.06,5)-.5)*.35;if(dx*dx+dy*dy<1+n||y<GAL)M[y*W+x]=AIR;}
   for(let x=2;x<W-2;x++){M[RAILY*W+x]=RAIL;M[(RAILY+1)*W+x]=RAIL;}
@@ -75,7 +75,7 @@ function titleSetup(){
   /* the chamber's curved floor is the basin: flood it with lava */
   TITLE.pool=[];for(let y=TITLE.poolY+4;y<H-1;y++)for(let x=1;x<W-1;x++){const i=y*W+x;if(M[i]===AIR){M[i]=LAVA;T[i]=1420;TITLE.pool.push(i);}}
   /* the letters */
-  TITLE.cells=[];TITLE.bottom=[];const sc=5,word='MOLTEN',x0=Math.round((W-(word.length*6*sc-sc))/2),y0=34;
+  TITLE.cells=[];TITLE.bottom=[];const sc=4,word='MOLTEN II',x0=Math.round((W-(word.length*6*sc-sc))/2),y0=38;
   for(let k=0;k<word.length;k++){const gl5=G5[word[k]];for(let r=0;r<7;r++)for(let c=0;c<5;c++)if((gl5[r]>>(4-c))&1)
     for(let j=0;j<sc;j++)for(let i=0;i<sc;i++){const x=x0+k*6*sc+c*sc+i,y=y0+r*sc+j,q=y*W+x;M[q]=IRON;T[q]=820;TITLE.cells.push(q);}}
   for(const q of TITLE.cells)if(M[q+W]!==IRON)TITLE.bottom.push(q);
@@ -116,7 +116,7 @@ function aimPoint(){
 function drawPlayHUD(){
   const blink=(S.clock*4|0)%2;
   otxt5(g,fmt(S.score),4,2,'#ffffff');
-  for(let i=0;i<3;i++){const on=i<CR.bombs,x=5+i*7,y=12;g.fillStyle='#000';g.fillRect(x-1,y-1,6,6);g.fillStyle=on?'#ff8a30':'#2a1c1c';g.fillRect(x,y,4,4);if(on){g.fillStyle='#ffe0a0';g.fillRect(x+1,y+1,1,1);}}
+  for(let i=0;i<RUN.bombMax;i++){const on=i<CR.bombs,x=5+i*7,y=12;g.fillStyle='#000';g.fillRect(x-1,y-1,6,6);g.fillStyle=on?'#ff8a30':'#2a1c1c';g.fillRect(x,y,4,4);if(on){g.fillStyle='#ffe0a0';g.fillRect(x+1,y+1,1,1);}}
   const cx=W/2,bw=74;otxt3(g,'FORGE',cx-bw/2-24,3,HEART.heat<30&&blink?'#ff5040':'#ffb070');heatBar(Math.round(cx-bw/2),3,bw,HEART.heat/100,HEART.hurtT>0&&blink);
   otxt3(g,Math.round(HEART.heat)+'%',cx+bw/2+4,3,'#ffe0c0');
   const left=EN.length+S.q.length+ST.waves.slice(S.wi).reduce((a,w)=>a+w[4],0);
@@ -129,10 +129,10 @@ function drawPlayHUD(){
   /* aim marker */
   let ap=aimPoint();if(ap){const q=projHUD(ap[0]+.5,ap[1],2);ap=[Math.round(q[0]),Math.round(q[1])];}if(ap&&!CR.refill){g.fillStyle=CR.pouring?'rgba(255,220,150,.55)':'rgba(255,170,90,.35)';g.fillRect(ap[0]-2,ap[1]-4,1,1);g.fillRect(ap[0]+2,ap[1]-4,1,1);g.fillRect(ap[0]-1,ap[1]-3,1,1);g.fillRect(ap[0]+1,ap[1]-3,1,1);g.fillRect(ap[0],ap[1]-2,1,1);}
   /* tunnel warnings */
-  for(const w of S.warn){if(w.type==='KING')continue;const sides=w.side?[w.side]:[-1,1];for(const sd of sides){const ts=TUN.filter(t=>t.side===sd),t=ts[Math.min(w.tun,ts.length-1)];if(!t||!((S.clock*5|0)%2))continue;
+  for(const w of S.warn){if(w.type==='KING'||w.type==='QUEEN')continue;const sides=w.side?[w.side]:[-1,1];for(const sd of sides){const ts=TUN.filter(t=>t.side===sd),t=ts[Math.min(w.tun,ts.length-1)];if(!t||!((S.clock*5|0)%2))continue;
     const q=projHUD(sd<0?3:W-4,t.y-8,0),x=sd<0?Math.max(3,Math.round(q[0])):Math.min(W-4,Math.round(q[0])),y=Math.round(q[1]);g.fillStyle='#9fe8ff';for(let i=0;i<4;i++)g.fillRect(x+(sd<0?i:-i),y-3+i,1,7-i*2);otxt3(g,'!',x+(sd<0?6:-8),y-2,'#ffffff');}}
   if(S.combo>1&&S.comboT>0)otxt3(g,'CHAIN x'+Math.min(8,S.combo),W/2,H-8,S.combo>4?'#ff5ad8':'#ffd040',1,'c');
-  if(BOSS.on){const bw2=120,x1=Math.round(W/2-bw2/2),y1=13;otxt3(g,'THE HOAR KING',W/2,y1,'#bfefff',1,'c');g.fillStyle='rgba(0,0,0,.7)';g.fillRect(x1-1,y1+6,bw2+2,4);
+  if(BOSS.on){const bw2=120,x1=Math.round(W/2-bw2/2),y1=13;otxt3(g,BOSS.name||'THE HOAR KING',W/2,y1,'#bfefff',1,'c');g.fillStyle='rgba(0,0,0,.7)';g.fillRect(x1-1,y1+6,bw2+2,4);
     const kb=BOSS.cells/BOSS.cells0,kc=Math.max(0,(BOSS.coreHp/BOSS.coreHp0-.12)/.88);for(let i=0;i<bw2;i+=2){g.fillStyle=i<kb*bw2?'#7fd8ff':'#1a2a3a';g.fillRect(x1+i,y1+7,1,1);g.fillStyle=i<kc*bw2?'#ffffff':'#2a3440';g.fillRect(x1+i,y1+8,1,1);}}
 }
 function drawPops(){for(const p of S.pops){const a=clamp((1.1-p.t)*3,0,1),q=projHUD(p.x,p.y,4);g.globalAlpha=a;otxt3(g,p.text,Math.round(q[0]),Math.round(q[1]-p.t*12),p.col,1,'c');g.globalAlpha=1;}}
@@ -146,7 +146,7 @@ function drawMsgs(){
 const MENU=()=>['FIRE THE FORGE','HOW TO PLAY','QUALITY: '+QL[LQ],'DOTS: '+DOTSL[DOTS]];
 function menuRows(){const y0=110;return MENU().map((t,i)=>({t,y:y0+i*11}));}
 function drawTitle(){
-  otxt3(g,'HOLD THE FORGE AGAINST THE RIME',W/2,74,'#ffc8a0',1,'c');
+  otxt3(g,'THE RIME QUEEN RISES',W/2,74,'#ffc8a0',1,'c');
   if(S.how>=0){drawHow();return;}
   for(const [i,r] of menuRows().entries()){const sel=i===S.menuI;
     if(sel){g.fillStyle='rgba(255,120,40,.22)';g.fillRect(Math.round(W/2-64),r.y-2,128,11);}
@@ -155,11 +155,12 @@ function drawTitle(){
 }
 const HOW=[
   ['THE RIME ARE CREATURES OF ICE. THEY','MARCH ON THE FORGE HEART TO FREEZE IT.','','POUR MOLTEN IRON ON THEM FROM THE','CRUCIBLE. IRON COOLS INTO WALLS THAT','HOLD THEM BACK. LAVA THAT REACHES THE','HEART FEEDS IT.'],
-  ['MOVE    A D / ARROWS / STICK / MOUSE','POUR    HOLD SPACE / CLICK / POUR','BOMB    X / RIGHT CLICK / BOMB','REFILL  PARK UNDER THE FURNACE','','STEAM KILLS AND IRON TOMBS SCORE MORE.','EVERY 14 MELTED EARNS A SLAG BOMB.']
+  ['MOVE    A D / ARROWS / STICK / MOUSE','POUR    HOLD SPACE / CLICK / POUR','BOMB    X / RIGHT CLICK / BOMB','REFILL  PARK UNDER THE FURNACE','','STEAM KILLS AND IRON TOMBS SCORE MORE.','EVERY 14 MELTED EARNS A SLAG BOMB.'],
+  ['NEW IN PART II','SKATERS ARE FAST. SPITTERS FIRE FROST','AT THE CRUCIBLE: POUR ON THE BOLTS.','BULWARKS GROW A ROOF OF ICE.','','AFTER EACH STAGE THE ANVIL OFFERS','THREE UPGRADES. KEEP ONE.']
 ];
 function drawHow(){
   const p=HOW[S.how],w=172,h=p.length*7+22,x=Math.round(W/2-w/2),y=88;panel(x,y,w,h);
-  p.forEach((l,i)=>txt3(g,l,x+6,y+6+i*7,'#f0e0d8'));otxt3(g,(S.how+1)+'/2  '+(touchy?'TAP':'PRESS START'),W/2,y+h-9,'#ffb070',1,'c');
+  p.forEach((l,i)=>txt3(g,l,x+6,y+6+i*7,'#f0e0d8'));otxt3(g,(S.how+1)+'/'+HOW.length+'  '+(touchy?'TAP':'PRESS START'),W/2,y+h-9,'#ffb070',1,'c');
 }
 function drawIntro(){
   const t=S.t,a=clamp(t*2.5,0,1)*clamp((5-t)*2,0,1);g.globalAlpha=a;
@@ -168,6 +169,24 @@ function drawIntro(){
   ST.hint.forEach((l,i)=>otxt3(g,l,W/2,84+i*7,'#c8e8ff',1,'c'));
   if(t>3.2)otxt3(g,'THE RIME APPROACH',W/2,112,(S.clock*4|0)%2?'#9fe8ff':'#ffffff',1,'c');
   g.globalAlpha=1;
+}
+/* ---------- II: the Anvil ---------- */
+function toAnvil(){if(S.stage>=STAGES.length-1){nextStage();return;}S.mode='anvil';S.t=0;S.anv=anvilDeal();S.anvI=1;SFX.confirm();}
+function anvilPick(i){const u=S.anv[i];if(!u)return;u.ap();RUN.taken.push(u.id);SFX.go();flashMsg(u.name,'#ffd040',1.6);nextStage();}
+const ANV={x0:14,y:62,w:92,h:70,gap:8};
+function anvilCardAt(x,y){if(y<ANV.y||y>ANV.y+ANV.h)return -1;for(let i=0;i<3;i++){const cx=ANV.x0+i*(ANV.w+ANV.gap);if(x>=cx&&x<=cx+ANV.w)return i;}return -1;}
+function drawAnvil(){
+  g.fillStyle='rgba(6,4,8,.5)';g.fillRect(0,0,W,H);
+  otxt5(g,'THE ANVIL',W/2,22,GR.volt,2,'c',.1);otxt3(g,'KEEP ONE FOR THE ROAD AHEAD',W/2,44,'#ffc8a0',1,'c');
+  (S.anv||[]).forEach((u,i)=>{const x=ANV.x0+i*(ANV.w+ANV.gap),y=ANV.y,sel=i===S.anvI,pulse=sel?.5+.5*Math.sin(S.clock*5):0;
+    g.fillStyle=sel?'rgba(60,24,8,.92)':'rgba(14,8,8,.86)';g.fillRect(x,y,ANV.w,ANV.h);
+    panel(x,y,ANV.w,ANV.h,sel?'rgba(255,'+(170+60*pulse|0)+',80,1)':'rgba(255,150,60,.35)');
+    /* a little cast glyph: the upgrade's first letter at double size */
+    otxt5(g,u.name[0],x+ANV.w/2,y+8,sel?GR.volt:['#c09888','#c09888','#c09888','#a07868','#a07868','#a07868','#806050'],2,'c');
+    const words=u.name.split(' ');words.forEach((w,k)=>otxt3(g,w,x+ANV.w/2,y+28+k*7,sel?'#ffffff':'#d8c0b8',1,'c'));
+    u.d.forEach((l,k)=>txt3(g,l,x+ANV.w/2,y+46+k*7,sel?'#ffd8a0':'#a09088',1,'c'));});
+  if((S.clock*2|0)%2)otxt3(g,touchy?'TAP A CARD':'ARROWS, THEN START',W/2,140,'#ffb070',1,'c');
+  if(STAGES[S.stage+1])otxt3(g,'NEXT  '+(S.stage+2)+' '+STAGES[S.stage+1].name,W/2,150,'#9fe8ff',1,'c');
 }
 function drawTally(){
   const T_=S.tally,w=188,x=Math.round(W/2-w/2),y=34,h=T_.rows.length*9+40;
@@ -187,6 +206,7 @@ function drawOverlay(){
   if(m==='title')drawTitle();
   else if(m==='demo'){otxt5(g,'MOLTEN',W/2,3,GR.volt,1,'c');if((S.clock*2|0)%2)otxt3(g,touchy?'TAP TO PLAY':'PRESS START',W/2,H-9,'#ffd090',1,'c');otxt3(g,'DEMO  '+ST.name,4,H-9,'#a08880');}
   else if(m==='tally')drawTally();
+  else if(m==='anvil')drawAnvil();
   else if(m==='frozen'){const blink=(S.clock*3|0)%2;if(S.t>1.6)drawCenter('FROZEN',GR.cyan,[['THE FORGE IS COLD','#d8f0ff'],null,['CONTINUE?  '+Math.max(0,Math.ceil(S.count-.01)),'#ffd040'],[blink?(touchy?'TAP TO CONTINUE':'PRESS START'):'','#ffb070'],['SCORE RESETS ON CONTINUE','#a09098']]);}
   else if(m==='over')drawCenter('GAME OVER',GR.steel,[[fmt(S.score),'#ffffff'],[S.tickets+' TICKETS','#ffd040'],[S.newHi&&(S.clock*4|0)%2?'NEW HIGH SCORE':'','#6aff5a'],['HI '+fmt(S.hi),'#a09098']]);
   else if(m==='ending'&&S.t>1.5)drawCenter('FORGE ETERNAL',GR.volt,[['THE WINTER UNDER THE WORLD IS WATER','#ffe0c8'],[fmt(S.score),'#ffffff'],[S.tickets+' TICKETS','#ffd040'],[S.newHi&&(S.clock*4|0)%2?'NEW HIGH SCORE':'','#6aff5a']]);
@@ -198,7 +218,7 @@ function drawOverlay(){
    FRAME LOOP — fixed 60 Hz simulation, one render per display frame
    ===================================================================================== */
 const UIP={};
-function edges(c){c.m=K('KeyM');c.gk=K('KeyG');const e={};for(const k of ['ok','back','pause','a','b','u','d','m','gk']){e[k]=c[k]&&!UIP[k];UIP[k]=c[k];}if(e.m)toggleSound();if(e.gk)setDots((DOTS+1)%3);return e;}
+function edges(c){c.m=K('KeyM');c.gk=K('KeyG');const e={};for(const k of ['ok','back','pause','a','b','u','d','l','r','m','gk']){e[k]=c[k]&&!UIP[k];UIP[k]=c[k];}if(e.m)toggleSound();if(e.gk)setDots((DOTS+1)%3);return e;}
 function rowAt(y){for(const [i,r] of menuRows().entries())if(y>=r.y-3&&y<=r.y+9)return i;return -1;}
 function menuAct(i){
   if(i===0)APP_start();else if(i===1){S.how=0;SFX.confirm();}
@@ -216,7 +236,7 @@ function tick(dt){
   }
   const m=S.mode;
   if(m==='title'||m==='demo'){
-    if(m==='title'&&S.how>=0){if(e.ok||tap){S.how++;SFX.move();if(S.how>1)S.how=-1;}else if(e.back){S.how=-1;SFX.back();}}
+    if(m==='title'&&S.how>=0){if(e.ok||tap){S.how++;SFX.move();if(S.how>=HOW.length)S.how=-1;}else if(e.back){S.how=-1;SFX.back();}}
     else if(m==='title'){const nm=MENU().length;if(e.u){S.menuI=(S.menuI+nm-1)%nm;SFX.move();}if(e.d){S.menuI=(S.menuI+1)%nm;SFX.move();}
       if(tap){const i=rowAt(PTR.y);if(i>=0){S.menuI=i;menuAct(i);return;}}
       else if(e.ok){menuAct(S.menuI);if(S.mode!=='title')return;}
@@ -241,8 +261,16 @@ function tick(dt){
     worldStep(dt,{x:0,pour:false},false);const T_=S.tally;T_.t+=dt;
     if(T_.shown<T_.rows.length){if(T_.t>.42){T_.t=0;T_.shown++;SFX.tick();}}
     else if(T_.paid<T_.pay){const k=Math.min(T_.pay-T_.paid,Math.max(50,Math.round(T_.pay*dt*.9)));T_.paid+=k;addScore(k);SFX.tick();}
-    if(e.ok||tap){if(T_.shown<T_.rows.length||T_.paid<T_.pay){addScore(T_.pay-T_.paid);T_.paid=T_.pay;T_.shown=T_.rows.length;}else nextStage();}
-    else if(S.t>16&&T_.paid>=T_.pay)nextStage();
+    if(e.ok||tap){if(T_.shown<T_.rows.length||T_.paid<T_.pay){addScore(T_.pay-T_.paid);T_.paid=T_.pay;T_.shown=T_.rows.length;}else toAnvil();}
+    else if(S.t>16&&T_.paid>=T_.pay)toAnvil();
+  }
+  else if(m==='anvil'){
+    /* II: the Anvil. Pick one upgrade for the rest of the run: arrows and start, or tap a card */
+    worldStep(dt,{x:0,pour:false},false);
+    if(e.l){S.anvI=(S.anvI+2)%3;SFX.move();}if(e.r){S.anvI=(S.anvI+1)%3;SFX.move();}
+    if(tap&&S.t>.4){const i=anvilCardAt(PTR.x,PTR.y);if(i>=0)anvilPick(i);}
+    else if(e.ok&&S.t>.4)anvilPick(S.anvI);
+    else if(S.t>45)anvilPick(S.anvI);
   }
   else if(m==='frozen'){
     /* the cold spreads out from the dead heart and everything sets */
@@ -257,7 +285,7 @@ let ACC=0,LAST=0;
 const QUAL={ema:16.7,t:0,auto:true,drops:0};
 function frame(ts){
   const ms=LAST?ts-LAST:16.7,dt=Math.min(.05,ms/1000);LAST=ts;
-  ACC+=dt;let n=0;while(ACC>=1/60&&n<3){tick(1/60);ACC-=1/60;n++;}if(n===3)ACC=0;
+  const slow=(S.slowT||0)>0&&!S.paused;if(slow)S.slowT-=dt;ACC+=dt*(slow?.3:1);let n=0;while(ACC>=1/60&&n<3){tick(1/60);ACC-=1/60;n++;}if(n===3)ACC=0;
   if(n>0){endInputFrame();render();}   /* the world only changes on a tick: a 120 Hz display does not need twice the light */
   musicTick(S.paused);ambUpdate();
   /* auto quality: fewer light probes when the GPU falls behind */
@@ -270,7 +298,8 @@ let RLAST=0;
 function render(){
   const t0=performance.now(),dt=RLAST?Math.min(.05,(t0-RLAST)/1000):1/60;RLAST=t0;
   SU.uTime=S.clock%600;stampState();const t1=performance.now();drawSprites();const t2=performance.now();
-  camStep(dt);if(!S.paused){fxEmit(dt);fxStep(dt);}
+  camStep(dt);if(!S.paused){const k=(S.slowT||0)>0?.3:1;fxEmit(dt*k);fxStep(dt*k);}
+  POURAGE=CR.pouring&&CR.rod>.4&&!CR.refill?POURAGE+dt*((S.slowT||0)>0?.3:1):0;
   g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,W,H);drawOverlay();const t3=performance.now();
   FLASH=reduce?0:S.flash*.06;   /* 3D: the blast's own light does the work; the screen only blinks */COLD+=((S.mode==='frozen'?Math.min(.55,S.t*.3):0)-COLD)*Math.min(1,dt*3);
   present();
@@ -290,6 +319,7 @@ function camStep(dt){
   else if(m==='tally'){yaw=Math.sin(S.t*.3)*7;pitch=19;dk=.97;}
   else if(m==='frozen'){const k=clamp(S.t/3,0,1);yaw=k*5;pitch=17+k*9;dk=1+k*.12;}
   else if(m==='over'||m==='ending'){yaw=Math.sin(S.t*.13)*12;pitch=18+Math.sin(S.t*.1)*3;dk=.92;}
+  if((S.slowT||0)>0)dk*=.93;   /* slow motion leans in */
   if(m==='play'||m==='demo'){yaw=(CR.x-160)/160*3.2+Math.sin(S.clock*.21)*1.1;pitch=17+Math.sin(S.clock*.17)*.7;
     if(BOSS.on&&BOSS.t<5){const k=Math.sin(clamp(BOSS.t/5,0,1)*Math.PI);yaw+=k*7;pitch+=k*-3;dk*=1-k*.1;tx+=k*20;}}
   const a=CS.init?1-Math.exp(-dt*(m==='intro'?6:2.6)):1;CS.init=true;

@@ -1,6 +1,6 @@
-# Molten 3D
+# Molten II: The Rime Queen
 
-The 3D version of Molten for the V2 arcade. The original stays at `games/molten.html` as the cabinet's "Retro 2D" choice; this is its "3D" choice, at `v2/games/molten3d.html`.
+The sequel to Molten, and the 3D version for the V2 arcade. The original stays at `games/molten.html` as the cabinet's "Retro 2D" choice; this is its "3D" choice, at `v2/games/molten3d.html`.
 
 ## Build
 
@@ -12,7 +12,9 @@ python3 v2/src/molten3d/build.py --dev OUT   # also writes OUT, a test build wit
 ## What's what
 
 - `3_sim.js`, `4_world.js`, `4b_rime.js`, `5_game.js` are the original's simulation, stages, Rime, Hoar King and game flow, copied from `src/molten/`. Gameplay is unchanged. The only additions are visual: each flying particle gets a depth (taken from `Math.random`, so the simulation's own random stream is untouched), stamped particles are flagged so they aren't drawn as walls, and the pointer steers by where it meets the play plane.
-- `2_gl.js` and `march.glsl` are the new renderer. The original's 2D light (radiance cascades) still lights everything. A jump flood gives every cell a depth: rock juts toward you, and open cave recedes behind the play channel. One ray per pixel then walks the grid cell by cell. The crucible, its trolley and the furnace are meshes, and flying matter is drawn as streaks in 3D.
+- `4c_sequel.js` is Part II: skaters, spitters and their frost bolts, bulwarks and their ice roofs, the Caldera's lava vents, three new stages after the Hoar King (the Caldera, the Obsidian Deep, the Winter Throne), the Rime Queen, and the Anvil, where you keep one of three upgrades after each stage.
+- `sculpt.glsl` is the renderer on MED and HIGH. Four jump floods measure how far every cell is from the edge of the rock, the matter (iron, lava, ice), the Rime and the water. A smooth 3D distance field built from those is sphere-traced, which gives rounded rock with crags and magma veins, cast iron that crazes as it cools, lava with a drifting crust, crystal Rime, see-through water, soft shadows from the heart and the lava (HIGH), and light shafts in the steam. A far magma chamber sits behind the cave.
+- `2_gl.js` and `march.glsl` are the first 3D renderer, now the LOW setting. The original's 2D light (radiance cascades) still lights everything. A jump flood gives every cell a depth: rock juts toward you, and open cave recedes behind the play channel. One ray per pixel then walks the grid cell by cell. The crucible, its trolley and the furnace are meshes, and flying matter is drawn as streaks in 3D.
 - `6_view.js` holds the sprites, the LED-dot HUD (anything tied to a place in the cave is projected there), the camera and the frame loop.
 
 ## Cabinet
@@ -21,4 +23,4 @@ The id is `molten3d`, and it speaks the cabinet contract in the root README (`re
 
 ## Quality
 
-HIGH renders at full resolution with a light probe per cell, MED at 56% with a probe per 2×2 cells, and LOW at 42% with a soft glow and no shadows. A phone starts on MED and a desktop on HIGH, and either steps down by itself if the frame rate can't hold. `?q=low|med|high` pins a level. G (or DOTS in the title menu) shows the view through an LED dot screen: off, fine (640 across) or classic (320, the original's grid).
+HIGH renders the sculpted cave at full resolution, with soft shadows and a light probe per cell. MED renders it at 50% without the soft shadows, with a probe per 2×2 cells. LOW uses the first, blockier renderer at 42%, with a soft glow and no shadows. A phone starts on MED and a desktop on HIGH, and either steps down by itself if the frame rate can't hold. `?q=low|med|high` pins a level. G (or DOTS in the title menu) shows the view through an LED dot screen: off, fine (640 across) or classic (320, the original's grid).

@@ -107,8 +107,8 @@ uniform sampler2D uState;uniform sampler2D uJB;uniform sampler2D uVox;uniform sa
 void main(){
   ivec2 p=ivec2(gl_FragCoord.xy);vec2 pc=vec2(p)+.5;
   vec4 s=texelFetch(uState,p,0);int raw=int(s.r*255.+.5);bool fly=raw>=128;int m=raw&127;
-  vec4 jb=texelFetch(uJB,p,0);float d=jb.x<-1e3?99.:length(jb.xy-pc);
   bool rock=m==ROCK||m==BED||m==CRYST;
+  vec4 jb=texelFetch(uJB,p,0);vec2 jo=rock?jb.zw:jb.xy;float d=jo.x<-1e3?99.:max(0.,length(jo-pc)-1.);
   float n1=vn(pc*.11),n2=h21(pc*1.37),n3=vn(pc*.031+7.);
   float zT;
   if(rock)zT=8.+min(11.,d*.62)+(n1-.5)*2.6+(n2-.5)*.9;
@@ -152,6 +152,55 @@ void main(){ivec2 b=ivec2(gl_FragCoord.xy)*4;float mx=0.,busy=0.;
   for(int j=0;j<4;j++)for(int i=0;i<4;i++){vec4 d=texelFetch(uCell,min(b+ivec2(i,j),ivec2(319,179)),0);mx=max(mx,d.r);if(d.g>0.||d.b>0.||d.a>0.)busy=1.;}
   o=vec4(mx,busy,0.,1.);}`;
 const FS_MARCH=`/*@@MARCH@@*/`;
+/* ---------------------------------------------------------------------------------
+   V3 — the sculpted cavern. Four jump floods measure, for every cell, how far it is from the edge
+   of the rock, of the play-channel matter (iron, lava, ice...), of the Rime and of the water;
+   inside counts negative. From those 2D distances one smooth 3D distance field is built and
+   sphere-traced: rounded rock, pillowed cast iron, puffy crystal creatures.
+   --------------------------------------------------------------------------------- */
+const FS_KSEED=`${GLSL_MATS}
+uniform sampler2D uState;uniform sampler2D uVox;uniform int uCls;out vec4 o;
+void main(){ivec2 p=ivec2(gl_FragCoord.xy);int raw=int(texelFetch(uState,p,0).r*255.+.5),m=raw&127;bool fly=raw>=128,c;
+  if(uCls==0)c=m==ROCK||m==BED||m==CRYST;
+  else if(uCls==1)c=!fly&&(m==IRON||m==SLAG||m==ICE||m==SNOW||m==RUBBLE||m==LAVA||m==EMBER||m==HOUSE||m==RAIL);
+  else if(uCls==2)c=texelFetch(uVox,p,0).a>0.;
+  else c=!fly&&m==WATER;
+  vec2 pc=vec2(p)+.5;o=c?vec4(pc,-1e4,-1e4):vec4(-1e4,-1e4,pc);}`;
+/* each texel keeps two seeds: the nearest cell inside the class (xy) and the nearest outside it (zw) */
+const FS_KSTEP=`uniform sampler2D uTex;uniform float uK;out vec4 o;
+void main(){vec2 p=gl_FragCoord.xy;vec4 best=vec4(-1e4);float b1=1e9,b2=1e9;
+  for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){vec2 q=p+vec2(i,j)*uK;if(q.x<0.||q.y<0.||q.x>=320.||q.y>=180.)continue;vec4 s=texelFetch(uTex,ivec2(q),0);
+    if(s.x>-1e3){vec2 d=s.xy-p;float dd=dot(d,d);if(dd<b1){b1=dd;best.xy=s.xy;}}
+    if(s.z>-1e3){vec2 d=s.zw-p;float dd=dot(d,d);if(dd<b2){b2=dd;best.zw=s.zw;}}}
+  o=best;}`;
+/* FIELD: A = rock distance, rock front depth, cave back depth, water distance
+          B = matter distance, matter half-depth, Rime distance, water half-depth */
+const FS_FIELD=`${GLSL_MATS}
+uniform sampler2D uKR;uniform sampler2D uKS;uniform sampler2D uKP;uniform sampler2D uKW;uniform sampler2D uState;
+layout(location=0) out vec4 oA;layout(location=1) out vec4 oB;
+float sdk(vec4 k,vec2 pc,float far){bool in_=k.x>-1e3&&dot(k.xy-pc,k.xy-pc)<.01;
+  if(in_)return k.z<-1e3?-far:-(length(k.zw-pc)-.5);return k.x<-1e3?far:length(k.xy-pc)-.5;}
+int support(ivec2 q){int cnt=0;for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){if(i==0&&j==0)continue;int r2=int(texelFetch(uState,clamp(q+ivec2(i,j),ivec2(0),ivec2(319,179)),0).r*255.+.5);int m2=r2&127;if(r2<128&&m2!=AIR&&m2!=STEAM&&m2!=SMOKE)cnt++;}return cnt;}
+float shOf(ivec2 q){q=clamp(q,ivec2(0),ivec2(319,179));int raw=int(texelFetch(uState,q,0).r*255.+.5),m=raw&127;if(raw>=128)return 0.;
+  float n2=h21((vec2(q)+.5)*1.37),sh;
+  if(m==HOUSE)sh=6.5;else if(m==RAIL)sh=2.;else if(m==IRON||m==SLAG)sh=7.3+n2*.7;else if(m==ICE)sh=7.4+n2*.8;else if(m==SNOW)sh=7.1+n2*.6;else if(m==LAVA||m==RUBBLE||m==EMBER)sh=8.;else return 0.;
+  bool loose=m==SNOW||m==RUBBLE||m==LAVA||m==EMBER,castm=m==IRON||m==SLAG||m==ICE;
+  if(loose||castm){float c=float(support(q));sh=max(.9,sh*(loose?smoothstep(1.5,4.5,c):smoothstep(.5,2.5,c)));}
+  return sh;}
+void main(){ivec2 p=ivec2(gl_FragCoord.xy);vec2 pc=vec2(p)+.5;
+  vec4 kr=texelFetch(uKR,p,0),ks=texelFetch(uKS,p,0),kp=texelFetch(uKP,p,0),kw=texelFetch(uKW,p,0);
+  float dR=sdk(kr,pc,64.),dS=sdk(ks,pc,16.),dP=sdk(kp,pc,16.),dW=sdk(kw,pc,16.);
+  float n1=vn(pc*.11),n3=vn(pc*.031+7.);
+  float zF=8.+min(11.,max(0.,-dR)*.62)+(n1-.5)*2.4;
+  float zB=dR>0.?-8.-min(54.,pow(dR,.92)*.95)*(.8+.4*n1)-n3*2.5:-8.;
+  float sh=ks.x>-1e3?shOf(ivec2(ks.xy)):0.;
+  float wd=0.;if(kw.x>-1e3){ivec2 q=ivec2(kw.xy);wd=max(.9,8.*smoothstep(1.5,4.5,float(support(q))));}
+  oA=vec4(dR,zF,zB,dW);oB=vec4(dS,sh,dP,wd);}`;
+/* a soft blur over all four channels: distances measured from cell centres ripple at the cell
+   spacing, and the ripple would show on every surface */
+const FS_BLUR4=`in vec2 vT;uniform sampler2D uTex;uniform vec2 uDir;out vec4 o;
+void main(){vec4 s=texture(uTex,vT)*.227027;s+=(texture(uTex,vT+uDir*1.3846)+texture(uTex,vT-uDir*1.3846))*.316216;s+=(texture(uTex,vT+uDir*3.2308)+texture(uTex,vT-uDir*3.2308))*.070270;o=s;}`;
+const FS_SCULPT=`/*@@SCULPT@@*/`;
 /* meshes: the crucible, its trolley and the furnace. Lit like the cave: GI from the grid, the soft
    spill, the point lights; hot parts glow with the blackbody colour of their temperature. */
 const VS_MESH=`in vec3 aP;in vec3 aN;in vec4 aC;in float aE;uniform mat4 uVP;uniform mat4 uM;out vec3 vW;out vec3 vN;out vec4 vC;out float vE;
@@ -210,6 +259,7 @@ void main(){
   else if(m==STEAM)c=vec4((vec3(.8,.83,.9)*(L*.9+uAmb*uTint*2.)+.012)*.3,.05);   /* steam scatters the light: it brightens more than it hides */
   else if(m==SMOKE)c=vec4(vec3(.12,.1,.1)*L*.3,.3);
   else if(m==99)c=vec4(vec3(.9,.75,.6)*L*.5,0.);                     /* lit dust mote */
+  else if(m==97)c=vec4((vec3(.55,.8,1.)*(L*.9+.12)+.04)*(.3+1.2*pow(fract(sin(dot(aA.zw,vec2(12.9,78.2)))*43758.),3.)),0.);   /* a crystal shard glinting */
   else c=vec4(vec3(.16,.13,.12)*L+bb(T)*.5,1.);                       /* rubble, cooled iron */
   if(m==LAVA&&T<1100.)c.rgb*=.5;
   vCol=c;gl_Position=uVP*vec4(pos,1.);
@@ -243,7 +293,10 @@ void main(){
   vec3 c=texture(uScene,uv).rgb+(texture(uB1,uv).rgb*.5+texture(uB2,uv).rgb*.8)*uBloom;
   c=c*uExp+uFlashC*uFlash;
   c=mix(c,vec3(dot(c,vec3(.3,.5,.2)))*vec3(.7,.9,1.25),uCold);
-  c=aces(c)*dm;c=pow(c,vec3(1./2.2));
+  c=aces(c)*dm;
+  /* the grade: cool shadows, warm highlights, a gentle S-curve */
+  float lu=dot(c,vec3(.3,.55,.15));c=mix(c*vec3(.9,.97,1.1),c*vec3(1.07,1.,.9),smoothstep(.04,.55,lu));c=mix(c,c*c*(3.-2.*c),.35);
+  c=pow(c,vec3(1./2.2));
   vec2 q=vT-.5;c*=1.-dot(q,q)*.55;
   c+=(h21(fc+fract(uTime*7.)*91.)-.5)*.018;
   /* the HUD: one LED per matrix cell over the play rectangle */
@@ -257,11 +310,11 @@ void main(){
   o=vec4(c,1.);
 }`;
 
-let P_MAT,P_JS,P_JT,P_RC,P_LI,P_DN,P_BS,P_CE,P_GA,P_CS,P_MA,P_ME,P_PA,P_SH,P_BR,P_BL,P_CO,VAO,GLERR=null;
+let P_B4,P_MAT,P_JS,P_JT,P_RC,P_LI,P_DN,P_BS,P_CE,P_GA,P_CS,P_MA,P_KS,P_KT,P_FI,P_SC,P_ME,P_PA,P_SH,P_BR,P_BL,P_CO,VAO,GLERR=null;
 const FB={},TX={};let VW=1,VH=1,DPR=1,RW=1,RH=1,RECT={x:0,y:0,w:100,h:56};
 /* quality: 2 HIGH (full resolution, a light probe per cell), 1 MED (70% resolution, a probe per 2x2),
    0 LOW (50% resolution, blurred glow without shadows, lighter steam) */
-const QL=['LOW','MED','HIGH'],RSCALE=[.42,.56,1],DOTSN=[0,640,320],DOTSL=['OFF','FINE','CLASSIC'];
+const QL=['LOW','MED','HIGH'],RSCALE=[.42,.5,1],DOTSN=[0,640,320],DOTSL=['OFF','FINE','CLASSIC'];
 let LQ=parseInt(store.get('hd-molten3d-q',touchy?'1':'2'),10);if(!(LQ>=0&&LQ<=2))LQ=touchy?1:2;if(!HDR)LQ=0;
 let DOTS=parseInt(store.get('hd-molten3d-dots','0'),10);if(!(DOTS>=0&&DOTS<=2))DOTS=0;
 function texParams(nearest){const f=nearest?gl.NEAREST:gl.LINEAR;gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,f);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,f);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);}
@@ -305,15 +358,20 @@ function buildLightTargets(){
 if(gl){
   try{
     P_MAT=prog(VS,FS_MAT);P_JS=prog(VS,FS_JSEED);P_JT=prog(VS,FS_JSTEP);P_RC=prog(VS,FS_RC);P_LI=prog(VS,FS_LIGHT);P_DN=prog(VS,FS_DOWN);
-    P_BS=prog(VS,FS_BSEED);P_CE=prog(VS,FS_CELL);P_GA=prog(VS,FS_GAS);P_CS=prog(VS,FS_COARSE);P_MA=prog(VS,FS_MARCH);P_ME=prog(VS_MESH,FS_MESH);P_PA=prog(VS_PART,FS_PART);
+    P_BS=prog(VS,FS_BSEED);P_CE=prog(VS,FS_CELL);P_GA=prog(VS,FS_GAS);P_CS=prog(VS,FS_COARSE);P_MA=prog(VS,FS_MARCH);P_KS=prog(VS,FS_KSEED);P_KT=prog(VS,FS_KSTEP);P_FI=prog(VS,FS_FIELD);P_SC=prog(VS,FS_SCULPT);P_B4=prog(VS,FS_BLUR4);P_ME=prog(VS_MESH,FS_MESH);P_PA=prog(VS_PART,FS_PART);
     P_SH=prog(VS,FS_SHIM);P_BR=prog(VS,FS_BRIGHT);P_BL=prog(VS,FS_BLUR);P_CO=prog(VS,FS_COMP);
   }catch(e){GLERR=String(e);console.error(e);}
   VAO=gl.createVertexArray();
   TX.hud=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,TX.hud);texParams(true);
-  for(const k of ['state','spr','vox']){TX[k]=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,TX[k]);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,W,H,0,gl.RGBA,gl.UNSIGNED_BYTE,null);texParams(true);}
+  for(const k of ['state','spr','vox']){TX[k]=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,TX[k]);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,W,H,0,gl.RGBA,gl.UNSIGNED_BYTE,null);texParams(k!=='vox');}   /* vox filters (V3 tints the Rime with it); texelFetch ignores that */
   TX.bb=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,TX.bb);gl.texImage2D(gl.TEXTURE_2D,0,HDR?gl.RGBA16F:gl.RGBA32F,256,1,0,gl.RGBA,gl.FLOAT,blackbodyLUT());texParams(!HDR);
   FB.emit=mkTarget(W,H,true);FB.j0=mkTarget(W,H,true);FB.j1=mkTarget(W,H,true);
   FB.lb0=mkTarget(W>>2,H>>2,false);FB.lb1=mkTarget(W>>2,H>>2,false);
+  for(const k of ['kr','ks','kp','kw','kt'])FB[k]=mkTarget(W,H,true);FB.fld=mkTarget(W,H,false,true);FB.fa1=mkTarget(W,H,false);FB.fa2=mkTarget(W,H,false);FB.fb1=mkTarget(W,H,false);FB.fb2=mkTarget(W,H,false);
+  /* a tiling 32^3 value-noise volume for the rock's detail */
+  {const n=32,d=new Uint8Array(n*n*n);let s=1234567;for(let i=0;i<d.length;i++){s=(s*1103515245+12345)>>>0;d[i]=s>>>24;}
+    TX.n3=gl.createTexture();gl.bindTexture(gl.TEXTURE_3D,TX.n3);gl.texImage3D(gl.TEXTURE_3D,0,gl.R8,n,n,n,0,gl.RED,gl.UNSIGNED_BYTE,d);
+    for(const [k,v] of [[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR],[gl.TEXTURE_WRAP_S,gl.REPEAT],[gl.TEXTURE_WRAP_T,gl.REPEAT],[gl.TEXTURE_WRAP_R,gl.REPEAT]])gl.texParameteri(gl.TEXTURE_3D,k,v);}
   FB.cell=mkTarget(W,H,true,false,false);FB.gas=mkTarget(W,H,false,false,false);FB.co=mkTarget(W/4,Math.ceil(H/4),true,false,false);
   buildLightTargets();
 }
@@ -324,7 +382,7 @@ function bindT(unit,t,loc){gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.
 function draw(p,dst,setup){gl.bindFramebuffer(gl.FRAMEBUFFER,dst?dst.f:null);gl.viewport(0,0,dst?dst.w:VW,dst?dst.h:VH);gl.useProgram(p.p);if(setup)setup(p.u);gl.bindVertexArray(VAO);gl.drawArrays(gl.TRIANGLES,0,3);}
 function pass(p,src,dst,setup){draw(p,dst,u=>{bindT(0,src.t,u.uTex);if(setup)setup(u);});}
 /* per-stage colours staged by the game */
-const SU={uTime:0,uAmb:.095,uTint:[.5,.45,.6],uBackA:[.05,.045,.06],uBackB:[.11,.09,.1],uCryst:[.2,.6,1],uIce:[.55,.8,.95],uFlashC:[1,.9,.8]};
+const SU={uMagma:.8,uTime:0,uAmb:.095,uTint:[.5,.45,.6],uBackA:[.05,.045,.06],uBackB:[.11,.09,.1],uCryst:[.2,.6,1],uIce:[.55,.8,.95],uFlashC:[1,.9,.8]};
 let LIGHTT=null,LDIRT=null,LSZ=[W,H];
 /* the 2D passes: light, then the cells' 3D shape */
 function renderGrid(){
@@ -344,11 +402,22 @@ function renderGrid(){
     draw(P_LI,LIGHT,u=>{bindT(0,CASC[0].fb.t,u.uC0);gl.uniform2i(u.uPr,CASC[0].pw,CASC[0].ph);});
     LIGHTT=LIGHT.t;LDIRT=LIGHT.t2;LSZ=[CASC[0].pw*CASC[0].sp,CASC[0].ph*CASC[0].sp];
   }else{LIGHTT=FB.lb0.t;LDIRT=FB.lb0.t;LSZ=[W,H];}
-  /* terrain: jump-flood from the rock edge (the GI's own field is finished with by now) */
-  draw(P_BS,FB.j0,u=>bindT(0,TX.state,u.uState));const jb=jfa();
+  /* class floods: rock (long reach), then matter, Rime and water (short reach) */
+  const kflood=(cls,dst,steps)=>{draw(P_KS,dst,u=>{bindT(0,TX.state,u.uState);bindT(1,TX.vox,u.uVox);gl.uniform1i(u.uCls,cls);});
+    let a=dst,b=FB.kt;for(const k of steps){draw(P_KT,b,u=>{bindT(0,a.t,u.uTex);gl.uniform1f(u.uK,k);});[a,b]=[b,a];}
+    if(a!==dst){FB.kt=dst;}return a;};
+  const KR=kflood(0,FB.kr,[128,64,32,16,8,4,2,1,1]);FB.kr=KR;
   draw(P_GA,FB.gas,u=>{bindT(0,TX.state,u.uState);bindT(1,TX.bb,u.uBB);});
-  draw(P_CE,FB.cell,u=>{bindT(0,TX.state,u.uState);bindT(1,jb.t,u.uJB);bindT(2,TX.vox,u.uVox);bindT(3,FB.gas.t,u.uGas);});
-  draw(P_CS,FB.co,u=>bindT(0,FB.cell.t,u.uCell));
+  if(LQ===0){
+    draw(P_CE,FB.cell,u=>{bindT(0,TX.state,u.uState);bindT(1,KR.t,u.uJB);bindT(2,TX.vox,u.uVox);bindT(3,FB.gas.t,u.uGas);});
+    draw(P_CS,FB.co,u=>bindT(0,FB.cell.t,u.uCell));
+  }else{
+    const sh=[8,4,2,1,1];const KS=kflood(1,FB.ks,sh);FB.ks=KS;const KP=kflood(2,FB.kp,sh);FB.kp=KP;const KW=kflood(3,FB.kw,sh);FB.kw=KW;
+    draw(P_FI,FB.fld,u=>{bindT(0,KR.t,u.uKR);bindT(1,KS.t,u.uKS);bindT(2,KP.t,u.uKP);bindT(3,KW.t,u.uKW);bindT(4,TX.state,u.uState);});
+    draw(P_B4,FB.fa1,u=>{bindT(0,FB.fld.t,u.uTex);gl.uniform2f(u.uDir,.62/W,0);});draw(P_B4,FB.fa2,u=>{bindT(0,FB.fa1.t,u.uTex);gl.uniform2f(u.uDir,0,.62/H);});
+    /* the matter softer still: the grid's staircases become slopes, a frozen drop stays a bead */
+    draw(P_B4,FB.fb1,u=>{bindT(0,FB.fld.t2,u.uTex);gl.uniform2f(u.uDir,.42/W,0);});draw(P_B4,FB.fb2,u=>{bindT(0,FB.fb1.t,u.uTex);gl.uniform2f(u.uDir,0,.42/H);});
+  }
   gl.activeTexture(gl.TEXTURE0);
 }
 /* ---------------------------------------------------------------------------------
@@ -468,13 +537,16 @@ function buildMeshes(){
 /* ---------------------------------------------------------------------------------
    PARTICLES — one instance per flying cell of the simulation, plus the purely visual embers
    --------------------------------------------------------------------------------- */
-const FXMAX=1400,PINST=new Float32Array((4096+FXMAX+64)*8);let PVAO=null,PBUF=null,PCOUNT=0;
+const FXMAX=1400,PINST=new Float32Array((4096+FXMAX+300)*8);let POURAGE=0;let PVAO=null,PBUF=null,PCOUNT=0;
 const FX={n:0,x:new Float32Array(FXMAX),y:new Float32Array(FXMAX),z:new Float32Array(FXMAX),vx:new Float32Array(FXMAX),vy:new Float32Array(FXMAX),vz:new Float32Array(FXMAX),
   ox:new Float32Array(FXMAX),oy:new Float32Array(FXMAX),t:new Float32Array(FXMAX),l:new Float32Array(FXMAX),m:new Uint8Array(FXMAX)};
 function fxSpawn(x,y,z,vx,vy,vz,T,life,m){if(FX.n>=FXMAX)return;const k=FX.n++;FX.x[k]=FX.ox[k]=x;FX.y[k]=FX.oy[k]=y;FX.z[k]=z;FX.vx[k]=vx;FX.vy[k]=vy;FX.vz[k]=vz;FX.t[k]=T;FX.l[k]=life;FX.m[k]=m;}
+/* a Rime shattering: glinting crystal shards (the simulation's own water and ice fall with them) */
+function fxShatter(x,y,w,h){const n=Math.min(30,6+(w*h*.2|0));for(let i=0;i<n;i++){const a=Math.random()*TAU,s=30+Math.random()*100;fxSpawn(x+(Math.random()-.5)*w,y+(Math.random()-.5)*h,(Math.random()-.5)*9,Math.cos(a)*s,Math.sin(a)*s-50,(Math.random()-.5)*36,2000,.5+Math.random()*.8,97);}}
 function fxStep(dt){
   for(let k=0;k<FX.n;k++){FX.ox[k]=FX.x[k];FX.oy[k]=FX.y[k];
     if(FX.m[k]===99){FX.vx[k]+=Math.sin(FX.y[k]*.07+k)*dt*2;FX.vy[k]+=Math.cos(FX.x[k]*.05+k)*dt*2;FX.vx[k]*=.99;FX.vy[k]*=.99;}
+    else if(FX.m[k]===97){FX.vy[k]+=280*dt;FX.vx[k]*=.99;FX.vz[k]*=.99;}
     else{FX.vy[k]-=48*dt;FX.vx[k]+=Math.sin(FX.y[k]*.15+k*1.7)*dt*22;FX.vz[k]+=Math.cos(FX.x[k]*.1+k)*dt*10;FX.vx[k]*=.985;FX.vy[k]*=.985;FX.vz[k]*=.99;FX.t[k]-=dt*330;}
     FX.x[k]+=FX.vx[k]*dt;FX.y[k]+=FX.vy[k]*dt;FX.z[k]+=FX.vz[k]*dt;FX.l[k]-=dt;
     if(FX.l[k]<=0||(FX.m[k]!==99&&FX.t[k]<520)||FX.y[k]<1){const e=--FX.n;if(k!==e){for(const a of ['x','y','z','vx','vy','vz','ox','oy','t','l','m'])FX[a][k]=FX[a][e];}k--;}}
@@ -494,7 +566,14 @@ function fillParticles(){
   for(let k=0;k<PN;k++){const m=PM[k],pour=PF[k]&1;
     const sz=m===STEAM?3.2:m===SMOKE?2.6:m===EMBER?.32:pour?.95:m===LAVA?.62:m===SNOW?.42:m===WATER?.3:m===ICE?.38:.5,tl=m===EMBER?1:pour?.55:m===LAVA?.4:.2;   /* drops leave a short trail, sparks a long one */
     put(PX[k]+(POX[k]-PX[k])*tl,PY[k]+(POY[k]-PY[k])*tl,PX[k],PY[k],PT[k],m,PZ[k],sz);}
-  for(let k=0;k<FX.n;k++)put(FX.ox[k],FX.oy[k],FX.x[k],FX.y[k],FX.m[k]===99?20:FX.t[k],FX.m[k]===99?99:EMBER,FX.z[k],FX.m[k]===99?.16:.26);
+  for(let k=0;k<FX.n;k++){const fm=FX.m[k],tl=fm===97?.3:1;put(FX.x[k]+(FX.ox[k]-FX.x[k])*tl,FX.y[k]+(FX.oy[k]-FX.y[k])*tl,FX.x[k],FX.y[k],fm===99?20:FX.t[k],fm===99||fm===97?fm:EMBER,FX.z[k],fm===99?.16:fm===97?.2:.26);}
+  /* II: the pour as one rope of molten iron along the path the stream is taking right now, grown
+     only as far as the first drops could have fallen since the pour began */
+  if(POURAGE>0&&CR.fill>1){let x=CR.nx,y=CR.ny+.4,vx=CR.nvx,vy=21,px=x,py=y,tt=0;const h=1/120;
+    for(let s=0;s<240;s++){vy+=GRAV*h;x+=vx*h;y+=vy*h;tt+=h;const cx=x|0,cy=y|0;if(cx<1||cx>W-2||cy>H-2||tt>POURAGE)break;
+      const hit=cy>GAL&&pBlock(LAVA,M[cy*W+cx]);
+      if(hit||Math.hypot(x-px,y-py)>=1.5){put(px,py,x,y,1570-s*.9,LAVA,0,(.34+.12*Math.sin(S.clock*23+s*.7))*Math.min(1,CR.flow*1.4));px=x;py=y;}
+      if(hit)break;}}
   /* the furnace's tap stream while the crucible refills */
   if(CR.refill){const surf=PIV_Y+3.4+(1-CR.fill/CR.cap)*7.4;for(let s=0;s<6;s++){const y0=6+s*(surf-6)/6,y1=6+(s+1)*(surf-6)/6,wb=Math.sin(S.clock*17+s*1.3)*.15;put(FURN_X+wb,y0,FURN_X-wb,y1,1540,LAVA,-6.5,.95);}}
   PCOUNT=n;return n;
@@ -507,8 +586,8 @@ function addPL(x,y,z,r,c,k){if(PLN>=8)return;const o=PLN*4;PLP[o]=x;PLP[o+1]=y;P
 function gatherLights(){
   PLN=0;
   if(HEART.cells.length){const H_=HEART,Tc=(880+H_.heat*6.6+H_.beat*110+H_.pulse*160)*H_.ign+AMB_T*(1-H_.ign);addPL(HX+.5,COREY()+.5,2,80,bbAt(Math.max(400,Tc)),(.9+H_.beat*.3)*H_.ign*(1-H_.frost*.6)*(.35+.65*H_.heat/100));}
-  const k=CR.fill/CR.cap;addPL(CR.x,PIV_Y+5,0,34,bbAt(1520),.45*k+(CR.pouring?.25:0));
   if(LAVAC.n>20)addPL(LAVAC.x,LAVAC.y-5,0,40+Math.sqrt(LAVAC.n)*1.6,bbAt(1320),Math.min(1.6,LAVAC.n/350+.2));
+  const k=CR.fill/CR.cap;addPL(CR.x,PIV_Y+5,0,34,bbAt(1520),.45*k+(CR.pouring?.25:0));
   if(CR.refill)addPL(FURN_X,8,-6,26,bbAt(1500),1.1);
   /* flashes; a slag bomb's (the longest) lights the whole cavern from where it burst */
   for(const l of LIGHTS){const kk=1-l.t/l.dur,big=l.dur>=.34;if(big)addPL(l.x,l.y-2,4,85,bbAt(1250),kk*kk*kk*7);else addPL(l.x,l.y,0,34,[l.c[0]/255*4,l.c[1]/255*4,l.c[2]/255*4],kk);}
@@ -534,12 +613,14 @@ function present(){
   const sc=FB.sc;gl.bindFramebuffer(gl.FRAMEBUFFER,sc.f);gl.viewport(0,0,sc.w,sc.h);
   if(portrait){gl.enable(gl.SCISSOR_TEST);const k=sc.w/VW;gl.scissor(Math.floor(RECT.x*DPR*k),Math.floor((VH-(RECT.y+RECT.h)*DPR)*k),Math.ceil(RECT.w*DPR*k)+1,Math.ceil(RECT.h*DPR*k)+1);}
   gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.ALWAYS);gl.depthMask(true);
-  gl.useProgram(P_MA.p);{const u=P_MA.u;
-    bindT(0,FB.cell.t,u.uCell);bindT(8,FB.co.t,u.uCoarse);bindT(1,TX.state,u.uState);bindT(2,TX.vox,u.uVox);bindT(3,TX.spr,u.uSpr);bindT(4,FB.gas.t,u.uGas);setLightU(u);
+  const PM_=LQ>0?P_SC:P_MA;gl.useProgram(PM_.p);{const u=PM_.u;
+    if(LQ>0){bindT(0,FB.fa2.t,u.uFA);bindT(8,FB.fb2.t,u.uFB);gl.activeTexture(gl.TEXTURE9);gl.bindTexture(gl.TEXTURE_3D,TX.n3);gl.uniform1i(u.uN3,9);gl.uniform1i(u.uQ,LQ);gl.uniform1f(u.uMagma,SU.uMagma);}
+    else{bindT(0,FB.cell.t,u.uCell);bindT(8,FB.co.t,u.uCoarse);}
+    bindT(1,TX.state,u.uState);bindT(2,TX.vox,u.uVox);bindT(3,TX.spr,u.uSpr);bindT(4,FB.gas.t,u.uGas);setLightU(u);
     gl.uniformMatrix4fv(u.uInvVP,false,CAM.IVP);gl.uniformMatrix4fv(u.uVP,false,CAM.VP);
     const H_=HEART,Tc=(880+H_.heat*6.6+H_.beat*110+H_.pulse*160)*H_.ign+AMB_T*(1-H_.ign);
     gl.uniform4f(u.uHeart,HX+.5,COREY()+.5,CORER+.25,Tc);gl.uniform4f(u.uHeartFx,H_.frost,H_.ign,H_.beat,H_.cells.length?1:0);
-    for(const k of ['uBackA','uBackB','uCryst','uIce'])gl.uniform3fv(u[k],SU[k]);gl.uniform1f(u.uSteamQ,LQ);
+    for(const k of ['uBackA','uBackB','uCryst','uIce'])if(u[k])gl.uniform3fv(u[k],SU[k]);if(u.uSteamQ)gl.uniform1f(u.uSteamQ,LQ);
     gl.bindVertexArray(VAO);gl.drawArrays(gl.TRIANGLES,0,3);}
   gl.depthFunc(gl.LEQUAL);
   /* meshes */

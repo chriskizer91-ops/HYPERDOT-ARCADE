@@ -1,7 +1,7 @@
 /* =====================================================================================
    CABINET, MUSIC, SOUND
    ===================================================================================== */
-const CAB={id:'molten3d',title:'MOLTEN 3D',tickets:true};
+const CAB={id:'molten3d',title:'MOLTEN II',tickets:true};
 const TRACKS={
   title:{bpm:84,root:38,scale:'phryg',prog:[0,1,0,5],bass:'R.......R...O...',lead:'5-------6---5---3-------2---1---',kick:'x...............',snare:'................',hat:'................',anv:'X.......x.......',pad:1,lv:.022},
   s0:{bpm:112,root:40,scale:'minor',prog:[0,5,3,4],bass:'R..R..R.R..RO.F.',lead:'1-3-5---4-3-1---5-6-5-3-2-------',kick:'x.......x..x....',snare:'....x.......x...',hat:'..x...x...x...x.',anv:'X...x...X...x.x.',chn:'..x...x.x...x...',pad:1,lv:.026},
@@ -36,6 +36,7 @@ const SFX={
   stomp(){const t=now();tone(48,t,.4,'sine',.45,0,26);noise(t,.5,.3,500,60,'lowpass');noise(t+.2,1.2,.07,8000,4000,'highpass',0,.3);},
   coreCrack(){if(!rl('cc',90))return;const t=now();glass(t,900+Math.random()*300,.05,.7);},
   bossDie(){const t=now();for(let i=0;i<10;i++)glass(t+i*.07,600+i*170,.04,1);noise(t,2.5,.4,3000,100,'lowpass',0,.6);tone(40,t,1.5,'sine',.4,0,20);},
+  vent(){const t=now();tone(40,t,.9,'sine',.3,0,24);noise(t,1.1,.18,420,70,'lowpass',0,.3);},
   spawn(){if(!rl('sp',400))return;const t=now();noise(t,.9,.07,400,1400,'bandpass',0,.3,4);glass(t+.1,2400,.015,.4);},
   warn(){tone(1600,now(),.06,'square',.045);tone(1600,now()+.09,.06,'square',.04);},
   wave(){const t=now();anvil(t,64,.06);anvil(t+.25,64,.05);},
@@ -142,14 +143,14 @@ const S={mode:'title',t:0,clock:0,tick:0,score:0,hi:parseInt(store.get('hd-molte
 function newStats(){return {kills:0,steam:0,entomb:0,bomb:0,best:0,poured:0,fed:0};}
 function stageSetup(i,demo){
   ST=STAGES[i];S.stage=i;S.demo=demo;
-  genCave(ST);EN.length=0;BOMBS.length=0;LIGHTS.length=0;BOSS.on=false;BOSS.dead=false;heartReset();crReset(true);
+  genCave(ST);ventSetup();EN.length=0;BOMBS.length=0;LIGHTS.length=0;BOSS.on=false;BOSS.dead=false;heartReset();crReset(true);
   S.wt=0;S.wi=0;S.q=[];S.warn=[];S.stats=newStats();S.combo=0;S.comboT=0;S.msgs.length=0;S.big=null;S.pops.length=0;S.clearT=0;
-  Object.assign(SU,{uTint:ST.tint,uBackA:ST.backA,uBackB:ST.backB,uCryst:ST.cryst,uIce:ST.ice});
+  Object.assign(SU,{uTint:ST.tint,uBackA:ST.backA,uBackB:ST.backB,uCryst:ST.cryst,uIce:ST.ice,uMagma:ST.magma!=null?ST.magma:clamp((ST.amb+10)/28,.08,1)});
   lavaCentroid();
 }
 function APP_attract(){S.mode='title';S.t=0;S.paused=false;S.how=-1;S.menuI=0;S.over=false;$('pauseBtn').textContent='Pause';titleSetup();setTrack('title');}
 function startDemo(){stageSetup(S.attractN%4,true);S.attractN++;S.mode='demo';S.t=0;HEART.ign=1;setTrack(ST.tr);}
-function APP_start(){S.score=0;S.cont=0;S.over=false;S.newHi=false;S.paused=false;$('pauseBtn').textContent='Pause';startStage(0);SFX.confirm();ARC.score(0);}
+function APP_start(){runReset();S.score=0;S.cont=0;S.over=false;S.newHi=false;S.paused=false;$('pauseBtn').textContent='Pause';startStage(0);SFX.confirm();ARC.score(0);}
 function startStage(i){stageSetup(i,false);S.mode='intro';S.t=0;setTrack(ST.tr);}
 function setPause(on){if(S.mode!=='play'&&S.mode!=='intro')on=false;S.paused=on;S.pauseI=0;$('pauseBtn').textContent=on?'Resume':'Pause';}
 /* ---------- scoring ---------- */
@@ -160,14 +161,15 @@ function pop(x,y,text,col){S.pops.push({x,y,text,col,t:0});if(S.pops.length>10)S
 const HOW_KILL={heart:['SEARED','#ffd040',1],steam:['STEAMED','#e8f4ff',1.5],entomb:['ENTOMBED','#ffb060',2],bomb:['BLASTED','#ff8040',1],lava:['SEARED','#ffd040',1],pool:['MELTED','#ff9a30',1],heat:['MELTED','#ff9a30',1]};
 function onKill(e){
   if(S.demo&&S.mode!=='demo')return;
-  S.combo=S.comboT>0?S.combo+1:1;S.comboT=1.8;const m=Math.min(8,S.combo),h=HOW_KILL[e.src]||HOW_KILL.heat,pts=Math.round(e.D.score*m*h[2]/10)*10;
+  S.combo=S.comboT>0?S.combo+1:1;S.comboT=1.8;if(S.combo===5||S.combo===8)S.slowT=Math.max(S.slowT||0,.5);   /* II: a big melt chain slows time for a breath */
+  const m=Math.min(8,S.combo),h=HOW_KILL[e.src]||HOW_KILL.heat,pts=Math.round(e.D.score*m*h[2]/10)*10;
   if(!S.demo){addScore(pts);S.stats.kills++;if(e.src==='steam')S.stats.steam++;if(e.src==='entomb')S.stats.entomb++;if(e.src==='bomb')S.stats.bomb++;S.stats.best=Math.max(S.stats.best,m);
-    if(S.stats.kills%14===0&&CR.bombs<3){CR.bombs++;flashMsg('SLAG BOMB +1','#ff9a40',1);}}
+    if(S.stats.kills%RUN.bombEvery===0&&CR.bombs<RUN.bombMax){CR.bombs++;flashMsg('SLAG BOMB +1','#ff9a40',1);}}
   pop((e.x0+e.x1)/2,e.y0-3,(h[2]>1||e.src==='bomb'?h[0]+' ':'')+pts,m>3?'#ff5ad8':h[1]);
   if(m>1)flashMsg('MELT CHAIN x'+m,m>5?'#ff5ad8':m>3?'#ffd040':'#9fe8ff',.9);
   SFX.kill(m);
 }
-function onBossKilled(){if(S.demo)return;addScore(25000);pop(BOSS.x,BOSS.y-60,'25000','#ffffff');bigMsg('THE KING IS WATER','#9fe8ff','25000');S.stats.kills++;}
+function onBossKilled(){if(S.demo)return;const q=BOSS.kind==='queen',pts=q?50000:25000;addScore(pts);pop(BOSS.x,BOSS.y-(q?40:60),pts+'','#ffffff');bigMsg(q?'THE QUEEN IS WATER':'THE KING IS WATER','#9fe8ff',pts+'');S.stats.kills++;}
 function finalize(){
   S.over=true;S.tickets=Math.round(S.score/2500);
   if(S.score>S.hi){S.hi=Math.floor(S.score);store.set('hd-molten3d-hi',S.hi);S.newHi=true;}else S.newHi=false;
@@ -190,8 +192,8 @@ function waveStep(dt){
   S.wt+=dt;const wv=ST.waves;
   while(S.wi<wv.length&&wv[S.wi][0]<=S.wt){const [t,type,side,tun,count,gap]=wv[S.wi++];
     for(let k=0;k<count;k++){const sd=side||(k%2?1:-1);S.q.push({t:S.wt+1.6+k*gap,type,side:sd,tun});}
-    S.warn.push({side:side||0,tun,t:0,type});if(type!=='KING')SFX.warn();}
-  for(let k=S.q.length-1;k>=0;k--){const q=S.q[k];if(q.t<=S.wt){S.q.splice(k,1);spawnEnemy(q.type,q.side,q.tun);if(q.type!=='KING')SFX.spawn();}}
+    S.warn.push({side:side||0,tun,t:0,type});if(type!=='KING'&&type!=='QUEEN')SFX.warn();}
+  for(let k=S.q.length-1;k>=0;k--){const q=S.q[k];if(q.t<=S.wt){S.q.splice(k,1);spawnEnemy(q.type,q.side,q.tun);if(q.type!=='KING'&&q.type!=='QUEEN')SFX.spawn();}}
   for(const w of S.warn)w.t+=dt;S.warn=S.warn.filter(w=>w.t<2.4);
 }
 function stageDone(){return S.wi>=ST.waves.length&&S.q.length===0&&EN.length===0&&!BOSS.on;}
@@ -213,7 +215,7 @@ function autopilot(){
   if(bs<0)best=null;
   /* the King planted beside the heart drains it steadily: he outranks everything but a clinging Rimeback or a wisp at the ladle */
   const kingUrgent=BOSS.on&&BOSS.dying<=0&&BOSS.x<=BOSS.stopX+1&&!(best&&((best.latched&&best.t!=='shard')||(best.t==='wisp'&&best.yc<60)));
-  if(BOSS.on&&(!best||bs<450||kingUrgent)){const tx=aimFor(BOSS.x,BOSS.y-40,BOSS.x>BOSS.stopX?-2:0);o.tx=tx;o.pour=Math.abs(CR.x-tx)<6&&CR.fill>6;
+  if(BOSS.on&&(!best||bs<450||kingUrgent)){const tx=aimFor(BOSS.x,BOSS.y-(BOSS.aimY||40),BOSS.x>BOSS.stopX?-2:0);o.tx=tx;o.pour=Math.abs(CR.x-tx)<6&&CR.fill>6;
     if(CR.bombs>0&&Math.abs(CR.x-BOSS.x)<10&&BOSS.x<W-30)o.bomb=true;}
   else if(best){const cx=(best.x0+best.x1)/2,vx=best.D.fly?best.vx:best.latched?0:best.dir*best.D.sp;
     const tx=aimFor(cx,best.y0,vx);o.tx=tx;o.pour=Math.abs(CR.x-tx)<(AP.pour?7:4)&&CR.fill>6&&!best.inRock;
@@ -238,6 +240,7 @@ function worldStep(dt,ctl,live){
   stepParticles(dt);bombStep(dt);const t3=performance.now();
   enemyStep(dt,live);bossStep(dt,live);heartStep(dt,live);const t4=performance.now();
   PERF.mv=(PERF.mv||0)*.95+(t1-t0)*.05;PERF.ht=(PERF.ht||0)*.95+(t2-t1)*.05;PERF.pt=(PERF.pt||0)*.95+(t3-t2)*.05;PERF.en=(PERF.en||0)*.95+(t4-t3)*.05;
+  sequelStep(dt,live);
   if(S.tick%20===0)lavaCentroid();
   if(S.mode==='title')titleStep(dt);
   PERF.sim+=(performance.now()-t0-PERF.sim)*.05;PERF.n++;

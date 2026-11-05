@@ -34,6 +34,7 @@ const EGW=W>>2,EGH=H>>2,EGRID=new Int16Array(EGW*EGH);
 function bbox(e){const D=e.D;e.x0=Math.round(e.x-D.w/2);e.x1=e.x0+D.w-1;if(D.fly){e.y0=Math.round(e.yc-D.h/2);e.y1=e.y0+D.h-1;}else{e.y1=Math.round(e.y);e.y0=e.y1-D.h+1;}}
 function spawnEnemy(type,side,tun){
   if(type==='KING'){bossSpawn();return null;}
+  if(type==='QUEEN'){queenSpawn();return null;}
   const D=ETYPES[type],e={t:type,D,id:EID++,hp:D.hp,dir:side<0?1:-1,vx:0,vy:0,acc:0,fall:0,anim:Math.random()*4,state:'walk',dig:0,latched:false,hurt:0,
     inRock:false,quiet:0,blockT:0,climbing:false,climbAcc:0,bestD:1e9,stall:0,rage:false,casts:0,cast:2+Math.random()*1.5,summon:9,perch:30+Math.random()*50,walked:0,turnT:0,drip:0,src:'',x:0,y:0,yc:0,x0:0,x1:0,y0:0,y1:0};
   const ts=TUN.filter(t=>t.side===side);const tt=ts.length?ts[Math.min(tun,ts.length-1)]:TUN[0];
@@ -100,12 +101,14 @@ function enemyStep(dt,live){
     /* melting creatures drip */
     if(e.hp<D.hp&&(r32()&255)<40*(1-e.hp/D.hp)+3&&PN<PMAX-50)spawnP(e.x0+rf()*D.w,e.y1-rf()*2,rnd(-8,8),rnd(0,20),WATER,4,9,0);
     if(e.dead){EN.splice(k,1);killEnemy(e);continue;}
+    if(e.t==='bolt'){boltStep(e,dt);continue;}
     if(D.fly){wispStep(e,dt);continue;}
     if(e.inRock){borerStep(e,dt);continue;}
     /* iron that sets on a creature's back is shrugged off as it hardens: a Rimeback cannot hide under its own frozen cap */
     for(let y=Math.max(GAL+1,e.y0-2);y<e.y0;y++)for(let x=Math.max(1,e.x0);x<=Math.min(W-2,e.x1);x++){const i=y*W+x,m=M[i];
       if((m===IRON||m===SLAG||m===ICE||m===SNOW||m===RUBBLE)&&(r32()&7)===0){M[i]=AIR;wake(x,y);
         if(PN<PMAX-40)spawnP(x+.5,y+.5,(x-(e.x0+e.x1)/2)*rnd(4,9),rnd(-70,-25),m===ICE||m===SNOW?ICE:RUBBLE,T[i],9,0);}}
+    if(e.t==='bulwark')bulwarkRoof(e,dt);
     /* latch onto the heart */
     e.latched=e.x1>=HEART.x0-6&&e.x0<=HEART.x1+6&&e.y1>=HEART.y0-2;
     if(e.latched){HEART.latched++;if(live){HEART.drain+=D.drain*dt;HEART.hurtT=.2;}
@@ -128,6 +131,7 @@ function enemyStep(dt,live){
     e.turnT=Math.max(0,e.turnT-dt);
     if(e.turnT<=0)e.dir=Math.sign(HX-(e.x0+e.x1)/2)||e.dir;
     if(e.t==='caller'&&callerStep(e,dt))continue;
+    if(e.t==='spitter'&&spitterStep(e,dt))continue;
     if(e.climbing){e.climbAcc+=dt*9;while(e.climbAcc>=1){e.climbAcc-=1;if(stepX(e,e.dir)){e.climbing=false;e.blockT=0;break;}if(!climbWall(e)){e.climbing=false;break;}}continue;}
     e.acc+=D.sp*(e.wet>.25?.55:1)*dt;let moved=false;
     while(e.acc>=1){e.acc-=1;if(stepX(e,e.dir)){moved=true;e.blockT=0;continue;}
@@ -178,10 +182,12 @@ function callerStep(e,dt){
   return true;
 }
 function killEnemy(e,silent){
+  if(e.roof)dropRoof(e);
   e.alive=false;const sp=SPRS[e.t][0],cx=(e.x0+e.x1)/2,cy=(e.y0+e.y1)/2;
   for(let r=0;r<sp.h;r++)for(let c=0;c<sp.w;c++){const ch=sp.rows[r][e.dir>0?c:sp.w-1-c];if(ch==='.')continue;if(rf()<.5){const x=e.x0+c+.5,y=e.y0+r+.5,ice=rf()<.3;
     spawnP(x,y,(x-cx)*rnd(4,11)+rnd(-20,20),(y-cy)*rnd(3,8)-rnd(30,100),ice?ICE:WATER,ice?-12:(e.src==='entomb'?6:45),9,0);}}
   for(let n=0;n<8;n++)spawnP(cx+rnd(-3,3),cy,rnd(-40,40),rnd(-90,-20),STEAM,110,rnd(.5,1.2),0);
+  fxShatter(cx,cy,sp.w,sp.h);
   LIGHTS.push({x:cx,y:cy,r:1,t:0,dur:.28,c:[160,235,255]});
   if(!silent)onKill(e);else SFX.shatter(.6);
 }
@@ -230,6 +236,7 @@ function bossSpawn(){
     if(!ell(c,r,w,h,cx,9.5,8.6,6.2))return 0;if(r===9&&(Math.abs(c-cx+3.5)<1||Math.abs(c-cx-3.5)<1))return 5;return 1;}));
   P.push(mkPart('armL',-26,-42,9,27,(c,r,w,h)=>{const cx=4+Math.sin(r*.2)*.8;if(Math.abs(c-cx)>3.6-(r>h-6?-.6:0))return 0;return r>h-5?2:1;}));
   P.push(mkPart('armR',17,-42,9,27,(c,r,w,h)=>{const cx=4-Math.sin(r*.2)*.8;if(Math.abs(c-cx)>3.6-(r>h-6?-.6:0))return 0;return r>h-5?2:1;}));
+  BOSS.kind='king';BOSS.name='THE HOAR KING';BOSS.aimY=40;
   BOSS.parts=P;BOSS.on=true;BOSS.dead=false;BOSS.dying=0;BOSS.x=W+30;BOSS.y=ST.tunnels[ST.tunnels.length-1].y-1;BOSS.t=0;BOSS.phase=0;BOSS.breath=0;BOSS.breathT=9;BOSS.stompT=11;BOSS.kneel=0;BOSS.roar=1;
   BOSS.cells0=P.reduce((a,p)=>a+p.n0,0);BOSS.cells=BOSS.cells0;
   BOSS.coreHp0=0;const to=P[2];for(let i=0;i<to.kind.length;i++)if(to.kind[i]===3)BOSS.coreHp0+=to.hp[i];BOSS.coreHp=BOSS.coreHp0;
@@ -258,11 +265,12 @@ function bossParticle(k,cx,cy){const q=bossCellAt(cx,cy);if(q<0)return false;con
   if((r32()&3)===0)spawnP(cx+.5,cy-1,rnd(-30,30),rnd(-80,-30),STEAM,110,rnd(.3,.8),0);return true;}
 function bossBlast(x,y,r){for(const p of BOSS.parts){const [ox,oy]=partOrigin(p);for(let i=0;i<p.kind.length;i++){if(!p.kind[i])continue;const cx=ox+i%p.w,cy=oy+(i/p.w|0),d=Math.hypot(cx-x,cy-y);if(d<r)bossDamage((BOSS.parts.indexOf(p)<<13)|i,(1-d/r)*7);}}}
 function bossStep(dt,live){
-  const B=BOSS;if(!B.on)return;B.t+=dt;B.roar=Math.max(0,B.roar-dt);
+  const B=BOSS;if(!B.on)return;if(B.kind==='queen'){queenStep(dt,live);return;}
+  B.t+=dt;B.roar=Math.max(0,B.roar-dt);
   const P=B.parts,legs=(P[0].n+P[1].n)/(P[0].n0+P[1].n0),head=P[3].n/P[3].n0;
   if(B.dying>0){B.dying+=dt;if(B.dying>2.4){bossShatter();}return;}
   /* once most of the frost heart is gone the rest cannot hold: it cracks apart */
-  if(B.coreHp<=B.coreHp0*.12){B.dying=.01;SFX.roar();S.shake=1.2;S.flash=.6;return;}
+  if(B.coreHp<=B.coreHp0*.12){B.dying=.01;SFX.roar();S.shake=1.2;S.flash=.6;S.slowT=1.4;return;}
   /* walk in from the great tunnel and plant himself beside the heart */
   B.kneel=legs<.3?Math.min(7,B.kneel+dt*6):0;
   const sp=legs<.3?0:2.4*(.4+.6*legs);
