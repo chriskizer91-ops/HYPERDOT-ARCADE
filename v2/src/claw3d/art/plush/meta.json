@@ -1,0 +1,562 @@
+{
+ "mochi": {
+  "num": 1,
+  "machine": "sugar",
+  "keychain": 1,
+  "front": {
+   "w": 683,
+   "h": 634,
+   "cx": 0.5006
+  },
+  "side": {
+   "w": 369,
+   "h": 449,
+   "cx": 0.5024
+  },
+  "back": {
+   "w": 507,
+   "h": 448,
+   "cx": 0.5001
+  },
+  "sheet": {
+   "front_h": 448,
+   "side_h": 449,
+   "back_h": 448,
+   "front_w": 506,
+   "side_w": 369,
+   "back_w": 507
+  }
+ },
+ "berry": {
+  "num": 2,
+  "machine": "sugar",
+  "keychain": 1,
+  "front": {
+   "w": 588,
+   "h": 717,
+   "cx": 0.4988
+  },
+  "side": {
+   "w": 297,
+   "h": 512,
+   "cx": 0.4941
+  },
+  "back": {
+   "w": 418,
+   "h": 512,
+   "cx": 0.4988
+  },
+  "sheet": {
+   "front_h": 559,
+   "side_h": 611,
+   "back_h": 560,
+   "front_w": 458,
+   "side_w": 355,
+   "back_w": 457
+  }
+ },
+ "toast": {
+  "num": 3,
+  "machine": "sugar",
+  "keychain": 1,
+  "front": {
+   "w": 643,
+   "h": 701,
+   "cx": 0.496
+  },
+  "side": {
+   "w": 215,
+   "h": 512,
+   "cx": 0.4977
+  },
+  "back": {
+   "w": 469,
+   "h": 512,
+   "cx": 0.499
+  },
+  "sheet": {
+   "front_h": 554,
+   "side_h": 558,
+   "back_h": 554,
+   "front_w": 503,
+   "side_w": 234,
+   "back_w": 507
+  }
+ },
+ "onigiri": {
+  "num": 4,
+  "machine": "sugar",
+  "keychain": 1,
+  "front": {
+   "w": 727,
+   "h": 680,
+   "cx": 0.5019
+  },
+  "side": {
+   "w": 277,
+   "h": 512,
+   "cx": 0.4993
+  },
+  "back": {
+   "w": 512,
+   "h": 474,
+   "cx": 0.4987
+  },
+  "sheet": {
+   "front_h": 505,
+   "side_h": 518,
+   "back_h": 505,
+   "front_w": 541,
+   "side_w": 280,
+   "back_w": 546
+  }
+ },
+ "pudding": {
+  "num": 5,
+  "machine": "sugar",
+  "keychain": 1,
+  "front": {
+   "w": 607,
+   "h": 684,
+   "cx": 0.5003
+  },
+  "side": {
+   "w": 378,
+   "h": 512,
+   "cx": 0.5027
+  },
+  "back": {
+   "w": 453,
+   "h": 512,
+   "cx": 0.4988
+  },
+  "sheet": {
+   "front_h": 544,
+   "side_h": 545,
+   "back_h": 545,
+   "front_w": 476,
+   "side_w": 402,
+   "back_w": 482
+  }
+ },
+ "boba": {
+  "num": 6,
+  "machine": "sugar",
+  "keychain": 1,
+  "front": {
+   "w": 478,
+   "h": 768,
+   "cx": 0.4991
+  },
+  "side": {
+   "w": 290,
+   "h": 512,
+   "cx": 0.5013
+  },
+  "back": {
+   "w": 312,
+   "h": 512,
+   "cx": 0.4967
+  },
+  "sheet": {
+   "front_h": 637,
+   "side_h": 636,
+   "back_h": 634,
+   "front_w": 391,
+   "side_w": 360,
+   "back_w": 386
+  }
+ },
+ "cupcake": {
+  "num": 7,
+  "machine": "sugar",
+  "keychain": 1,
+  "front": {
+   "w": 562,
+   "h": 768,
+   "cx": 0.4985
+  },
+  "side": {
+   "w": 331,
+   "h": 512,
+   "cx": 0.4917
+  },
+  "back": {
+   "w": 374,
+   "h": 512,
+   "cx": 0.4925
+  },
+  "sheet": {
+   "front_h": 629,
+   "side_h": 629,
+   "back_h": 629,
+   "front_w": 459,
+   "side_w": 407,
+   "back_w": 460
+  }
+ },
+ "donut": {
+  "num": 8,
+  "machine": "sugar",
+  "keychain": 1,
+  "front": {
+   "w": 679,
+   "h": 687,
+   "cx": 0.4994
+  },
+  "side": {
+   "w": 202,
+   "h": 512,
+   "cx": 0.4982
+  },
+  "back": {
+   "w": 499,
+   "h": 512,
+   "cx": 0.5008
+  },
+  "sheet": {
+   "front_h": 540,
+   "side_h": 590,
+   "back_h": 540,
+   "front_w": 531,
+   "side_w": 233,
+   "back_w": 526
+  }
+ },
+ "frog": {
+  "num": 9,
+  "machine": "wild",
+  "keychain": 0,
+  "front": {
+   "w": 768,
+   "h": 737,
+   "cx": 0.4983
+  },
+  "side": {
+   "w": 418,
+   "h": 512,
+   "cx": 0.4733
+  },
+  "back": {
+   "w": 512,
+   "h": 465,
+   "cx": 0.497
+  },
+  "sheet": {
+   "front_h": 599,
+   "side_h": 608,
+   "back_h": 596,
+   "front_w": 654,
+   "side_w": 496,
+   "back_w": 656
+  }
+ },
+ "hedgehog": {
+  "num": 10,
+  "machine": "wild",
+  "keychain": 0,
+  "front": {
+   "w": 677,
+   "h": 768,
+   "cx": 0.5011
+  },
+  "side": {
+   "w": 478,
+   "h": 512,
+   "cx": 0.5291
+  },
+  "back": {
+   "w": 454,
+   "h": 512,
+   "cx": 0.4998
+  },
+  "sheet": {
+   "front_h": 633,
+   "side_h": 630,
+   "back_h": 630,
+   "front_w": 556,
+   "side_w": 588,
+   "back_w": 559
+  }
+ },
+ "toadstool": {
+  "num": 11,
+  "machine": "wild",
+  "keychain": 0,
+  "front": {
+   "w": 551,
+   "h": 768,
+   "cx": 0.4988
+  },
+  "side": {
+   "w": 352,
+   "h": 512,
+   "cx": 0.486
+  },
+  "back": {
+   "w": 375,
+   "h": 512,
+   "cx": 0.4986
+  },
+  "sheet": {
+   "front_h": 753,
+   "side_h": 756,
+   "back_h": 754,
+   "front_w": 550,
+   "side_w": 520,
+   "back_w": 552
+  }
+ },
+ "fox": {
+  "num": 12,
+  "machine": "wild",
+  "keychain": 0,
+  "front": {
+   "w": 501,
+   "h": 768,
+   "cx": 0.4497
+  },
+  "side": {
+   "w": 351,
+   "h": 512,
+   "cx": 0.4604
+  },
+  "back": {
+   "w": 343,
+   "h": 512,
+   "cx": 0.5479
+  },
+  "sheet": {
+   "front_h": 776,
+   "side_h": 794,
+   "back_h": 771,
+   "front_w": 523,
+   "side_w": 545,
+   "back_w": 516
+  }
+ },
+ "redpanda": {
+  "num": 13,
+  "machine": "wild",
+  "keychain": 0,
+  "front": {
+   "w": 574,
+   "h": 768,
+   "cx": 0.4585
+  },
+  "side": {
+   "w": 474,
+   "h": 512,
+   "cx": 0.406
+  },
+  "back": {
+   "w": 307,
+   "h": 512,
+   "cx": 0.4949
+  },
+  "sheet": {
+   "front_h": 702,
+   "side_h": 713,
+   "back_h": 747,
+   "front_w": 520,
+   "side_w": 660,
+   "back_w": 448
+  }
+ },
+ "owl": {
+  "num": 14,
+  "machine": "wild",
+  "keychain": 0,
+  "front": {
+   "w": 548,
+   "h": 768,
+   "cx": 0.5012
+  },
+  "side": {
+   "w": 318,
+   "h": 512,
+   "cx": 0.4582
+  },
+  "back": {
+   "w": 384,
+   "h": 512,
+   "cx": 0.5016
+  },
+  "sheet": {
+   "front_h": 767,
+   "side_h": 780,
+   "back_h": 766,
+   "front_w": 568,
+   "side_w": 484,
+   "back_w": 574
+  }
+ },
+ "moth": {
+  "num": 15,
+  "machine": "wild",
+  "keychain": 0,
+  "front": {
+   "w": 701,
+   "h": 768,
+   "cx": 0.4991
+  },
+  "side": {
+   "w": 138,
+   "h": 512,
+   "cx": 0.5147
+  },
+  "back": {
+   "w": 485,
+   "h": 512,
+   "cx": 0.5015
+  },
+  "sheet": {
+   "front_h": 756,
+   "side_h": 782,
+   "back_h": 755,
+   "front_w": 716,
+   "side_w": 211,
+   "back_w": 715
+  }
+ },
+ "hare": {
+  "num": 16,
+  "machine": "wild",
+  "keychain": 0,
+  "front": {
+   "w": 336,
+   "h": 768,
+   "cx": 0.4979
+  },
+  "side": {
+   "w": 249,
+   "h": 512,
+   "cx": 0.4422
+  },
+  "back": {
+   "w": 219,
+   "h": 512,
+   "cx": 0.4965
+  },
+  "sheet": {
+   "front_h": 904,
+   "side_h": 915,
+   "back_h": 907,
+   "front_w": 388,
+   "side_w": 445,
+   "back_w": 388
+  }
+ },
+ "whale": {
+  "num": 17,
+  "machine": "titan",
+  "keychain": 0,
+  "front": {
+   "w": 1024,
+   "h": 862,
+   "cx": 0.4972
+  },
+  "side": {
+   "w": 768,
+   "h": 435,
+   "cx": 0.43
+  },
+  "back": {
+   "w": 1024,
+   "h": 870,
+   "cx": 0.4999
+  },
+  "sheet": {
+   "front_h": 483,
+   "side_h": 493,
+   "back_h": 488,
+   "front_w": 610,
+   "side_w": 871,
+   "back_w": 602
+  }
+ },
+ "dino": {
+  "num": 18,
+  "machine": "titan",
+  "keychain": 0,
+  "front": {
+   "w": 518,
+   "h": 1024,
+   "cx": 0.4995
+  },
+  "side": {
+   "w": 623,
+   "h": 768,
+   "cx": 0.4204
+  },
+  "back": {
+   "w": 496,
+   "h": 1024,
+   "cx": 0.4983
+  },
+  "sheet": {
+   "front_h": 796,
+   "side_h": 797,
+   "back_h": 816,
+   "front_w": 402,
+   "side_w": 647,
+   "back_w": 401
+  }
+ },
+ "sloth": {
+  "num": 19,
+  "machine": "titan",
+  "keychain": 0,
+  "front": {
+   "w": 810,
+   "h": 1024,
+   "cx": 0.4982
+  },
+  "side": {
+   "w": 583,
+   "h": 673,
+   "cx": 0.5394
+  },
+  "back": {
+   "w": 807,
+   "h": 1024,
+   "cx": 0.4975
+  },
+  "sheet": {
+   "front_h": 683,
+   "side_h": 673,
+   "back_h": 676,
+   "front_w": 543,
+   "side_w": 583,
+   "back_w": 537
+  }
+ },
+ "dragon": {
+  "num": 20,
+  "machine": "titan",
+  "keychain": 0,
+  "front": {
+   "w": 896,
+   "h": 1024,
+   "cx": 0.5005
+  },
+  "side": {
+   "w": 580,
+   "h": 642,
+   "cx": 0.3664
+  },
+  "back": {
+   "w": 816,
+   "h": 1024,
+   "cx": 0.4992
+  },
+  "sheet": {
+   "front_h": 637,
+   "side_h": 642,
+   "back_h": 689,
+   "front_w": 564,
+   "side_w": 580,
+   "back_w": 559
+  }
+ }
+}
