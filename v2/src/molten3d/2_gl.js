@@ -147,7 +147,7 @@ void main(){
     fill=loose?smoothstep(1.5,4.5,float(cnt)):smoothstep(.5,2.5,float(cnt));}   /* a lone frozen drop is a bead; a wall of any thickness spans the channel */
   if(!rock&&!fly){
     if(m==WATER)med=10+int(max(.9,8.*fill)*10.+.5);
-    else if(m==HOUSE)sh=6.5;else if(m==RAIL)sh=2.;
+    else if(m==HOUSE)sh=0.;else if(m==RAIL)sh=2.;
     else if(m==IRON||m==SLAG)sh=7.3+n2*.7;else if(m==ICE)sh=7.4+n2*.8;else if(m==SNOW)sh=7.1+n2*.6;
     else if(m!=AIR)sh=8.;
     if(loose&&m!=WATER||castm)sh=max(.9,sh*fill);
@@ -185,7 +185,7 @@ const FS_KSEED=`${GLSL_MATS}
 uniform sampler2D uState;uniform sampler2D uVox;uniform int uCls;out vec4 o;
 void main(){ivec2 p=ivec2(gl_FragCoord.xy);int raw=int(texelFetch(uState,p,0).r*255.+.5),m=raw&127;bool fly=raw>=128,c;
   if(uCls==0)c=m==ROCK||m==BED||m==CRYST;
-  else if(uCls==1)c=!fly&&(m==IRON||m==SLAG||m==ICE||m==SNOW||m==RUBBLE||m==LAVA||m==EMBER||m==HOUSE||m==RAIL);
+  else if(uCls==1)c=!fly&&(m==IRON||m==SLAG||m==ICE||m==SNOW||m==RUBBLE||m==LAVA||m==EMBER||m==RAIL);   /* not HOUSE: the heart's pedestal is a model */
   else if(uCls==2)c=texelFetch(uVox,p,0).a>0.;
   else c=!fly&&m==WATER;
   vec2 pc=vec2(p)+.5;o=c?vec4(pc,-1e4,-1e4):vec4(-1e4,-1e4,pc);}`;
@@ -226,17 +226,58 @@ void main(){vec4 s=texture(uTex,vT)*.227027;s+=(texture(uTex,vT+uDir*1.3846)+tex
 const FS_SCULPT=`/*@@SCULPT@@*/`;
 /* meshes: the crucible, its trolley and the furnace. Lit like the cave: GI from the grid, the soft
    spill, the point lights; hot parts glow with the blackbody colour of their temperature. */
-const VS_MESH=`in vec3 aP;in vec3 aN;in vec4 aC;in float aE;uniform mat4 uVP;uniform mat4 uM;out vec3 vW;out vec3 vN;out vec4 vC;out float vE;
-void main(){vec4 w=uM*vec4(aP,1.);vW=w.xyz;vN=mat3(uM)*aN;vC=aC;vE=aE;gl_Position=uVP*w;}`;
+const VS_MESH=`in vec3 aP;in vec3 aN;in vec4 aC;in float aE;in float aT;uniform mat4 uVP;uniform mat4 uM;out vec3 vW;out vec3 vN;out vec4 vC;out float vE;out vec3 vL;out vec3 vNL;flat out float vT;
+void main(){vec4 w=uM*vec4(aP,1.);vW=w.xyz;vN=mat3(uM)*aN;vC=aC;vE=aE;vL=aP;vNL=aN;vT=aT;gl_Position=uVP*w;}`;
 const FS_MESH=`${GLSL_MATS}
-in vec3 vW;in vec3 vN;in vec4 vC;in float vE;
+${GLSL_ART}
+in vec3 vW;in vec3 vN;in vec4 vC;in float vE;in vec3 vL;in vec3 vNL;flat in float vT;
 uniform sampler2D uLight;uniform sampler2D uLB;uniform vec2 uLSz;uniform float uLQ;uniform vec3 uEye;
 uniform vec4 uPL[8];uniform vec4 uPC[8];uniform int uNL;uniform float uAmb;uniform vec3 uTint;
-uniform float uHot;uniform float uFrost;uniform int uMode;uniform mat4 uLoc;uniform float uTime;uniform float uFill;
+uniform float uHot;uniform float uFrost;uniform int uMode;uniform mat4 uLoc;uniform float uTime;uniform float uFill;uniform mat4 uM;
+uniform float uTS;uniform vec3 uIceT;uniform vec4 uFx;uniform vec3 uGlowC;uniform sampler2D uRV;uniform float uMask;uniform vec3 uIce;
 out vec4 o;
+/* the painted surface for this vertex's layer, projected in the model's own space so it rides with it;
+   returns colour and bends the normal by the tile's bumps */
+vec4 paint(vec3 V,inout vec3 Nn,float bump){
+  vec3 nl=normalize(vNL);vec3 nb=nl;float sc=1./uTS;vec3 Pw=vec3(vW.x,-vW.y,vW.z);
+  vec4 a=tri(vL,nl,vT,sc,artLod(Pw,Nn,V,sc*1.4),bump,nb);
+  vec3 d=mat3(uM)*(nb-nl);Nn=normalize(Nn+vec3(d.x,-d.y,d.z));return a;}
 void main(){
   vec3 P=vec3(vW.x,-vW.y,vW.z),Nw=normalize(vN),Nn=vec3(Nw.x,-Nw.y,Nw.z),V=normalize(vec3(uEye.x,-uEye.y,uEye.z)-P);
   if(!gl_FrontFacing)Nn=-Nn;
+  float mk=1.;
+  if(uMask>.5){
+    /* a giant built cell by cell: where his cells have melted away the model is gone too. The layer marks
+       living cells (red) and melted ones (green); only the melted are cut, so the outline stays the model's
+       own, and a hole needs a few melted cells together. The edge of a wound glows */
+    vec2 q=P.xy/vec2(320.,180.),px=vec2(.75)/vec2(320.,180.);
+    vec4 m0=texture(uRV,q);float al=max(max(m0.r,texture(uRV,q+px).r),max(texture(uRV,q-px).r,max(texture(uRV,q+vec2(px.x,-px.y)).r,texture(uRV,q-vec2(px.x,-px.y)).r)));
+    if(m0.g>.45&&al<.25)discard;mk=1.-smoothstep(.15,.6,m0.g)*(1.-smoothstep(.2,.8,m0.r));}
+  if(uMode==2){
+    /* living ice: lit through, a cold fresnel edge, glints; eyes and cores glow (colour alpha holds the glow) */
+    vec3 alb=vC.rgb*uIceT,Nb=Nn;
+    if(uArt>.5&&vT>=0.){vec4 a=paint(V,Nb,1.3);alb*=.45+a.rgb/artMean(vT)*.6;}
+    vec3 L=texture(uLight,(P.xy+Nb.xy*.8)/uLSz).rgb*(uLQ<.5?2.6:1.)+texture(uLB,P.xy/vec2(320.,180.)).rgb*.6;
+    vec3 amb=uAmb*uTint*1.6;
+    vec3 dif=vec3(0),spc=vec3(0);
+    for(int i=0;i<8;i++){if(i>=uNL)break;vec3 d=uPL[i].xyz-P;float dd=dot(d,d);vec3 l=d*inversesqrt(dd);float att=1./(1.+dd/(uPL[i].w*uPL[i].w));
+      dif+=uPC[i].rgb*max(dot(Nb,l),0.)*att;spc+=uPC[i].rgb*pow(max(dot(Nb,normalize(l+V)),0.),90.)*att;}
+    float nv=max(dot(Nb,V),0.),fres=.05+.95*pow(1.-nv,3.);
+    /* light passes into the ice and comes out tinted by it; a cold light lives inside every Rime, so they read
+       as blue crystal even beside the lava; the edge catches the cave's light */
+    vec3 Lb=texture(uLight,(P.xy-Nb.xy*2.)/uLSz).rgb*(uLQ<.5?2.6:1.);
+    vec3 thru=alb*alb*(Lb*1.5+dif*.7+amb*2.4)+alb*vec3(.03,.08,.16)*(.6+.4*nv);
+    /* a cool key light from above picks out every facet; faces turned up are frosted white */
+    vec3 kd=normalize(vec3(-.35,-.75,.55));float kl=max(dot(Nb,kd),0.);
+    vec3 c=thru+(L*.45+dif*.35)*fres*alb*1.6+spc*1.2+uIce*fres*(amb*3.+.012)+alb*vec3(.05,.08,.12)*kl*(1.+uAmb*6.);
+    c=mix(c,c*1.25+vec3(.03,.045,.06)*(.5+kl),smoothstep(.45,.9,-Nb.y)*.55);
+    c+=step(.985,h21(floor(vL.xy*2.3)+floor(vL.z*2.3)+floor(uTime*4.)))*(L+.06)*1.2;   /* glints */
+    float wet=uFx.x;c=mix(c,c*vec3(.5,.62,.75)+spc*.6,wet*.55);                         /* melting: dark and glossy */
+    c+=vC.a*uGlowC*(3.4+uFx.w*3.)*(uFx.z>.5&&vE>.5?vec3(2.,.25,.2)/uGlowC*.5:vec3(1));  /* eyes, cores (red when enraged) */
+    c=mix(c,vec3(1.3,1.35,1.4),uFx.y*.75);                                                /* hurt */
+    if(uMask>.5){float rim=1.-mk;c+=mix(uGlowC*.6,bb(1050.)*.7,clamp(uHot,0.,1.))*rim*1.5;}
+    o=vec4(c,0.);return;
+  }
   if(uMode==1){
     /* the molten surface: a level disc, cut to the inside of the tilted ladle */
     vec3 l=(uLoc*vec4(vW,1.)).xyz;float k=clamp((-2.6-l.y)/8.6,0.,1.),rin=mix(8.,4.6,k)-.15;float r=length(l.xz);
@@ -252,6 +293,10 @@ void main(){
   for(int i=0;i<8;i++){if(i>=uNL)break;vec3 d=uPL[i].xyz-P;float dd=dot(d,d);vec3 l=d*inversesqrt(dd);float att=1./(1.+dd/(uPL[i].w*uPL[i].w));
     dif+=uPC[i].rgb*max(dot(Nn,l),0.)*att;spc+=uPC[i].rgb*pow(max(dot(Nn,normalize(l+V)),0.),40.)*att;}
   vec3 alb=vC.rgb;float met=vC.a;
+  if(uArt>.5&&vT>=0.){vec4 a=paint(V,Nn,1.2);alb*=a.rgb/artMean(vT);
+    dif=vec3(0);spc=vec3(0);   /* the bumps change the light: work it out again */
+    for(int i=0;i<8;i++){if(i>=uNL)break;vec3 d=uPL[i].xyz-P;float dd=dot(d,d);vec3 l=d*inversesqrt(dd);float att=1./(1.+dd/(uPL[i].w*uPL[i].w));
+      dif+=uPC[i].rgb*max(dot(Nn,l),0.)*att;spc+=uPC[i].rgb*pow(max(dot(Nn,normalize(l+V)),0.),40.)*att*(.4+a.a);}}
   vec3 c=alb*(L+dif)+spc*mix(.04,.9,met)*mix(vec3(1),alb*2.,met);
   float fres=pow(1.-max(dot(Nn,V),0.),4.);c+=fres*(L*.6+uAmb*uTint)*met*.6;
   if(vE>0.){float T=vE*uHot;c+=bb(T);}
@@ -369,7 +414,7 @@ function blackbodyLUT(){
   }
   return out;
 }
-let CASC=[],LIGHT=null,SBUF=null,SPR=null,VOX=null;
+let CASC=[],LIGHT=null,SBUF=null,SPR=null,VOX=null,RVOX=null;
 function buildLightTargets(){
   for(const c of CASC)freeTarget(c.fb);CASC=[];freeTarget(LIGHT);LIGHT=null;
   if(LQ===0)return;
@@ -386,7 +431,7 @@ if(gl){
   }catch(e){GLERR=String(e);console.error(e);}
   VAO=gl.createVertexArray();
   TX.hud=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,TX.hud);texParams(true);
-  for(const k of ['state','spr','vox']){TX[k]=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,TX[k]);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,W,H,0,gl.RGBA,gl.UNSIGNED_BYTE,null);texParams(k!=='vox');}   /* vox filters (V3 tints the Rime with it); texelFetch ignores that */
+  for(const k of ['state','spr','vox','rv']){TX[k]=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,TX[k]);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,W,H,0,gl.RGBA,gl.UNSIGNED_BYTE,null);texParams(k!=='vox'&&k!=='rv');}   /* vox filters (V3 tints the Rime with it); texelFetch ignores that */
   TX.bb=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,TX.bb);gl.texImage2D(gl.TEXTURE_2D,0,HDR?gl.RGBA16F:gl.RGBA32F,256,1,0,gl.RGBA,gl.FLOAT,blackbodyLUT());texParams(!HDR);
   FB.emit=mkTarget(W,H,true);FB.j0=mkTarget(W,H,true);FB.j1=mkTarget(W,H,true);
   FB.lb0=mkTarget(W>>2,H>>2,false);FB.lb1=mkTarget(W>>2,H>>2,false);
@@ -398,7 +443,7 @@ if(gl){
   FB.cell=mkTarget(W,H,true,false,false);FB.gas=mkTarget(W,H,false,false,false);FB.co=mkTarget(W/4,Math.ceil(H/4),true,false,false);
   buildLightTargets();
 }
-SBUF=new Uint8ClampedArray(N*4);SPR=new Uint8ClampedArray(N*4);VOX=new Uint8ClampedArray(N*4);
+SBUF=new Uint8ClampedArray(N*4);SPR=new Uint8ClampedArray(N*4);VOX=new Uint8ClampedArray(N*4);RVOX=new Uint8ClampedArray(N*4);
 function setLight(q){if(!HDR)q=0;LQ=q;store.set('hd-molten3d-q',q);if(gl){buildLightTargets();resize();}$('resv').textContent=QL[LQ];}
 function setDots(d){DOTS=d;store.set('hd-molten3d-dots',d);}
 function bindT(unit,t,loc){gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,t);gl.uniform1i(loc,unit);}
@@ -410,7 +455,7 @@ let LIGHTT=null,LDIRT=null,LSZ=[W,H];
 /* the 2D passes: light, then the cells' 3D shape */
 function renderGrid(){
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
-  for(const [k,b] of [['state',SBUF],['spr',SPR],['vox',VOX]]){gl.bindTexture(gl.TEXTURE_2D,TX[k]);gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,W,H,gl.RGBA,gl.UNSIGNED_BYTE,b);}
+  for(const [k,b] of [['state',SBUF],['spr',SPR],['vox',VOX],['rv',RVOX]]){gl.bindTexture(gl.TEXTURE_2D,TX[k]);gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,W,H,gl.RGBA,gl.UNSIGNED_BYTE,b);}
   draw(P_MAT,FB.emit,u=>{bindT(0,TX.state,u.uState);bindT(1,TX.spr,u.uSpr);bindT(2,TX.bb,u.uBB);gl.uniform1f(u.uTime,SU.uTime);gl.uniform3fv(u.uCryst,SU.uCryst);});
   /* the soft spill: a wide blur of everything that glows */
   draw(P_DN,FB.lb0,u=>{bindT(0,FB.emit.t,u.uTex);gl.uniform2f(u.uPx,1/FB.lb0.w,1/FB.lb0.h);});
@@ -494,9 +539,9 @@ function unprojPlane(cx,cy){const vw=VW/DPR,vh=VH/DPR,nx=cx/vw*2-1,ny=1-cy/vh*2;
 /* ---------------------------------------------------------------------------------
    MESHES — a tiny builder: lathes (anything round), boxes, tubes
    --------------------------------------------------------------------------------- */
-function Mesh(){this.v=[];}
-Mesh.prototype.tri=function(a,b,c,col,met,e){const n=V3.norm(V3.cross(V3.sub(b,a),V3.sub(c,a)));for(const p of [a,b,c])this.v.push(p[0],p[1],p[2],n[0],n[1],n[2],col[0],col[1],col[2],met,e||0);};
-Mesh.prototype.vert=function(p,n,col,met,e){this.v.push(p[0],p[1],p[2],n[0],n[1],n[2],col[0],col[1],col[2],met,e||0);};
+function Mesh(){this.v=[];this.tl=-1;}   /* tl: the painted surface (texture layer) for what is added next, -1 for none */
+Mesh.prototype.tri=function(a,b,c,col,met,e){const n=V3.norm(V3.cross(V3.sub(b,a),V3.sub(c,a)));for(const p of [a,b,c])this.v.push(p[0],p[1],p[2],n[0],n[1],n[2],col[0],col[1],col[2],met,e||0,this.tl);};
+Mesh.prototype.vert=function(p,n,col,met,e){this.v.push(p[0],p[1],p[2],n[0],n[1],n[2],col[0],col[1],col[2],met,e||0,this.tl);};
 /* revolve a profile [[r,y],...] about the local y axis; smooth normals around, faceted along */
 Mesh.prototype.lathe=function(prof,seg,col,met,e,o,flip){o=o||[0,0,0];
   for(let i=0;i<prof.length-1;i++){const [r0,y0]=prof[i],[r1,y1]=prof[i+1];const dy=y1-y0,dr=r1-r0,nl=Math.hypot(dy,dr)||1;let ny=-dr/nl,nr=dy/nl;if(flip){ny=-ny;nr=-nr;}
@@ -518,22 +563,23 @@ Mesh.prototype.tube=function(a,b,r,seg,col,met,e){const ax=V3.norm(V3.sub(b,a)),
     this.tri(a,p10,p00,col,met,e);this.tri(b,p01,p11,col,met,e);}
   return this;};
 function upMesh(m){const vao=gl.createVertexArray(),buf=gl.createBuffer(),data=new Float32Array(m.v);gl.bindVertexArray(vao);gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.bufferData(gl.ARRAY_BUFFER,data,gl.STATIC_DRAW);
-  const loc=n=>gl.getAttribLocation(P_ME.p,n),st=11*4;
-  for(const [n,sz,off] of [['aP',3,0],['aN',3,12],['aC',4,24],['aE',1,40]]){const l=loc(n);if(l<0)continue;gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,sz,gl.FLOAT,false,st,off);}
-  gl.bindVertexArray(null);return {vao,n:data.length/11};}
+  const loc=n=>gl.getAttribLocation(P_ME.p,n),st=12*4;
+  for(const [n,sz,off] of [['aP',3,0],['aN',3,12],['aC',4,24],['aE',1,40],['aT',1,44]]){const l=loc(n);if(l<0)continue;gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,sz,gl.FLOAT,false,st,off);}
+  gl.bindVertexArray(null);return {vao,n:data.length/12};}
 const MESH={};
 function buildMeshes(){
   const iron=[.2,.19,.2],dark=[.08,.075,.08],steel=[.42,.41,.43],brass=[.5,.36,.2],refr=[.22,.15,.12];
   /* the ladle, in its own frame: origin at the pivot, hanging down -y. Rim 2.4 below the pivot
      (radius 9), base 12.4 below (radius 5.8), refractory lining inside, steel bands outside */
-  const L=new Mesh();
+  const L=new Mesh();L.tl=10;
   L.lathe([[5.6,-12.4],[6.,-12.],[7.4,-8.6],[7.75,-8.6],[7.75,-8.],[8.55,-5.5],[8.9,-5.5],[8.9,-4.9],[9.4,-3.],[9.8,-2.8],[9.8,-2.2],[8.1,-2.2]],32,iron,.75,[0,0,0,0,0,0,0,0,.55,.8,1.]);
-  L.lathe([[8.05,-2.25],[7.95,-2.7],[4.7,-11.15],[0.,-11.15]],28,refr,.1,[.8,.8,1,1],0,true);
+  L.tl=11;L.lathe([[8.05,-2.25],[7.95,-2.7],[4.7,-11.15],[0.,-11.15]],28,refr,.1,[.8,.8,1,1],0,true);L.tl=10;
   L.lathe([[0,-12.4],[5.8,-12.4]],20,dark,.6,0,0,true);
   L.tube([0,-12.2,0],[0,-13.5,0],1.15,10,steel,.7,0);                    /* the nozzle */
   L.tube([-9.6,-3.3,0],[-11.,-3.3,0],1.,10,steel,.8,0);L.tube([9.6,-3.3,0],[11.,-3.3,0],1.,10,steel,.8,0);   /* trunnions */
   /* the bail: from the trunnions up to the pivot eye */
   for(const s of [-1,1]){L.tube([s*10.6,-3.3,0],[s*7.,1.2,0],.55,8,steel,.8,0);L.tube([s*7.,1.2,0],[s*1.,.6,0],.55,8,steel,.8,0);}
+  L.tl=-1;crucibleDetail(L);
   MESH.ladle=upMesh(L);
   const N=new Mesh();N.tube([0,-13.3,0],[0,-13.9,0],1.2,10,[.2,.2,.2],.3,1);MESH.nozzle=upMesh(N);
   const R=new Mesh();R.tube([0,3.2,0],[0,-10.4,0],.42,8,steel,.8,0);R.box(-.9,3.,-.9,.9,4.,.9,dark,.5,0);MESH.rod=upMesh(R);
@@ -543,7 +589,7 @@ function buildMeshes(){
   /* the trolley, in its own frame: origin on the rail centre-line at the crucible's x; y is world up.
      Four wheels ride the top of the I-beam (rail cells 5..6 -> y -5..-7), side plates drop past
      the beam to a crossbar, and the pivot pin sits at y -8 */
-  const T=new Mesh();
+  const T=new Mesh();T.tl=10;
   for(const wx of [-6,6])for(const wz of [-2.3,2.3]){T.tube([wx,-3.55,wz-.55],[wx,-3.55,wz+.55],1.45,14,steel,.85,0);T.tube([wx,-3.55,wz-.75],[wx,-3.55,wz+.75],.45,8,dark,.5,0);}
   for(const wz of [-3.25,3.25])T.box(-7.6,-4.6,wz-.3,7.6,-2.6,wz+.3,iron,.7,0),T.box(-1.6,-7.8,wz-.3,1.6,-4.6,wz+.3,iron,.7,0);
   T.box(-6.8,-7.9,-3.55,6.8,-7.1,3.55,iron,.7,0);T.tube([0,-8,-3.6],[0,-8,3.6],.75,10,steel,.85,0);
@@ -556,6 +602,7 @@ function buildMeshes(){
   for(let i=0;i<10;i++){const a=i/10*TAU;F.box(Math.cos(a)*7.9-.35,-1.35,Math.sin(a)*7.9-6.5-.35,Math.cos(a)*7.9+.35,-.65,Math.sin(a)*7.9-6.5+.35,brass,.8,0);}
   F.tube([0,6,-6.5],[0,-3,-6.5],1.6,10,dark,.4,0);
   MESH.furnace=upMesh(F);
+  buildForge();buildRime();buildGiants();
 }
 /* ---------------------------------------------------------------------------------
    PARTICLES — one instance per flying cell of the simulation, plus the purely visual embers
@@ -565,7 +612,7 @@ const FX={n:0,x:new Float32Array(FXMAX),y:new Float32Array(FXMAX),z:new Float32A
   ox:new Float32Array(FXMAX),oy:new Float32Array(FXMAX),t:new Float32Array(FXMAX),l:new Float32Array(FXMAX),m:new Uint8Array(FXMAX)};
 function fxSpawn(x,y,z,vx,vy,vz,T,life,m){if(FX.n>=FXMAX)return;const k=FX.n++;FX.x[k]=FX.ox[k]=x;FX.y[k]=FX.oy[k]=y;FX.z[k]=z;FX.vx[k]=vx;FX.vy[k]=vy;FX.vz[k]=vz;FX.t[k]=T;FX.l[k]=life;FX.m[k]=m;}
 /* a Rime shattering: glinting crystal shards (the simulation's own water and ice fall with them) */
-function fxShatter(x,y,w,h){const n=Math.min(30,6+(w*h*.2|0));for(let i=0;i<n;i++){const a=Math.random()*TAU,s=30+Math.random()*100;fxSpawn(x+(Math.random()-.5)*w,y+(Math.random()-.5)*h,(Math.random()-.5)*9,Math.cos(a)*s,Math.sin(a)*s-50,(Math.random()-.5)*36,2000,.5+Math.random()*.8,97);}}
+function fxShatter(x,y,w,h){fxBurst(x,y,w,h);const n=Math.min(30,6+(w*h*.2|0));for(let i=0;i<n;i++){const a=Math.random()*TAU,s=30+Math.random()*100;fxSpawn(x+(Math.random()-.5)*w,y+(Math.random()-.5)*h,(Math.random()-.5)*9,Math.cos(a)*s,Math.sin(a)*s-50,(Math.random()-.5)*36,2000,.5+Math.random()*.8,97);}}
 function fxStep(dt){
   for(let k=0;k<FX.n;k++){FX.ox[k]=FX.x[k];FX.oy[k]=FX.y[k];
     if(FX.m[k]===99){FX.vx[k]+=Math.sin(FX.y[k]*.07+k)*dt*2;FX.vy[k]+=Math.cos(FX.x[k]*.05+k)*dt*2;FX.vx[k]*=.99;FX.vy[k]*=.99;}
@@ -648,7 +695,7 @@ function present(){
     gl.bindVertexArray(VAO);gl.drawArrays(gl.TRIANGLES,0,3);}
   gl.depthFunc(gl.LEQUAL);
   /* meshes */
-  gl.useProgram(P_ME.p);{const u=P_ME.u;setLightU(u);gl.uniformMatrix4fv(u.uVP,false,CAM.VP);gl.uniform1f(u.uFrost,CR.frozen>0?Math.min(1,CR.frozen*1.5):0);gl.uniform1f(u.uFill,CR.fill/CR.cap);
+  gl.useProgram(P_ME.p);{const u=P_ME.u;setLightU(u);setArtU(u);bindT(13,TX.rv,u.uRV);if(u.uIce)gl.uniform3fv(u.uIce,SU.uIce);gl.uniform1f(u.uMask,0);gl.uniform1f(u.uTS,9);gl.uniformMatrix4fv(u.uVP,false,CAM.VP);gl.uniform1f(u.uFrost,CR.frozen>0?Math.min(1,CR.frozen*1.5):0);gl.uniform1f(u.uFill,CR.fill/CR.cap);
     const x=CR.x,Tm=M4.tr(x,-RAILY-0.,0);drawMesh(MESH.trolley,Tm,0);
     const Lm=M4.mul(M4.tr(x,-PIV_Y,0),M4.rz(CR.sw));LADLE.M=Lm;LADLE.inv=M4.inv(Lm);
     const k=CR.fill/CR.cap;drawMesh(MESH.ladle,Lm,560+k*260);
@@ -656,6 +703,8 @@ function present(){
     drawMesh(MESH.nozzle,Lm,CR.rod>.3&&CR.fill>1?1560:420);
     drawMesh(MESH.furnace,M4.tr(FURN_X,0,0),(CR.refill?1500:1180)+60*Math.sin(S.clock*3));
     if(CR.fill>1){const surf=PIV_Y+3.4+(1-k)*7.4;gl.uniformMatrix4fv(u.uLoc,false,LADLE.inv);drawMesh(MESH.surf,M4.tr(CR.x,-surf,0),0,1);}
+    const now=S.clock,mdt=Math.max(0,Math.min(.1,now-MOD.t));MOD.t=now;
+    gl.uniform1f(u.uFrost,0);drawForgeModels(mdt);if(MOD.on){drawRimeModels(mdt);drawGiant(mdt);}gl.uniform1i(u.uMode,0);gl.uniform1f(u.uMask,0);
   }
   /* particles: premultiplied, over everything solid, never hiding each other */
   const n=fillParticles();
@@ -663,6 +712,7 @@ function present(){
     gl.useProgram(P_PA.p);const u=P_PA.u;setLightU(u);gl.uniformMatrix4fv(u.uVP,false,CAM.VP);gl.uniform1f(u.uPxW,2*Math.tan(CAM.fov/2)/sc.h);
     gl.bindBuffer(gl.ARRAY_BUFFER,PBUF);gl.bufferSubData(gl.ARRAY_BUFFER,0,PINST,0,n*8);
     gl.bindVertexArray(PVAO);gl.drawArraysInstanced(gl.TRIANGLES,0,6,n);gl.disable(gl.BLEND);gl.depthMask(true);}
+  drawFXB();drawCard();
   gl.disable(gl.DEPTH_TEST);gl.disable(gl.SCISSOR_TEST);gl.bindVertexArray(null);
   /* post */
   pass(P_SH,FB.sc,FB.s2,u=>{gl.uniform1f(u.uTime,SU.uTime);gl.uniform2f(u.uPx,1/FB.sc.w,1/FB.sc.h);gl.uniform1f(u.uK,(reduce?0:1.5)*FB.sc.h/600);gl.uniform1i(u.uS,0);bindT(0,FB.sc.t,u.uS);});

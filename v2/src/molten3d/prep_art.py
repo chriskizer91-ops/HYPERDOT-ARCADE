@@ -21,6 +21,8 @@ def find(num):
 SURF=[('1.1','basalt',.6),('1.2','strata',.5),('1.3','columns',.4),('1.4','frost',.5),('1.5','rubble',.5),('1.6','crystal',.3),
       ('2.1','iron',.6),('2.2','craze',.6),('2.3','crust',.2),('2.4','obsidian',.4),('2.5','plate',.3),('2.6','brick',.3),('2.7','hammered',.5),
       ('3.1','ice',.4),('3.2','rimeskin',.4),('3.3','snow',.6),('3.4','ripples',.3)]
+FX=[('6.1','fx_steam'),('6.2','fx_smoke'),('6.3','fx_blast'),('6.4','fx_sparks'),('6.5','fx_shatter'),('6.6','fx_splash')]
+CARD=[('7.1','card_title'),('7.2','card_anvil'),('7.3','card_queen'),('7.4','card_end')]
 BACK=[('4.1','back1'),('4.2','back2'),('4.3','back3'),('4.4','back4'),('4.5','back5'),('4.6','back6'),('4.7','back7'),('4.8','back8'),('4.9','back0')]
 
 def blur_wrap(a,r):
@@ -67,7 +69,25 @@ def back(num,name):
     im=im.resize((1536,round(1536*h/w)),Image.LANCZOS).filter(ImageFilter.GaussianBlur(.6))
     im.save(os.path.join(OUT,name+'.webp'),quality=80,method=6)
 
+def fx(num,name):
+    """effects on black: 256 square, the black kept (the game reads brightness as how much is there)"""
+    f=find(num)
+    if not f:print('missing',num,name);return
+    im=Image.open(f).convert('RGB').resize((256,256),Image.LANCZOS)
+    a=np.asarray(im).astype(np.float32)/255.
+    # fade to black at the border so no square edge can show
+    y,x=np.mgrid[0:256,0:256]/255.;r=np.maximum(abs(x-.5),abs(y-.5))*2;a*=np.clip((1-r)/.12,0,1)[:,:,None]
+    Image.fromarray((a*255+.5).astype(np.uint8)).save(os.path.join(OUT,name+'.webp'),quality=86,method=6)
+
+def card(num,name):
+    f=find(num)
+    if not f:print('missing',num,name);return
+    im=Image.open(f).convert('RGB');w,h=im.size
+    im.resize((1280,round(1280*h/w)),Image.LANCZOS).save(os.path.join(OUT,name+'.webp'),quality=80,method=6)
+
 for s in SURF:surf(*s)
+for f_ in FX:fx(*f_)
+for c in CARD:card(*c)
 for b in BACK:back(*b)
 tot=0
 for f in sorted(glob.glob(os.path.join(OUT,'*.webp'))):

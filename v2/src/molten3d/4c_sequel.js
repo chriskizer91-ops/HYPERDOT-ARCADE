@@ -93,7 +93,7 @@ function sequelStep(dt,live){
     v.t-=dt;
     if(v.t<1.4&&!v.warned){v.warned=true;SFX.vent();for(let n=0;n<10;n++)spawnP(v.x+rnd(-2,2),y-1,rnd(-15,15),rnd(-80,-30),STEAM,140,rnd(.5,1.2),0);}
     if(v.t<=0){v.erupt=1.3;v.t=11+Math.random()*6;v.warned=false;S.shake=Math.max(S.shake,.32);LIGHTS.push({x:v.x,y:y-6,r:1,t:0,dur:.6,c:[255,190,110]});}
-    if(v.erupt>0){v.erupt-=dt;for(let n=0;n<5;n++)spawnP(v.x+rnd(-1.5,1.5),y-1.5,rnd(-50,50),rnd(-290,-170),LAVA,1520,9,0);
+    if(v.erupt>0){v.erupt-=dt;if(Math.random()<dt*9)fxSplash(v.x+.5,y,true);for(let n=0;n<5;n++)spawnP(v.x+rnd(-1.5,1.5),y-1.5,rnd(-50,50),rnd(-290,-170),LAVA,1520,9,0);
       if((r32()&3)===0)spawnP(v.x,y-2,rnd(-60,60),rnd(-160,-60),EMBER,1500,rnd(.3,.9),0);}
   }
 }

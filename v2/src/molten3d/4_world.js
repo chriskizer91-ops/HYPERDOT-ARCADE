@@ -203,7 +203,7 @@ function bombStep(dt){
   }
 }
 function bombBurst(x,y){
-  explode(x,y,10,1500);S.shake=Math.max(S.shake,.9);S.flash=Math.max(S.flash,.5);SFX.boom();
+  explode(x,y,10,1500);fxBoom(x,y);S.shake=Math.max(S.shake,.9);S.flash=Math.max(S.flash,.5);SFX.boom();
   for(const e of EN){const cx=(e.x0+e.x1)/2,cy=(e.y0+e.y1)/2,d=Math.hypot(cx-x,cy-y);if(d<18)hurtEnemy(e,(1-d/18)*9,'bomb');}
   if(BOSS.on)bossBlast(x,y,14);
   LIGHTS.push({x,y,r:1,t:0,dur:.35,c:[255,200,120]});

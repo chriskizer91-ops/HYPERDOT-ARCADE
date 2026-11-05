@@ -311,7 +311,7 @@ function bossShatter(){
   const B=BOSS;for(const p of B.parts){const [ox,oy]=partOrigin(p);for(let i=0;i<p.kind.length;i++){if(!p.kind[i])continue;const x=ox+i%p.w+.5,y=oy+(i/p.w|0)+.5;
     if(rf()<.55&&PN<PMAX-10)spawnP(x,y,(x-B.x)*rnd(2,6)+rnd(-30,30),rnd(-160,-20),rf()<.6?WATER:ICE,rf()<.5?20:-8,9,0);p.kind[i]=0;}}
   for(let n=0;n<40;n++)spawnP(B.x+rnd(-15,15),B.y-30+rnd(-20,20),rnd(-80,80),rnd(-140,-30),STEAM,110,rnd(.8,1.8),0);
-  B.on=false;B.dead=true;S.shake=1.4;S.flash=.8;SFX.bossDie();onBossKilled();
+  fxGiantBurst(B.x,B.y-30);B.on=false;B.dead=true;S.shake=1.4;S.flash=.8;SFX.bossDie();onBossKilled();
 }
 function drawBoss(){
   const B=BOSS;if(!B.on)return;const pulse=.5+.5*Math.sin(S.clock*5),dyingFlash=B.dying>0&&((B.dying*14|0)&1);

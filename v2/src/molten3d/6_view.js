@@ -54,8 +54,11 @@ function drawBombs(){for(const b of BOMBS){const x=Math.round(b.x),y=Math.round(
 function drawLights(){for(const l of LIGHTS){const k=1-l.t/l.dur,c=l.c;for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++){const w=(i||j)?.45:1;sEmit(Math.round(l.x)+i,Math.round(l.y)+j,c[0]/255*5*k*w,c[1]/255*5*k*w,c[2]/255*5*k*w);}}}
 function drawSprites(){
   SPR.fill(0);
-  drawRime();drawBoss();drawBombs();
-  VOX.set(SPR);                    /* 3D: these are built as voxels; what follows only lights the cave (the meshes draw it) */
+  if(MOD.on){
+    /* the Rime and the giants are models now: only the slag bombs are built as voxels; the giants' living
+       cells go to their own layer, which melts holes in their models */
+    drawBombs();VOX.set(SPR);giantLayer();drawRime();drawBoss();
+  }else{drawRime();drawBoss();drawBombs();VOX.set(SPR);}   /* 3D: built as voxels; what follows only lights the cave (the meshes draw it) */
   if(S.mode!=='title')drawHeart();
   drawFurnace();drawCrucible();drawLights();
 }
@@ -299,7 +302,7 @@ let RLAST=0;
 function render(){
   const t0=performance.now(),dt=RLAST?Math.min(.05,(t0-RLAST)/1000):1/60;RLAST=t0;
   SU.uTime=S.clock%600;stampState();const t1=performance.now();drawSprites();const t2=performance.now();
-  camStep(dt);if(!S.paused){const k=(S.slowT||0)>0?.3:1;fxEmit(dt*k);fxStep(dt*k);}
+  camStep(dt);if(!S.paused){const k=(S.slowT||0)>0?.3:1;fxEmit(dt*k);fxStep(dt*k);fxbStep(dt*k);pourSplash(dt*k);}
   POURAGE=CR.pouring&&CR.rod>.4&&!CR.refill?POURAGE+dt*((S.slowT||0)>0?.3:1):0;
   g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,W,H);drawOverlay();const t3=performance.now();
   FLASH=reduce?0:S.flash*.06;   /* 3D: the blast's own light does the work; the screen only blinks */COLD+=((S.mode==='frozen'?Math.min(.55,S.t*.3):0)-COLD)*Math.min(1,dt*3);
@@ -323,7 +326,8 @@ function camStep(dt){
   if((S.slowT||0)>0)dk*=.93;   /* slow motion leans in */
   if(m==='play'||m==='demo'){yaw=(CR.x-160)/160*3.2+Math.sin(S.clock*.21)*1.1;pitch=17+Math.sin(S.clock*.17)*.7;
     if(BOSS.on&&BOSS.t<5){const k=Math.sin(clamp(BOSS.t/5,0,1)*Math.PI);yaw+=k*7;pitch+=k*-3;dk*=1-k*.1;tx+=k*20;}}
-  const a=CS.init?1-Math.exp(-dt*(m==='intro'?6:2.6)):1;CS.init=true;
+  if(CS.pin)({yaw,pitch,dk,tx,ty}=Object.assign({yaw,pitch,dk,tx,ty},CS.pin));   /* a fixed view, for close looks */
+  const a=CS.init&&!CS.pin?1-Math.exp(-dt*(m==='intro'?6:2.6)):1;CS.init=true;
   CS.yaw+=(yaw-CS.yaw)*a;CS.pitch+=(pitch-CS.pitch)*a;CS.dk+=(dk-CS.dk)*a;CS.tx+=(tx-CS.tx)*a;CS.ty+=(ty-CS.ty)*a;
   const yr=CS.yaw*Math.PI/180,pr=CS.pitch*Math.PI/180,tgt=[CS.tx,-CS.ty,0];
   const d=camFit(yr,pr,tgt)*CS.dk;let sh=null;
@@ -348,9 +352,9 @@ addEventListener('resize',resize);
 if(!gl||GLERR){$('err').style.display='grid';if(GLERR)$('err').textContent='MOLTEN could not build its light shaders on this graphics card. '+GLERR.slice(0,300);}
 if(AU.muted)$('snd').textContent='Sound off';
 {const q=(location.search.match(/[?&]q=(low|med|high)/)||[])[1];if(q){LQ=HDR?['low','med','high'].indexOf(q):0;QUAL.auto=false;}}
-if(gl&&!GLERR){$('resv').textContent=QL[LQ];buildLightTargets();buildMeshes();buildParticles();loadArt();resize();APP_attract();
+if(gl&&!GLERR){$('resv').textContent=QL[LQ];buildLightTargets();buildMeshes();buildParticles();loadArt();buildFX();cardsPreload();resize();APP_attract();
   ARC.post('ready',{title:CAB.title,w:W,h:H,tickets:CAB.tickets});
   window.__mo={AWAKE,ACT,get HEATN(){return HEATN;},simMove,simHeat,stepParticles,enemyStep,stampState,drawSprites,TITLE,S,CR,HEART,EN,BOSS,STAGES,KEY,LATCH,PTR,TS,PERF,RT,M,T,EV,get PN(){return PN;},get ST(){return ST;},get LQ(){return LQ;},tick,render,autopilot,setLight,startStage,startDemo,titleSetup,stageSetup,spawnEnemy,explode,
-    CAM,FX,CS,get ARTOK(){return ARTOK;},setArt(v){ARTOK=v;},BACK,get GLERR(){return GLERR;},get DOTS(){return DOTS;},setDots,camStep,projHUD,unprojPlane,get QUAL(){return QUAL;},
+    CAM,FX,CS,get ARTOK(){return ARTOK;},setArt(v){ARTOK=v;},MOD,RIME,toAnvil,FXB,fxBoom,fxBurst,fxSplash,get FXOK(){return TX.fxOk;},BACK,get GLERR(){return GLERR;},get DOTS(){return DOTS;},setDots,camStep,projHUD,unprojPlane,get QUAL(){return QUAL;},
     ff(sec,skipRender){for(let i=0;i<sec*60;i++)tick(1/60);endInputFrame();},start:APP_start,attract:APP_attract,count(m){let n=0;for(let i=0;i<N;i++)if(M[i]===m)n++;return n;}};
   requestAnimationFrame(frame);}
