@@ -228,6 +228,7 @@ function physTick(clawStep){
     if(BOD.some(b=>!b.sleep)){buildHash();collideAll();}
     for(const b of BOD)if(!b.sleep)bounds(b);
     if(clawStep)clawStep.contacts();
+    if(RINGSTEP)RINGSTEP();
   }
   /* a toy that has crept less than 6 mm/s on average (no ball faster than 4 cm/s) for half a second goes to sleep */
   for(const b of BOD){if(b.sleep||b.state!=='pit')continue;let mv=0,av=0;

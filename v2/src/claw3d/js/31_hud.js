@@ -41,7 +41,7 @@ function hudDraw(dt){
     led('HI '+fmt(S.hi),sx+12,ty,d*.75,'#b8a4d8');led(S.mode==='over'?MC.name:'PLUSH PANIC 3D',W/2,ty,d*.8,S.mode==='over'?MC.col:'#ff6ac0','c');led(S.mode==='over'?'THANKS':'FREE',sx+sw-12,ty,d*.75,'#b8a4d8','r');
   }
   /* strength meter (and grip while holding) on the left */
-  if(S.mode==='play'){
+  if(S.mode==='play'&&!SHOW.cur){
     const mh=Math.min(170,H*.32),mx=Math.max(10,SAFE.left+10),my=H*.5-mh/2,seg=10,v=M.ph==='roll'?M.roll:M.S,on=Math.round(v*seg);
     panel(mx-6,my-26,34,mh+52,9);led('STR',mx+11,my-20,1.6,'#c8ffd0','c');
     for(let s=0;s<seg;s++){const t=s/(seg-1),yy=my+mh-(s+1)*(mh/seg),c=s<on?`hsl(${t*120},95%,58%)`:'rgba(255,255,255,.07)';g.fillStyle=c;g.beginPath();g.roundRect((mx)*HUD.dpr,(yy+2)*HUD.dpr,22*HUD.dpr,(mh/seg-4)*HUD.dpr,3*HUD.dpr);g.fill();}
@@ -56,7 +56,7 @@ function hudDraw(dt){
       ledBig('STRENGTH '+pc+'%',W/2,cy+big*10,big*.55,pc>75?'#6aff5a':pc>55?'#ffd040':'#ff5a5a');
       if(S.credit===MC.credits&&S.prizes.length===0&&M.S>=MC.boost)led('LAST CHANCE BOOST',W/2,cy+big*16,big*.4,'#6aff5a','c');}
     if(M.msgT>0&&M.msg){const big=small?3.4:5;ledBig(M.msg,W/2,H*.34,big,M.msg==='TIME!'?'#ff4a4a':'#ff6ac0');}
-    if(M.ph==='result'&&M.wins.length&&((S.winT*6|0)%2||S.winT>1)){const big=small?4.5:7;ledBig(M.wins.some(b=>b.T.rar===4)?'JACKPOT!':'WINNER!',W/2,H*.24,big,'#ffd040');
+    if(M.ph==='result'&&M.wins.length&&S.demo&&((S.winT*6|0)%2||S.winT>1)){const big=small?4.5:7;ledBig(M.wins.some(b=>b.T.rar===4)?'JACKPOT!':'WINNER!',W/2,H*.24,big,'#ffd040');
       ledBig(M.wins.map(b=>b.T.name).join(' + '),W/2,H*.24+big*10,big*.45,RAR[M.wins[0].T.rar].c);}
   }
   /* title: the machine's marquee is the big sign; the game's name and the prompt sit low, under the case */
@@ -67,12 +67,15 @@ function hudDraw(dt){
     const lc=MC.level==='EASY'?'#6aff5a':MC.level==='HARD'?'#ff5a5a':'#ffd040';
     led(MC.sub+' . '+MC.what,W/2,y+big*9.5,big*.42,'#e8dcc8','c');led(MC.level,W/2,y+big*14,big*.42,lc,'c');
     if((S.t*2|0)%2)led(touchy?'TAP TO PLAY':'PRESS START',W/2,y+big*19.2,big*.56,'#ffd040','c');}
-  if(S.mode==='over'){const big=small?4:6,y=H*.2;led(S.prizes.length?'YOUR HAUL':'GAME OVER',W/2,y,big,S.prizes.length?'#ffd040':'#ff6ac0','c');
-    S.prizes.forEach((id,i)=>led(CAST[id].name+'  +'+CAST[id].tix,W/2,y+big*10+i*big*5,big*.45,RAR[CAST[id].rar].c,'c'));
-    if(!S.prizes.length)led('NO PRIZE THIS TIME',W/2,y+big*10,big*.45,'#c8c0e0','c');
-    const yy=H*.62;led('TICKETS '+fmt(S.tShown||0),W/2,yy,big*.6,'#ffd040','c');led('SCORE '+fmt(S.score),W/2,yy+big*6,big*.45,'#ffffff','c');
+  if(S.mode==='over'){const big=small?4:6,y=H*(small?.29:.2);ledBig(S.prizes.length?'YOUR HAUL':'GAME OVER',W/2,y,big,S.prizes.length?'#ffd040':'#ff6ac0');
+    const ls=big*8.5,tz=big*7.5;S.prizes.slice(0,6).forEach((id,i)=>{const T=CAST[id],yy=y+big*10+i*ls,txt=T.name+'  +'+T.tix,tw=tw5(txt)*big*.45,x0=W/2-(tw+tz+8)/2;
+      panel(x0-6,yy-tz*.4,tw+tz+20,tz*1.05,8);const th=thumbOf(T);if(th)g.drawImage(th,x0*HUD.dpr,(yy-tz*.35)*HUD.dpr,tz*HUD.dpr,tz*HUD.dpr);led(txt,x0+tz+8,yy,big*.45,RAR[T.rar].c);});
+    if(S.prizes.length>6)led('+ '+(S.prizes.length-6)+' MORE',W/2,y+big*10+6*ls,big*.4,'#c8c0e0','c');
+    if(!S.prizes.length)ledBig('NO PRIZE THIS TIME',W/2,y+big*10,big*.45,'#c8c0e0');
+    const yy=Math.max(H*.62,y+big*10+Math.min(7,S.prizes.length)*big*8.5+big*2);ledBig('TICKETS '+fmt(S.tShown||0),W/2,yy,big*.6,'#ffd040');ledBig('SCORE '+fmt(S.score),W/2,yy+big*7,big*.45,'#ffffff');
     if(S.newHi&&(S.t*4|0)%2)led('NEW HIGH SCORE',W/2,yy+big*11,big*.4,'#6aff5a','c');
     if(S.t>2.5&&(S.t*2|0)%2)led(touchy?'TAP TO CONTINUE':'PRESS START',W/2,H*.88,small?2.4:3,'#ffb040','c');}
+  showHud(W,H,small);
   /* pop-up text */
   for(const p of HUD.pops){p.t+=dt;const a=p.t<.15?p.t/.15:p.t>1.2?1-(p.t-1.2)/.4:1;if(a<=0)continue;g.globalAlpha=clamp(a,0,1);led(p.txt,W/2,H*.44-p.t*30,small?2.6:3.4,p.col,'c');g.globalAlpha=1;}
   HUD.pops=HUD.pops.filter(p=>p.t<1.6);

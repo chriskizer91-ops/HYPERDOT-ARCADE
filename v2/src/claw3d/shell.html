@@ -67,6 +67,27 @@ body.playing.paused .tb{display:none}
 #pL{left:max(8px,env(safe-area-inset-left,0px))}#pR{right:max(8px,env(safe-area-inset-right,0px))}
 body.title .pk{display:grid}.pk.off{opacity:.18;pointer-events:none}
 body.paused .pk{display:none}
+/* the collection: a button on the title screen, and its screen */
+#cB{position:fixed;left:max(12px,env(safe-area-inset-left,0px));bottom:max(12px,env(safe-area-inset-bottom,0px));height:40px;padding:0 12px 0 10px;border-radius:20px;
+  border:1px solid var(--edge);background:var(--panel);color:#ffd040;font:700 12px/1 var(--f);letter-spacing:.08em;display:none;align-items:center;gap:6px;cursor:pointer;backdrop-filter:blur(6px)}
+#cB b{font-size:17px;line-height:1}#cB i{font-style:normal;color:var(--ink)}
+#cB.fresh{box-shadow:0 0 14px rgba(255,208,64,.55);border-color:rgba(255,208,64,.7)}
+body.title #cB{display:flex}body.coll #cB,body.paused #cB{display:none}
+body.show .tb{display:none!important}
+#coll{position:fixed;inset:0;z-index:6;display:grid;place-items:center;background:rgba(5,3,12,.7);backdrop-filter:blur(4px)}
+#coll .cc{width:min(560px,94vw);max-height:92vh;overflow:auto;padding:14px 14px 16px;border-radius:18px;border:1px solid var(--edge);background:rgba(16,12,26,.95);box-shadow:0 0 40px rgba(255,208,64,.12)}
+.chd{display:flex;align-items:center;gap:10px;margin:0 2px 6px}
+.chd b{font:700 17px/1 var(--f);letter-spacing:.24em;color:#fff}.chd span{flex:1;font:600 13px/1 var(--f);color:#ffd040;letter-spacing:.1em}
+#cX{width:38px;height:38px;border-radius:50%;border:1px solid var(--edge);background:rgba(255,255,255,.06);color:#fff;font-size:15px;cursor:pointer}
+.cs h3{margin:12px 2px 6px;font:700 12px/1 var(--f);letter-spacing:.18em}.cs h3 i{font-style:normal;color:var(--ink-2);margin-left:6px}
+.cg{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.cell{position:relative;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);padding:4px 3px 6px;text-align:center}
+.cell img{display:block;width:100%;aspect-ratio:1;object-fit:contain}
+.cell span{display:block;font:700 9.5px/1.15 var(--f);letter-spacing:.06em;color:var(--ink-2);margin-top:2px;min-height:11px}
+.cell em{display:block;font:600 9px/1 var(--f);font-style:normal;color:#8a82a0;margin-top:3px;min-height:9px}
+.cell.got{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.16)}.cell.got span{color:#fff}.cell.got em{color:#ffd040}
+.cell.jack{border-color:rgba(255,208,64,.45)}
+.cell.new::after{content:'NEW';position:absolute;top:4px;right:4px;padding:2px 5px;border-radius:6px;background:#6aff5a;color:#08200a;font:700 8.5px/1 var(--f);letter-spacing:.08em}
 #ld{position:fixed;inset:0;display:grid;place-items:center;background:radial-gradient(60% 60% at 50% 45%,#2a1606,#07060b);transition:opacity .5s;z-index:8;text-align:center}
 #ld.gone{opacity:0;pointer-events:none}
 #ld b{display:block;font:700 22px/1.1 var(--f);letter-spacing:.24em;color:#fff;text-shadow:0 0 14px #ff6ac0}
@@ -84,6 +105,7 @@ body.paused .pk{display:none}
   <div class="opts"><button class="chip" id="snd" type="button">Sound on</button><button class="chip" id="pauseBtn" type="button">Pause</button></div>
 </div>
 <button id="pz" type="button" aria-label="Pause">II</button>
+<button id="cB" type="button" aria-label="Your collection"><b>&#9733;</b><i>0/20</i></button>
 <button class="pk" id="pL" type="button" aria-label="Previous machine">&#8249;</button>
 <button class="pk" id="pR" type="button" aria-label="Next machine">&#8250;</button>
 <button class="tb" id="bDrop" type="button" aria-label="Drop the claw now">DROP</button>
@@ -93,8 +115,13 @@ body.paused .pk{display:none}
   <button class="mb big" id="mRes" type="button">Resume</button>
   <button class="mb" id="mRe" type="button">New game</button>
   <button class="mb" id="mMach" type="button">Pick a machine</button>
+  <button class="mb" id="mColl" type="button">Collection</button>
   <div><button class="mb sm" id="mQ" type="button">Graphics: auto</button><button class="mb sm" id="mSnd" type="button">Sound: on</button></div>
   <button class="mb" id="mEx" type="button">Exit to arcade</button>
+</div></div>
+<div id="coll" hidden><div class="cc">
+  <div class="chd"><b>COLLECTION</b><span id="cN">0 / 20</span><button id="cX" type="button" aria-label="Close">&#10005;</button></div>
+  <div id="cG"></div>
 </div></div>
 <div id="ld"><div><b>PLUSH PANIC 3D</b><span>Filling the machine</span><i><em id="ldb"></em></i></div></div>
 <p class="keys" id="keys"></p>

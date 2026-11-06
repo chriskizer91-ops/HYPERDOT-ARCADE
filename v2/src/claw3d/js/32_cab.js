@@ -91,7 +91,7 @@ CABS.sugar=function(E){
   k.add(rbox(ow-.02,.2,.045,.05,.008),cream,0,-.025,C.z1+.08,-Math.PI/2,0,0,{cast:true});k.box(ow-.08,.012,.012,MAT.chrome,0,-.025,C.z1+.18);
   deckControls(E,-.08,.12,0,C.z1+.1,{r:.016,len:.05,baseM:MAT.chrome,ballM:STD('#ff8ab8',.3),br:.018,ringM:MAT.chrome,btnM:STD('#e8343c',.25,0,{emissive:new THREE.Color('#ff2020'),emissiveIntensity:.25})});
   /* the prize door and the coin door */
-  k.add(rbox(.2,.16,.02,.035,.005),cream,-.13,-.36,fz+.01);k.box(.15,.105,.006,STD('#9a3c66',.8),-.13,-.36,fz+.021);
+  MC.door=[-.13,-.36,fz];k.add(rbox(.2,.16,.02,.035,.005),cream,-.13,-.36,fz+.01);k.box(.15,.105,.006,STD('#9a3c66',.8),-.13,-.36,fz+.021);
   k.plane(.14,.035,new THREE.MeshStandardMaterial({map:labelTex('✦ PRIZE ✦',{w:512,h:128,bg:'#f7eedb',r:30,col:'#e0588e',font:'bold 78px "Arial Rounded MT Bold",Arial,sans-serif'}),roughness:.6}),-.13,-.255,fz+.003);
   k.box(.085,.15,.01,MAT.chrome,.15,-.34,fz+.005);k.box(.008,.04,.004,MAT.black,.15,-.31,fz+.012);
   k.plane(.06,.016,new THREE.MeshStandardMaterial({map:labelTex('INSERT COIN',{w:512,h:128,bg:'#d8dce4',col:'#222',font:'bold 64px Arial'}),roughness:.5}),.15,-.37,fz+.0115);
@@ -129,7 +129,7 @@ CABS.wild=function(E){
     for(const [dy,dz,w,h] of [[ph/2,0,pw+.04,.025],[-ph/2,0,pw+.04,.025],[0,pw/2,.025,ph],[0,-pw/2,.025,ph]])k.box(.012,h,w,oak,s*(ow/2+.006),-.08-ph/2+dy,dz);}
   for(const sx of [-1,1])for(const sz of [-1,1])k.cyl(.022,.03,.06,brass,sx*(ow/2-.01),-hb+.03,sz*(od/2-.01),{cast:true});
   /* the prize hatch (left, under the chute) and the coin door */
-  const px=(C.x0+C.cx)/2;
+  const px=(C.x0+C.cx)/2;MC.door=[px,-.5,fz];
   for(const [dx,dy,w,h] of [[0,.115,.27,.035],[0,-.115,.27,.035],[-.12,0,.035,.26],[.12,0,.035,.26]])k.box(w,h,.03,oak,px+dx,-.5+dy,fz+.012);
   k.box(.205,.195,.012,STD('#0c0806',.95),px,-.5,fz+.004);k.box(.2,.012,.08,oak,px,-.6,fz-.03);
   k.plane(.22,.07,new THREE.MeshStandardMaterial({map:labelTex('PRIZE',{w:512,h:160,bg:'#1a2c20',border:'#c9a45a',bw:6,r:14,col:'#e7c56e',font:'bold 92px Georgia',shadow:'#000',extra:(g,w,h)=>{pines(g,30,110,h*.75,60,2,'#c9a45a');pines(g,w-110,w-30,h*.75,60,2,'#c9a45a');}}),roughness:.6}),px,-.33,fz+.003);
@@ -186,7 +186,7 @@ CABS.titan=function(E){
   const scroll=new THREE.MeshStandardMaterial({map:ctex(512,256,(g,w,h)=>{g.clearRect(0,0,w,h);g.strokeStyle='#e8bf5a';g.lineWidth=9;g.lineCap='round';
       for(const s of [-1,1]){g.save();g.translate(w/2,h/2);g.scale(s,1);g.beginPath();g.moveTo(20,0);g.bezierCurveTo(80,-70,170,-70,200,-10);g.bezierCurveTo(220,40,160,60,140,20);g.stroke();
         g.beginPath();g.moveTo(20,0);g.bezierCurveTo(90,60,180,70,215,30);g.stroke();g.restore();}star(g,w/2,h/2,34,'#f2d27a');}),transparent:true,alphaTest:.4,roughness:.35,metalness:.6});
-  const px=(C.x0+C.cx)/2;
+  const px=(C.x0+C.cx)/2;MC.door=[px,-.38,fz];
   /* PRIZE door under the chute */
   k.box(.62,.44,.03,gold,px,-.38,fz+.012);k.box(.56,.38,.02,redD,px,-.38,fz+.024);
   k.plane(.5,.32,new THREE.MeshStandardMaterial({map:labelTex('PRIZE',{w:512,h:330,col:'#f2cd6a',font:'bold 120px Georgia',shadow:'#4a0006',extra:(g,w,h)=>{star(g,w/2,h*.8,34,'#f2cd6a');star(g,60,h*.3,20,'#f2cd6a');star(g,w-60,h*.3,20,'#f2cd6a');}}),transparent:true,roughness:.4}),px,-.38,fz+.035);
@@ -271,4 +271,23 @@ function drawRig(r){
   if(E.stick&&E===GFX.mg[MC.id]){const vx=CL.gvx/(GT.vm||.3),vz=CL.gvz/(GT.vmz||.24);E.stick.rotation.z=-clamp(vx,-1,1)*.38;E.stick.rotation.x=clamp(vz,-1,1)*.38;
     E.btn.position.y=E.btnY-((M.ph==='drop'&&M.t<.35)||TS.B?E.btnY*.6:0);}
   const cs=GFX.clawSpot,P=MPOS[r.id];if(cs){cs.intensity=M.beam*3*U*U;cs.distance=1.2*U;cs.position.set(CL.hx+P[0],CL.hy-.02*U+P[1],CL.hz+P[2]);cs.target.position.set(CL.hx+P[0],P[1],CL.hz+P[2]);}
+}
+/* ======================= KEYRINGS (see 12_rings.js) ======================= */
+/* drawing: one draw for all the rings of a machine, one for all the chains */
+function buildRings(E){if(!MC.rings)return;const n=48;
+  E.ringI=new THREE.InstancedMesh(new THREE.TorusGeometry(RING.R,RING.tube,8,28),MAT.chrome,n);
+  E.chainI=new THREE.InstancedMesh(new THREE.CylinderGeometry(.0008,.0008,1,5).translate(0,.5,0),MAT.steel,n);
+  for(const m of [E.ringI,E.chainI]){m.count=0;m.castShadow=true;m.frustumCulled=false;E.G.add(m);}}
+const _rm=new THREE.Matrix4(),_rc=new THREE.Vector3(),_rx=new THREE.Vector3(),_ry=new THREE.Vector3(),_rz=new THREE.Vector3();
+function syncRings(E){if(!E.ringI)return;let c=0;
+  for(const b of BOD){const r=b.rg;if(!r||b.state!=='pit')continue;ringAnchor(b,_ra);
+    _ry.set(r.x-_ra[0],r.y-_ra[1],r.z-_ra[2]);const len=_ry.length()||1e-6;_ry.multiplyScalar(1/len);
+    /* lying down the ring lies flat; hanging it hangs in the toy's own plane */
+    const R=b.R;let sx=-_ry.z,sz=_ry.x;const w=clamp((Math.hypot(sx,sz)-.25)/.4,0,1);
+    _rx.set(R[0],R[3],R[6]).addScaledVector(_ry,-_ry.dot(_rx.set(R[0],R[3],R[6]))).normalize().multiplyScalar(1-w);_rx.x+=sx*w;_rx.z+=sz*w;
+    _rx.addScaledVector(_ry,-_rx.dot(_ry)).normalize();_rz.crossVectors(_rx,_ry);
+    _rm.makeBasis(_rx,_ry,_rz).setPosition(r.x,r.y,r.z);E.ringI.setMatrixAt(c,_rm);
+    const cl=Math.max(.001,len-RING.R);_rm.makeBasis(_rx,_rc.copy(_ry).multiplyScalar(cl),_rz).setPosition(_ra[0],_ra[1],_ra[2]);E.chainI.setMatrixAt(c,_rm);
+    if(++c>=48)break;}
+  E.ringI.count=E.chainI.count=c;E.ringI.instanceMatrix.needsUpdate=E.chainI.instanceMatrix.needsUpdate=true;
 }

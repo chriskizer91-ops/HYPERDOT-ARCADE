@@ -9,20 +9,20 @@ const RAR=[{n:'COMMON',c:'#c8d0e8'},{n:'UNCOMMON',c:'#6aff5a'},{n:'RARE',c:'#4fe
    claw: see 11_claw.js. gantry: carriage speeds. wd/wu: winch speeds down/up. fill: how the case is stocked.
    cast: tix = tickets, wt = how many in a hundred, fric = grip of the fabric, mass in kg. */
 const MACHINES={
-  sugar:{id:'sugar',name:'SUGAR CLAW',sub:'MINI',what:'FOOD KEYCHAINS',level:'EASY',col:'#ff8ac8',U:.45,hb:.84,
+  sugar:{id:'sugar',name:'SUGAR CLAW',sub:'MINI',what:'FOOD KEYCHAINS',level:'EASY',col:'#ff8ac8',U:.45,hb:.84,rings:true,
     box:{x0:-.25,x1:.25,z0:-.19,z1:.19,top:.54,cx:-.105,cz:.065,ch:.08,cw:.004,deep:-.5},cam:{pe:.16,py:.5,tf:.4,fh:.04,se:.24,sy:.55},
-    claw:{npr:2,piv:.014,vh:.006,L1:.062,L2:.032,A0:.25,HOOK:1.62,RC:.0042,RH:.021,MHI:1/.45,IPI:1800,MAXPEN:.003,
+    claw:{npr:2,piv:.014,vh:.006,L1:.062,L2:.032,A0:.25,HOOK:1.62,RC:.0042,RH:.021,MHI:1/.45,IPI:10000,MAXPEN:.003,
       GY:.495,LMIN:.075,LMAX:.43,home:[-.178,.128],edge:.035,cab:.04},
     gantry:{vm:.2,vmz:.15,ac:1.1},wd:.32,wu:.24,
     credits:3,timer:30,stock:30,roll:[.7,1],boost:.85,
     fill:{cols:5,deps:4,mx:.055,mz:.055,row:.075,y0:.05},
-    cast:[{id:'mochi',name:'MOCHI',rar:0,tix:5,wt:16,mass:.03},{id:'berry',name:'BERRY',rar:0,tix:5,wt:16,mass:.03},
-      {id:'toast',name:'TOAST',rar:0,tix:5,wt:16,mass:.03},{id:'onigiri',name:'ONIGIRI',rar:1,tix:8,wt:13,mass:.03},
-      {id:'pudding',name:'PUDDING',rar:1,tix:8,wt:13,mass:.03},{id:'boba',name:'BOBA TEA',rar:2,tix:10,wt:11,mass:.03},
-      {id:'cupcake',name:'CUPCAKE',rar:3,tix:15,wt:8,mass:.03},{id:'donut',name:'GOLD DONUT',rar:4,tix:75,wt:0,mass:.035,fric:.9}]},
+    cast:[{id:'mochi',name:'MOCHI',rar:0,tix:5,wt:16,mass:.03,ring:true},{id:'berry',name:'BERRY',rar:0,tix:5,wt:16,mass:.03,ring:true},
+      {id:'toast',name:'TOAST',rar:0,tix:5,wt:16,mass:.03,ring:true},{id:'onigiri',name:'ONIGIRI',rar:1,tix:8,wt:13,mass:.03,ring:true},
+      {id:'pudding',name:'PUDDING',rar:1,tix:8,wt:13,mass:.03,ring:true},{id:'boba',name:'BOBA TEA',rar:2,tix:10,wt:11,mass:.03,ring:true},
+      {id:'cupcake',name:'CUPCAKE',rar:3,tix:15,wt:8,mass:.03,ring:true},{id:'donut',name:'GOLD DONUT',rar:4,tix:75,wt:0,mass:.035,fric:.9,ring:true}]},
   wild:{id:'wild',name:'WILDWOOD',sub:'CLASSIC',what:'WOODLAND PLUSH',level:'MEDIUM',col:'#ffcf8a',U:1,hb:.92,
     box:{x0:-.45,x1:.45,z0:-.35,z1:.35,top:1.0,cx:-.2,cz:.1,ch:.2,cw:.006,deep:-.6},cam:{fh:.34,tf:.5},
-    claw:{npr:3,piv:.032,vh:.012,L1:.12,L2:.055,A0:.2,HOOK:1.55,RC:.008,RH:.042,GY:.95,LMIN:.12,LMAX:.9,home:[-.33,.23],edge:.07,cab:.075},
+    claw:{npr:3,piv:.032,vh:.012,L1:.12,L2:.055,A0:.2,HOOK:1.55,RC:.008,RH:.042,IPI:1030,GY:.95,LMIN:.12,LMAX:.9,home:[-.33,.23],edge:.07,cab:.075},
     gantry:{vm:.32,vmz:.24,ac:1.4},wd:.45,wu:.34,
     credits:3,timer:30,stock:22,roll:[.42,1],boost:.78,
     fill:{cols:4,deps:3,mx:.13,mz:.12,row:.24,y0:.14},
@@ -32,19 +32,19 @@ const MACHINES={
       {id:'moth',name:'LUNA MOTH',rar:3,tix:60,wt:6,mass:.16,fric:.85},{id:'hare',name:'GOLDEN HARE',rar:4,tix:300,wt:0,mass:.26,fric:.85}]},
   titan:{id:'titan',name:'TITAN',sub:'GIANT',what:'GIANT PLUSH',level:'HARD',col:'#ffd040',U:2.2,hb:.78,
     box:{x0:-.95,x1:.95,z0:-.65,z1:.65,top:1.55,cx:-.2,cz:-.05,ch:.3,cw:.012,deep:-.72},
-    claw:{npr:3,piv:.08,vh:.03,L1:.3,L2:.14,A0:.2,HOOK:1.5,RC:.02,RH:.1,MHI:1/4,IPI:45,MAXPEN:.013,PHMAX:1.35,
+    claw:{npr:3,piv:.08,vh:.03,L1:.3,L2:.14,A0:.2,HOOK:1.5,RC:.02,RH:.1,MHI:1/4,IPI:48,MAXPEN:.013,PHMAX:1.35,
       GY:1.47,LMIN:.3,LMAX:1.36,home:[-.575,.3],edge:.15,cab:.17},
     gantry:{vm:.48,vmz:.36,ac:1.5},wd:.6,wu:.42,
-    credits:4,timer:40,stock:4,roll:[.25,.7],boost:.5,fixed:true,
+    credits:4,timer:40,stock:4,roll:[.25,.7],boost:.5,fixed:true,carryK:.55,carryT:1.6,
     spots:[[-.6,-.36],[.02,-.38],[.62,-.36],[.22,.32],[.64,.3]],
     cast:[{id:'whale',name:'WHALE',rar:2,tix:150,wt:25,mass:1.2},{id:'dino',name:'DINO',rar:2,tix:150,wt:25,mass:1.4},
-      {id:'sloth',name:'SLOTH',rar:2,tix:150,wt:25,mass:1.3,fric:1.1},{id:'dragon',name:'STAR DRAGON',rar:4,tix:500,wt:25,mass:1.5}]}
+      {id:'sloth',name:'SLOTH',rar:2,tix:150,wt:25,mass:1.3,fric:1.1},{id:'dragon',name:'STAR DRAGON',rar:4,tix:500,wt:25,mass:1.6,fric:.85}]}
 };
 const MORDER=['sugar','wild','titan'];
 let MC=null;const CAST={};
 function setMachine(id){
   MC=MACHINES[id];Object.assign(CASE,MC.box);for(const k in CS0)CS[k]=CS0[k];Object.assign(CS,MC.claw);
-  Object.assign(GT,{vm:.32,vmz:.24,ac:1.4},MC.gantry);UNIT=MC.U;
+  Object.assign(GT,{vm:.32,vmz:.24,ac:1.4},MC.gantry);UNIT=MC.U;RINGSTEP=MC.rings?ringStep:null;
   for(const c of MC.cast){const T=PLUSH[c.id];Object.assign(T,c);CAST[c.id]=T;}
 }
 /* ---------- state of the game and of one credit ---------- */
@@ -61,8 +61,11 @@ function setPhase(p){M.ph=p;M.t=0;}
 function newCredit(){
   S.credit++;M.wins=[];M.S=rollStrength();CL.S=M.S;M.maxLift=0;M.heldB=null;M.touched=false;M.timer=MC.timer;M.hurry=false;
   GT.tx=GT.tz=null;GT.vx=GT.vz=0;M.aDown=false;M.ptr=null;M.lockPend=0;M.slipped=false;M.overT=0;M.slackT=0;
+  M.d0=new Map();for(const b of BOD)if(b.state==='pit')M.d0.set(b.id,chuteDist(b));
   setPhase('roll');if(!S.demo)SFX.coin();
 }
+/* how far a toy is from the chute's opening (0 = over it) */
+function chuteDist(b){const dx=Math.max(0,b.cx-CASE.cx),dz=Math.max(0,CASE.cz-b.cz);return Math.hypot(dx,dz);}
 function startDrop(){
   let nb=null,nd=1e9;for(const b of BOD){if(b.state!=='pit')continue;const d=Math.hypot(b.cx-CL.gx,b.cz-CL.gz)-b.y1*.3;if(d<nd){nd=d;nb=b;}}M.aimB=nb;
   setPhase('drop');CL.motor=-1;GT.tx=CL.gx;GT.tz=CL.gz;GT.vx=GT.vz=0;SFX.drop();
@@ -100,11 +103,12 @@ function machineTick(dt,c,e){
   else if(ph==='grab'){if(M.t>1.0){setPhase('lift');SFX.lift();}}
   else if(ph==='lift'){CL.winch=-Math.min(MC.wu,.06*U+(CL.L-CS.LMIN)*3);
     if(CL.L<=CS.LMIN+.0005){CL.winch=0;M.t2=(M.t2||0)+dt;if(M.t2>.35){M.t2=null;setPhase('carry');GT.tx=h[0];GT.tz=h[1];GT.carry=true;SFX.rattle();}}}
-  else if(ph==='carry'){if(Math.abs(CL.gx-h[0])<.006*U&&Math.abs(CL.gz-h[1])<.006*U&&Math.abs(CL.gvx)+Math.abs(CL.gvz)<.01*U){M.t2=(M.t2||0)+dt;if(M.t2>.45){M.t2=null;GT.carry=false;setPhase('release');CL.motor=-1;SFX.release();}}}
+  else if(ph==='carry'){if(MC.carryK)CL.S=M.S*lerp(1,MC.carryK,clamp(M.t/(MC.carryT||1.5),0,1));   /* like a real giant machine: full power to pick up, less to carry */
+    if(Math.abs(CL.gx-h[0])<.006*U&&Math.abs(CL.gz-h[1])<.006*U&&Math.abs(CL.gvx)+Math.abs(CL.gvz)<.01*U){M.t2=(M.t2||0)+dt;if(M.t2>.45){M.t2=null;GT.carry=false;setPhase('release');CL.motor=-1;SFX.release();}}}
   else if(ph==='release'){if(M.t>1.9){setPhase('result');creditResult();}}
   else if(ph==='result'){
     if(M.t<dt*1.5&&!M.wins.length&&M.aimB)M.aimB.fails=(M.aimB.fails||0)+1;
-    if(M.t>(M.wins.length?3.2:1.9)){if(S.demo){S.credit=0;newCredit();}else if(S.credit>=MC.credits)gameOver();else newCredit();}}
+    if(M.t>(M.wins.length?3.2:1.9)&&!showBusy()){if(S.demo){S.credit=0;newCredit();}else if(S.credit>=MC.credits)gameOver();else newCredit();}}
   else if(ph==='idle'){CL.motor=-1;CL.winch=-MC.wu;GT.tx=h[0];GT.tz=h[1];M.beam=0;}
   /* what the claw holds, and slips */
   if(ph==='lift'||ph==='carry'||ph==='release'){
@@ -115,8 +119,11 @@ function machineTick(dt,c,e){
 }
 function creditResult(){
   if(S.demo)return;
-  if(M.wins.length===0){const close=M.maxLift>.4*UNIT,t=2+(close?2:0)+((Math.random()*2)|0);
-    S.tickets+=t;S.consol+=t;S.score+=t*20;M.msg=close?'SO CLOSE!':'NICE TRY';M.msgT=1.9;hudPop('+'+t+' TICKETS','#ffd040');SFX.aww();}
+  if(M.wins.length===0){
+    /* Titan's rule: giants stay where you leave them, so a credit that drags one toward the chute counts for something */
+    let gain=0;if(MC.fixed&&M.d0)for(const b of BOD){const d0=M.d0.get(b.id);if(b.state==='pit'&&d0!=null)gain=Math.max(gain,d0-chuteDist(b));}
+    const closer=gain>.12*UNIT,close=M.maxLift>.4*UNIT,t=2+(close?2:0)+(closer?3:0)+((Math.random()*2)|0);
+    S.tickets+=t;S.consol+=t;S.score+=t*20;M.msg=closer?'CLOSER!':close?'SO CLOSE!':'NICE TRY';M.msgT=1.9;M.gain=gain;hudPop('+'+t+' TICKETS','#ffd040');closer?SFX.settle(.8):SFX.aww();}
   ARC.score(S.score);
 }
 /* a plush went down the chute */
@@ -126,15 +133,17 @@ function winPlush(b){
   if(M.ph==='prep'||M.ph==='idle')return;
   M.wins.push(b);S.winT=0;S.lamp='win';
   if(!S.demo){const tb=Math.ceil(M.timer)*10,dbl=M.wins.length>1?1500:0,pts=T.tix*100+tb+dbl;
-    S.tickets+=T.tix;S.score+=pts;S.prizes.push(T.id);S.stats.wins++;recordPrize(T);
-    hudPop('+'+T.tix+' TICKETS','#ffd040');if(dbl)hudPop('DOUBLE!','#6aff5a');
+    S.tickets+=T.tix;S.score+=pts;S.prizes.push(T.id);S.stats.wins++;const e=recordPrize(T);showQueue(T,!!e&&e.n===1,e?e.n:1);
+    if(dbl)hudPop('DOUBLE!','#6aff5a');
     if(T.rar===4){SFX.jackpot();say('Jackpot!',.8,1);S.flash=1;}else{SFX.winner();say('Winner!',.9,1.05);S.flash=.5;}
     ARC.score(S.score);}
   else SFX.winner();
   S.shake=.4;
 }
 /* what you have won, kept for the arcade's shelf: per plush, how many and when first */
-function recordPrize(T){try{const k='hd-'+CAB.id+'-prizes',o=JSON.parse(store.get(k,'{}'))||{};const e=o[T.id]||{n:0,first:Date.now(),machine:MC.id};e.n++;o[T.id]=e;store.set(k,JSON.stringify(o));}catch(err){}}
+function prizeBook(){try{return JSON.parse(store.get('hd-'+CAB.id+'-prizes','{}'))||{};}catch(e){return {};}}
+function collectedCount(){const o=prizeBook();let n=0;for(const id in o)if(o[id]&&o[id].n>0&&PLUSH[id])n++;return n;}
+function recordPrize(T){try{const k='hd-'+CAB.id+'-prizes',o=prizeBook();const e=o[T.id]||{n:0,first:Date.now(),machine:MC.id};e.n++;e.fresh=1;o[T.id]=e;store.set(k,JSON.stringify(o));return e;}catch(err){return null;}}
 const LATER=[];function later(f,s){LATER.push({f,t:s});}
 /* ---------- the stock: filling the case, restocking between games ---------- */
 const restockQ=[];let restockT=0;
@@ -180,7 +189,7 @@ function placePile(id){
 }
 /* ---------- one machine's world, saved while you look at another ---------- */
 const WORLD={};
-function copyBody(b){const r={};for(const k in b){if(k==='T'||k==='P')continue;const v=b[k];r[k]=ArrayBuffer.isView(v)?v.slice():Array.isArray(v)?v.slice():v;}return r;}
+function copyBody(b){const r={};for(const k in b){if(k==='T'||k==='P')continue;const v=b[k];r[k]=ArrayBuffer.isView(v)?v.slice():Array.isArray(v)?v.slice():v&&v.constructor===Object?Object.assign({},v):v;}return r;}
 function copyState(o){const r={};for(const k in o){const v=o[k];r[k]=ArrayBuffer.isView(v)?v.slice():v;}return r;}
 function pasteState(o,r){for(const k in r){const v=r[k];if(ArrayBuffer.isView(v)&&ArrayBuffer.isView(o[k]))o[k].set(v);else o[k]=v;}}
 function saveWorld(){
@@ -194,7 +203,7 @@ function loadWorld(id){
   setMachine(id);const w=WORLD[id];
   clearPhys();
   if(!w){clawReset();setPhase('idle');return false;}
-  for(const s of w.bodies){const b=s.b,P=b.P;for(const k in s.own){const v=s.own[k];if(ArrayBuffer.isView(v))b[k].set(v);else if(Array.isArray(v))b[k]=v.slice();else b[k]=v;}b.i0=NP;
+  for(const s of w.bodies){const b=s.b,P=b.P;for(const k in s.own){const v=s.own[k];if(ArrayBuffer.isView(v))b[k].set(v);else if(Array.isArray(v))b[k]=v.slice();else if(v&&v.constructor===Object)b[k]=Object.assign({},v);else b[k]=v;}b.i0=NP;
     for(let k=0;k<b.n;k++){const i=NP+k;PX[i]=s.px[k];PY[i]=s.py[k];PZ[i]=s.pz[k];OX[i]=s.ox[k];OY[i]=s.oy[k];OZ[i]=s.oz[k];PR[i]=P.r[k];PW[i]=b.n/P.mass;PS[i]=b.sleep?1:0;}
     NP+=b.n;BOD.push(b);}
   reindex();setupGrid();
@@ -203,9 +212,9 @@ function loadWorld(id){
 }
 /* the attract-mode pilot picks a plush the way a decent player would: on top, reachable, worth something */
 function pickTarget(){let best=null,bs=-1e9;const U=UNIT;
-  for(const b of BOD){if(b.state!=='pit'||inChute(b.cx,b.cz,.08*U))continue;if(S.demo&&b.T.rar===4)continue;
+  for(const b of BOD){if(b.state!=='pit'||inChute(b.cx,b.cz,.08*U))continue;if(S.demo&&!AI.anyT&&b.T.rar===4)continue;
     let cover=0;for(const o of BOD)if(o!==b&&o.state==='pit'&&Math.hypot(o.cx-b.cx,o.cz-b.cz)<.12*U&&o.cy>b.cy+.03*U)cover++;
-    const sc=b.y1/U*2-cover*.5+b.T.tix*.002-(b.fails||0)*.3+Math.random()*.1;if(sc>bs){bs=sc;best=b;}}
+    const sc=b.y1/U*2-cover*.5+b.T.tix*.002-(b.fails||0)*.3+Math.random()*.1-(MC.fixed?chuteDist(b)/U*1.2:0);if(sc>bs){bs=sc;best=b;}}
   return best;}
 const AI={tgt:null,err:0,wait:0};
 function pilot(dt){

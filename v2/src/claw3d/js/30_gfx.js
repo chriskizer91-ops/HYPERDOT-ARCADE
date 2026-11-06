@@ -140,7 +140,7 @@ function buildWorld(){
   for(const id of MORDER){const G=new THREE.Group(),P=MPOS[id];G.position.set(P[0],P[1],P[2]);G.updateMatrix();GFX.scene.add(G);
     const pg=new THREE.Group();G.add(pg);
     setMachine(id);const E=GFX.mg[id]={G,pg,plush:new Map(),bulbs:[],anim:[]};
-    CABS[id](E);E.rig=buildRig(E,id);E.light=machineLight(id);}
+    CABS[id](E);E.rig=buildRig(E,id);E.light=machineLight(id);buildRings(E);}
 }
 /* in play only the machine in front of you is drawn; on the title screen all three */
 function showMachines(all){for(const id in GFX.mg)GFX.mg[id].G.visible=all||id===MC.id;}
@@ -177,6 +177,8 @@ function camTick(dt){
   if(CAM.sl<1&&CAM.from){CAM.sl=Math.min(1,CAM.sl+dt/.7);const s=CAM.sl*CAM.sl*(3-2*CAM.sl),f=CAM.from;
     /* a little pull back mid-slide, so you see the row */
     const back=Math.sin(s*Math.PI)*.35;c={p:lerp3(f.p,c.p,s),t:lerp3(f.t,c.t,s),fov:lerp(f.fov,c.fov,s)};c.p[2]+=back;c.p[1]+=back*.2;}
+  /* the close-up of a win */
+  if(SHOW.w>0){const P=showPose();if(P){const s=SHOW.w*SHOW.w*(3-2*SHOW.w);c={p:lerp3(c.p,P.p,s),t:lerp3(c.t,P.t,s),fov:lerp(c.fov,P.fov,s)};}}
   const cam=GFX.cam;_a.set(c.p[0],c.p[1],c.p[2]);
   if(S.shake>0&&!reduce){const k=S.shake*.01*UNIT;_a.x+=(Math.random()-.5)*k;_a.y+=(Math.random()-.5)*k;}
   cam.position.copy(_a);_b.set(c.t[0],c.t[1],c.t[2]);cam.lookAt(_b);
@@ -191,4 +193,4 @@ function screenToWorld(px,py,axis){
   if(axis==='x')_pl.set(_nz,-(CL.gz+P[2]));else _pl.set(_nx,-(CL.gx+P[0]));
   return _ray.ray.intersectPlane(_pl,_hit)?(axis==='x'?_hit.x-P[0]:_hit.z-P[2]):null;
 }
-function render(dt){camTick(dt);showMachines(CAM.f>.6||CAM.sl<1);drawRig(GFX.mg[MC.id].rig);syncPlush();animCabs(dt);GFX.R.render(GFX.scene,GFX.cam);}
+function render(dt){camTick(dt);showMachines(CAM.f>.6||CAM.sl<1);drawRig(GFX.mg[MC.id].rig);syncPlush();syncRings(GFX.mg[MC.id]);showLight();animCabs(dt);GFX.R.render(GFX.scene,GFX.cam);}

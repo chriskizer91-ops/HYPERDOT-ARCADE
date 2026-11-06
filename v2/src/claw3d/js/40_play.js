@@ -27,7 +27,7 @@ const UIP={};
 function setPause(on){if(S.mode!=='play')on=false;S.paused=on;$('menu').hidden=!on;document.body.classList.toggle('paused',on);if(on){M.aDown=false;TS.A=TS.B=false;}}
 function newGame(){Object.assign(S,{score:0,tickets:0,credit:0,prizes:[],consol:0,demo:false,newHi:false,tShown:0,winT:9});S.mode='play';S.t=0;S.lamp='play';setPhase('prep');M.wins=[];AI.tgt=null;}
 function APP_start(){if(S.mode==='play')return;newGame();setTrack('play');SFX.confirm();S.stats.games++;document.body.classList.add('playing');document.body.classList.remove('title');store.set('hd-'+CAB.id+'-m',MC.id);}
-function APP_attract(){S.mode='title';S.demo=true;S.paused=false;$('menu').hidden=true;S.t=0;S.lamp='attract';S.credit=0;S.prizes=[];newCredit();setTrack('title');document.body.classList.remove('playing');document.body.classList.add('title');pickUI();}
+function APP_attract(){S.mode='title';S.demo=true;S.paused=false;$('menu').hidden=true;S.t=0;S.lamp='attract';S.credit=0;S.prizes=[];newCredit();setTrack('title');document.body.classList.remove('playing');document.body.classList.add('title');pickUI();collButton();}
 /* ---------- the machine picker: the three machines stand in a row; slide along it ---------- */
 let PICK=0;const SW={on:false,x:0,y:0,t:0};
 function pickUI(){const i=MORDER.indexOf(MC.id);$('pL').classList.toggle('off',i<=0);$('pR').classList.toggle('off',i>=MORDER.length-1);}
@@ -57,6 +57,11 @@ function gameOver(){
 }
 function tick(dt){
   const c=readCtl(),e={};for(const k of ['ok','back','pause','a','b','start']){e[k]=c[k]&&!UIP[k];UIP[k]=c[k];}
+  /* the collection screen is open: Esc or C closes it; the demo keeps playing behind it */
+  const kC=LATCH.has('KeyC');if(kC)LATCH.delete('KeyC');   /* one press, one toggle, however many ticks this frame runs */
+  if(S.coll){if(e.back||kC){collClose();collButton();}if(S.mode==='title')worldTick(dt,null,null);return;}
+  if(kC&&(S.mode==='title'||S.mode==='over'||S.paused)){collOpen();return;}
+  showTick(dt,!!SHOW.cur&&(e.ok||e.a||PTR.pressed));
   S.t+=dt;if(S.shake>0)S.shake=Math.max(0,S.shake-dt*2);if(S.flash>0)S.flash=Math.max(0,S.flash-dt*2.5);S.winT+=dt;
   if(M.hurry&&!(M.ph==='aimX'||M.ph==='aimZ')&&S.mode==='play'){M.hurry=false;setTrack('play');}
   if(S.mode==='title'){worldTick(dt,null,null);const tp=pickInput(c,e);if(e.ok||e.start||tp){audioInit();APP_start();}else if(e.back&&EMBED)ARC.exit();}
@@ -94,6 +99,10 @@ function chrome(){
   holdBtn($('bGo'),'A');holdBtn($('bDrop'),'B');
   for(const [id,d] of [['pL',-1],['pR',1]])$(id).addEventListener('pointerdown',ev=>{ev.preventDefault();ev.stopPropagation();audioInit();if(S.mode==='title')PICK=d;});
   $('mMach').addEventListener('click',()=>{setPause(false);APP_attract();});
+  $('mColl').addEventListener('click',()=>{audioInit();collOpen();});
+  $('cB').addEventListener('click',e=>{e.stopPropagation();audioInit();collOpen();e.currentTarget.blur();});
+  $('cX').addEventListener('click',()=>{collClose();collButton();});
+  $('coll').addEventListener('click',e=>{if(e.target===$('coll')){collClose();collButton();}});
   $('keys').innerHTML=CAB.keys;
   document.addEventListener('visibilitychange',()=>{if(document.hidden)setPause(true);});
   addEventListener('keydown',e=>{if(e.code==='KeyM'){audioInit();toggleSound();}});
@@ -114,10 +123,10 @@ async function boot(){
   for(const id of MORDER){setMachine(id);clearPhys();clawReset();
     if(!placePile(id)){fillMachine();for(let f=0;f<10;f++){for(let t=0;t<30;t++)physTick(null);bar.style.width=(40+(k+f/10)*18)+'%';await raf();}}
     for(let t=0;t<20;t++)physTick(null);bar.style.width=(40+(k+1)*18)+'%';await raf();
-    setPhase('idle');syncPlush();drawRig(GFX.mg[id].rig);saveWorld();k++;}
+    setPhase('idle');ringSettle();syncPlush();syncRings(GFX.mg[id]);drawRig(GFX.mg[id].rig);saveWorld();k++;}
   BT.settle=performance.now()-T0-BT.unpack-BT.build;
   loadWorld(want);setShadows(want);S.hi=parseInt(store.get('hd-'+CAB.id+'-hi-'+want,'0'),10)||0;
-  const T1=performance.now();GFX.R.compile(GFX.scene,GFX.cam);render(1/60);BT.compile=performance.now()-T1;
+  showWarm();const T1=performance.now();GFX.R.compile(GFX.scene,GFX.cam);render(1/60);BT.compile=performance.now()-T1;showWarmDone();
   $('ld').classList.add('gone');setTimeout(()=>$('ld').hidden=true,500);
   APP_attract();ARC.post('ready',{title:CAB.title,tickets:CAB.tickets});
   requestAnimationFrame(frame);
@@ -125,7 +134,9 @@ async function boot(){
 /*@@HOOK*/
 /* test hook (stripped from the published build): fast-forward and inspect */
 window.__game={S,M,CL,CS,GT,BOD,CASE,PTR,TS,KEY,LATCH,PERF,GFX,CAM,MACHINES,MORDER,MPOS,tick,render,screenToWorld,hudDraw,start:APP_start,attract:APP_attract,setPause,pickTarget,endInput:endInputFrame,switchMachine,mc:()=>MC.id,
-  pickStep,
+  pickStep,SHOW,
+  dropIn(){const C=CASE,b=BOD.find(o=>o.state==='pit'&&!(o.cx<C.cx&&o.cz>C.cz));const dx=(C.x0+C.cx)/2-b.cx,dz=(C.cz+C.z1)/2-b.cz,dy=C.ch+.12*UNIT-b.cy+b.T.size*.5;
+    for(let i=b.i0;i<b.i0+b.n;i++){PX[i]+=dx;PY[i]+=dy;PZ[i]+=dz;OX[i]=PX[i];OY[i]=PY[i];OZ[i]=PZ[i];}b.cx+=dx;b.cy+=dy;b.cz+=dz;if(b.rg){b.rg.x+=dx;b.rg.y+=dy;b.rg.z+=dz;b.rg.ox=b.rg.x;b.rg.oy=b.rg.y;b.rg.oz=b.rg.z;}wake(b);return b.T.id;},
   ff(sec){for(let i=0;i<sec*60;i++)tick(1/60);endInputFrame();},
   ffUntil(f,max=30){let n=0;while(!f()&&n<max*60){tick(1/60);endInputFrame();n++;}return n/60;},
   asleep:()=>BOD.filter(b=>b.sleep).length,camSnap(){CAM.want=(M.ph==='aimZ'&&S.mode==='play'&&!S.demo)?1:0;CAM.k=CAM.want;CAM.f=(S.mode==='play'&&!S.demo)?0:1;CAM.sl=1;render(0);},tris:()=>GFX.R.info.render.triangles,calls:()=>GFX.R.info.render.calls,
