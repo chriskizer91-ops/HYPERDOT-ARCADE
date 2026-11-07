@@ -54,7 +54,7 @@ function syncWorld(dt){
   if(live&&th.lineK>0){DU.uGlow.value.set(live.x,live.z,.35,.09);DU.uGlowC.value.set(live.last>=0?plCol(live.last):'#9ad8ff');}else DU.uGlow.value.z=0;
   LT.goal.intensity=(LT.goalK||0)*.35;
   for(const c of CHUTE){const fl=G.chuteFl&&G.chuteFl[0]===c.sz?LT.goalK||0:0;c.lm.color.copy(c.base).multiplyScalar(1.4+fl*6*(((S.t*10)|0)%2?1:.3));}
-  BOARD.grp.visible=!((CAM.mode==='p1'||CAM.mode==='top')&&CAM.k>.5)||S.mode==='over';
+  BOARD.grp.visible=!((CAM.mode==='p1'||CAM.mode==='top')&&CAM.k>.5)&&UI.scr!=='title'&&S.mode!=='over';
   LEDU.uChase.value=S.mode==='title'?1:0;LEDU.uK.value=S.mode==='title'?1.2:1;
   M_COMP.uniforms.uFlash.value=reduce?0:S.flash*.25;
 }
