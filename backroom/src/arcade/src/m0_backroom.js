@@ -9,6 +9,8 @@
      a nook behind the X Room, where the Howler kneels;
      the EMPTY ROOM, through a doorway in the left wall;
      the WORKSHOP, through a doorway in the far wall: the unfinished games.
+   And one more, which nothing in the X Room gives away: a stretch of its far wall, in the corner, that you can walk through.
+   Behind it is THE ENDLESS ROOM, a hall that never ends.
 
    ROOM (set in build.py) is the box round all of it, which the engine uses for the floor, the ceiling and its limits.
    B is the building itself: the main room and the Workshop behind it. */
@@ -17,6 +19,13 @@ const ZB=-14,WD={x0:1.7,x1:3.5};                  // the wall between the main r
 const CL={x:4.2,z:-1.6,zn:-8,dz0:-4.9,dz1:-3.5,t:.16};   // the X Room: its west wall at x, its south wall at z, its north wall at zn, the door's gap in the west wall
 const ER={x0:-19,z0:-12,z1:-2,d0:-7.7,d1:-5.9};   // the empty room, off the left wall: its far wall at x0, its side walls at z0 and z1, the doorway from d0 to d1
 const WT=.16,HD=2.45;                             // how thick a wall is, how high a doorway
+/* The endless room, behind the building's right wall. The secret way in is the stretch of that wall from d0 to d1.
+   The hall is built lead + P + lead metres long, and everything in it repeats every P metres. Once you're `lead` metres in,
+   you walk inside one P-metre window: step out of it at the far side and you (and the camera) are put back P metres, onto
+   an identical spot, and n counts one more. Walking back undoes it, so the door is always as far behind you as you walked.
+   `lead` is longer than the camera can see (60 m), so neither end of the hall is ever in view from the window. */
+const EN={x0:B.x1+WT,z0:-9.25,z1:-4.85,d0:-7.7,d1:-6.4,lead:66,P:12,n:0,fog:.035};
+EN.x1=EN.x0+EN.lead*2+EN.P;ROOM.x1=EN.x1;        // ROOM grows to hold it
 const WALLS=[];                                   // interior walls the camera mustn't look through: [x0,x1,z0,z1]
 function wallBlock(x0,x1,z0,z1){WALLS.push([Math.min(x0,x1),Math.max(x0,x1),Math.min(z0,z1),Math.max(z0,z1)]);block(x0,x1,z0,z1);}
 /* the walking camera stays on the player's side of an interior wall: it slides in along the line to the player */
@@ -59,14 +68,18 @@ function buildRoom(){
     if(GLOW[R.cove])GLOW[R.cove].quad(at(R,0,0,yc),at(R,R.L,0,yc),at(R,R.L,gw,yc),at(R,0,gw,yc),[1,1,1],0,[[0,1],[1,1],[1,0],[0,0]]);
   };
   /* a wall, WT thick, standing behind its face. R.doors are openings you walk through, [from,to] along the face;
-     R.back dresses the far face too, for the room behind it; R.solid:false leaves out the blocker (a wall on ROOM's edge needs none) */
+     R.back dresses the far face too, for the room behind it; R.solid:false leaves out the blocker (a wall on ROOM's edge needs none);
+     R.secret are stretches that look like wall and stop the camera like wall, but let you walk through */
   const backOf=(R,cove)=>{const e=at(R,R.L,-WT,0);return {o:[e[0],e[2]],d:[-R.d[0],-R.d[1]],n:[-R.n[0],-R.n[1]],L:R.L,cove,skip:(R.doors||[]).map(([g0,g1])=>[R.L-g1,R.L-g0]).reverse()};};
   const wallRun=R=>{
     const doors=R.doors||[],segs=[];let s0=0;
     for(const [g0,g1] of doors){if(g0>s0)segs.push([s0,g0]);s0=g1;}if(R.L>s0)segs.push([s0,R.L]);
     W.fin(.2,0);
     for(const [a,b] of segs){boxAlong(R,a,b-a,-WT,h/2,h,WT,wall);
-      if(R.solid!==false){const p=at(R,a,0,0),q=at(R,b,-WT,0);wallBlock(p[0],q[0],p[2],q[2]);}}
+      if(R.solid!==false){
+        let parts=[[a,b]];for(const [g0,g1] of R.secret||[])parts=parts.flatMap(([u,v])=>g1<=u||g0>=v?[[u,v]]:[[u,g0],[g1,v]].filter(([i,j])=>j-i>.01));
+        for(const [u,v] of parts){const p=at(R,u,0,0),q=at(R,v,-WT,0);block(p[0],q[0],p[2],q[2]);}
+        const p=at(R,a,0,0),q=at(R,b,-WT,0);WALLS.push([Math.min(p[0],q[0]),Math.max(p[0],q[0]),Math.min(p[2],q[2]),Math.max(p[2],q[2])]);}}
     for(const [g0,g1] of doors)boxAlong(R,g0,g1-g0,-WT,(HD+h)/2,h-HD,WT,wall);
     dress(Object.assign({},R,{skip:(R.skip||[]).concat(doors).sort((a,b)=>a[0]-b[0])}));
     if(R.back)dress(backOf(R,R.back));
@@ -85,7 +98,7 @@ function buildRoom(){
           the left wall has the doorway to the empty room ---- */
   wallRun({o:[B.x0,B.z0],d:[1,0],n:[0,1],L:bw,cove:'v',solid:false});
   wallRun({o:[B.x1,B.z1],d:[-1,0],n:[0,-1],L:bw,cove:'p',skip:[[bw/2-1.75,bw/2+1.75]],solid:false});
-  wallRun({o:[B.x1,B.z0],d:[0,1],n:[-1,0],L:bd,cove:'c'});
+  wallRun({o:[B.x1,B.z0],d:[0,1],n:[-1,0],L:bd,cove:'c',secret:[[EN.d0-B.z0,EN.d1-B.z0]]});    // the right wall, and the way through it in the X Room's corner
   {const R=wallRun({o:[B.x0,B.z1],d:[0,-1],n:[1,0],L:bd,cove:'c',doors:[[B.z1-ER.d1,B.z1-ER.d0]]}),[g0,g1]=R.doors[0];
     frame(R,g0,g1,trimP);frame(R,g0,g1,trimC,true);
     lightAt(B.x0+1,2.3,(ER.d0+ER.d1)/2,3.5,[1,.35,.75],.5);}
@@ -213,6 +226,37 @@ function buildRoom(){
     house(ex,ER.z0+2.6,.7,7);house(ex,ER.z1-2.6,.7,7);
     uvRow(ER.z0+2.2,ER.x0+.6,B.x0-.7);uvRow(ER.z1-2.2,ER.x0+.6,B.x0-.7);
     lightAt(ex,2.6,ez,9,[.5,.3,1],.45);}
+
+  /* ---- THE ENDLESS ROOM ---- */
+  {const {x0:e0,x1:e1,z0:c0,z1:c1,P,lead}=EN,len=e1-e0,zc=(c0+c1)/2;
+    wallRun({o:[e0,c0],d:[1,0],n:[0,1],L:len,cove:'p'});
+    wallRun({o:[e1,c1],d:[-1,0],n:[0,-1],L:len,cove:'c'});
+    wallRun({o:[e1,c0],d:[0,1],n:[-1,0],L:c1-c0,cove:'v',solid:false});
+    /* the near end is the other face of the building's right wall. From this side the way back is marked. */
+    const NE={o:[e0,c1],d:[0,-1],n:[1,0],L:c1-c0,cove:'v',skip:[[c1-EN.d1,c1-EN.d0]]};
+    dress(NE);frame(NE,c1-EN.d1,c1-EN.d0,trimC);
+    neon2(W,'X ROOM',[e0+.05,2.62,(EN.d0+EN.d1)/2],[0,0,-1],.04,trimC,4.2);
+    /* every 6 m an arch of chrome and LED, pink then cyan, with a light of its colour; a blacklight tube between each pair */
+    for(let x=e0+3,i=0;x<e1-1;x+=6,i++){const col=i%2?trimC:trimP,lc=i%2?[.3,.85,1]:[1,.25,.7],ty=h-.5;
+      W.fin(.9,1);for(const z of [c0+.1,c1-.1])W.tube([x,0,z],[x,ty,z],.035,chrome,0,6);W.tube([x,ty,c0+.1],[x,ty,c1-.1],.035,chrome,0,6);
+      W.fin(0,0);for(const z of [c0+.17,c1-.17])W.tube([x,0,z],[x,ty-.07,z],.012,col,3.2);W.tube([x,ty-.07,c0+.17],[x,ty-.07,c1-.17],.012,col,3.2);
+      lightAt(x,h-1.0,zc,8.5,lc,.85);
+      W.fin(.3,1);W.box(x+3,h-.1,zc,.09,.05,1.25,steel);W.fin(0,0);W.tube([x+3,h-.14,zc-.58],[x+3,h-.14,zc+.58],.016,uvC,3.4);}
+    /* its floor is polished black. The engine checks every frame whether a polished floor is in view; this one is 144 m long,
+       so it is only on the list while you are in here */
+    EN.rect=[e0,c0,e1,c1,1];
+    const move=d=>{CH_.x+=d;CAM.eye[0]+=d;CAM.tgt[0]+=d;};
+    DECO.push({update(){
+      const inside=CH_.x>B.x1+WT/2,i=GLOSS.rects.indexOf(EN.rect);
+      if(inside&&i<0)GLOSS.rects.push(EN.rect);else if(!inside&&i>=0)GLOSS.rects.splice(i,1);
+      if(!inside){EN.n=0;EN.fog=.035;return;}
+      if(W_.mode==='walk'){const lo=e0+lead;
+        if(CH_.x>=lo+P){move(-P);EN.n++;}else if(CH_.x<lo&&EN.n>0){move(P);EN.n--;}
+        $('hint').textContent='The endless room · '+fmt(Math.max(0,Math.round(CH_.x-e0+EN.n*P)))+' m';}
+      /* the air thickens over the first metres, so the far end is lost in it */
+      const k=EN.n>0?1:clamp((CH_.x-e0)/14,0,1);EN.fog=lerp(.035,.075,k*k*(3-2*k));
+    }});
+  }
 
   /* ---- a polished mat at the door, a polished floor in front of the games ---- */
   GLOSS.disc=[0,6.55,1.05,3];

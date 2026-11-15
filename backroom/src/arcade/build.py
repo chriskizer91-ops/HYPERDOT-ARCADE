@@ -32,13 +32,16 @@ put("/*@@INTRO@@*/'original'","'original'")
 put("/*@@ROOT@@*/'../'","''")
 put("/*@@DEMO@@*/false",'false')
 put('/*@@INTROS@@*/','')
-# ROOM is the box round every room here: the building (x -9..9, z -26..8) and the empty room off its left wall (x -19..-9)
+# ROOM is the box round every room here: the building (x -9..9, z -26..8) and the empty room off its left wall (x -19..-9).
+# m0_backroom.js then stretches x1 to hold the endless room.
 put('const ROOM={x0:-16,x1:16,z0:-12,z1:12,h:4.6};','const ROOM={x0:-19,x1:9,z0:-26,z1:8,h:4.0};')
 # you start just inside the door from the main floor, facing into the room
 put('CH_.x=2.4;CH_.z=5.2;','CH_.x=0;CH_.z=5.5;')
 # the walking camera doesn't look through the walls between the rooms
 put('eye[0]=clamp(eye[0],ROOM.x0+.3,ROOM.x1-.3);eye[2]=clamp(eye[2],ROOM.z0+.3,ROOM.z1-.3);',
     'eye[0]=clamp(eye[0],ROOM.x0+.3,ROOM.x1-.3);eye[2]=clamp(eye[2],ROOM.z0+.3,ROOM.z1-.3);eye=camPull(tg,eye);')
+# the endless room thickens the air
+put('gl.uniform1f(u.uFogD,.035)','gl.uniform1f(u.uFogD,EN.fog)')
 # no pinball intro here: the room fades straight in
 put('resize();buildFloorAO();','resize();buildFloorAO();PIN.skip();')
 put('#skip{position:absolute;','#intro,#skip,#ihint{display:none!important}\n#skip{position:absolute;')
