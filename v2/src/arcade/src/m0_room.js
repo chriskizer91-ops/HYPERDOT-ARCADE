@@ -3,6 +3,7 @@
    and an open ceiling with lighting trusses. Spotlights on the trusses throw beams through the haze onto the feature
    machines; blacklight tubes make the carpet glow in pools. Over the front of the floor three neon rings turn slowly.
    The front wall has glass doors onto a rainy street, and a synthwave mural; backlit posters fill the bare walls. */
+const BACKDOOR={x:-6.0};   // the door to the back room, on the back wall between Ultramassive and Sky Stack
 function buildRoom(){
   const {x0,x1,z0,z1,h}=ROOM,W=WORLD;
   FLOOR.quad([x0,0,z1],[x1,0,z1],[x1,0,z0],[x0,0,z0],[1,1,1]);
@@ -16,7 +17,7 @@ function buildRoom(){
   W.quad([x1,0,z0],[x1,0,z1],[x1,h,z1],[x1,h,z0],wall);
   W.quad([x0,h,z0],[x1,h,z0],[x1,h,z1],[x0,h,z1],ceil);
   /* each wall as a run: origin, direction along it, inward normal, length */
-  const RUNS=[{o:[x0,z0],d:[1,0],n:[0,1],L:x1-x0,cove:'v'},{o:[x1,z1],d:[-1,0],n:[0,-1],L:x1-x0,cove:'p',skip:[[14.4,17.6]]},
+  const RUNS=[{o:[x0,z0],d:[1,0],n:[0,1],L:x1-x0,cove:'v',skip:DEMO?[]:[[BACKDOOR.x-x0-1.6,BACKDOOR.x-x0+1.6]]},{o:[x1,z1],d:[-1,0],n:[0,-1],L:x1-x0,cove:'p',skip:[[14.4,17.6]]},
     {o:[x0,z1],d:[0,-1],n:[1,0],L:z1-z0,cove:'c'},{o:[x1,z0],d:[0,1],n:[-1,0],L:z1-z0,cove:'c'}];
   const at=(R,s,off,y)=>[R.o[0]+R.d[0]*s+R.n[0]*off,y,R.o[1]+R.d[1]*s+R.n[1]*off];
   const boxAlong=(R,s,len,off,y,hgt,dep,col,e=0)=>{const c=at(R,s+len/2,off+dep/2,y);W.box(c[0],c[1],c[2],Math.abs(R.d[0])*len+Math.abs(R.n[0])*dep,hgt,Math.abs(R.d[1])*len+Math.abs(R.n[1])*dep,col,e);};

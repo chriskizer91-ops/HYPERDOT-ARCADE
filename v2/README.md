@@ -4,6 +4,8 @@ A second, separate arcade in the same repo. V1 at the root (`index.html`) is unt
 
 V2 started as a copy of V1 and then got a new renderer, a rebuilt room and a reworked intro. It plays the same games as V1, loaded from the shared `../games/` and `../attract/` folders, plus **Shiftlight 3**, which is in V2 only.
 
+A door on V2's back wall leads to **the back room** (`../backroom/`), which has its own README.
+
 ## Run it
 
 Serve the repo root over HTTP and open `/v2/`:
@@ -56,6 +58,19 @@ The table, the glitch and the landing are timed from `TL` and `G` in `src/arcade
 
 `build.py` writes them all, and `LIVE` in it names the one `index.html` plays. `python3 v2/src/arcade/build.py --demo DIR` writes a stand-alone copy of them to `DIR`, with the machines' games switched off.
 
+## The door to the back room
+
+On the back wall, between Ultramassive and Sky Stack, is a pair of frosted glass doors under a BACK ROOM sign. Walk up and press ENTER. The picture fades and the back room opens.
+
+The back room is a separate page, `../backroom/`, so each room has the phone or laptop to itself. The two share one wallet, so tickets carry across.
+
+Coming back, the back room's door opens `v2/?from=backroom`. With that on the address, the pinball intro doesn't play, and you arrive in front of the BACK ROOM door, facing the floor.
+
+- The door is one line in `src/arcade/src/m4_floor.js` (`Doorway({...})`), with where you arrive next to it (`ARRIVE.backroom`).
+- Its place along the back wall is `BACKDOOR` at the top of `src/arcade/src/m0_room.js`.
+- The door itself is `src/arcade/src/m6_doors.js`, which the back room's build reads too.
+- The stand-alone intro demo has no back room, so it has no door.
+
 ## Quality
 
 V2 picks **high** on a desktop and **medium** on a phone or tablet. Medium draws the haze and the reflections at lower resolution. If the frame rate can't hold while you walk, or while the intro shows the room, it steps down by itself, to **low** at the bottom. Low drops the haze, the streaks and the reflections.
@@ -101,6 +116,7 @@ This writes `v2/index.html` from two sources:
   - `m1_host`: the game host
   - `m2_cabinets` and `m2b_simpod`: the cabinets and the sim pod
   - `m3_tables`: the tables and redemption games
+  - `m6_doors`: the door to the back room
   - `m4_floor`: the floor plan
   - `m5_prizes`: the prize counter
 
@@ -110,6 +126,6 @@ This writes `v2/index.html` from two sources:
 v2/index.html          the V2 arcade (built), playing intro E
 v2/intro-*.html        the intro versions (built), listed on v2/intros.html
 v2/games/shift3.html   Shiftlight 3, with the arcade bridge
-v2/src/arcade/         shell.html + src/m0..m5 + src/intro_variants.js + build.py
+v2/src/arcade/         shell.html + src/m0..m6 + src/intro_variants.js + build.py
 v2/src/shift3/         bridge.js + add_bridge.py
 ```

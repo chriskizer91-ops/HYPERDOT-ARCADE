@@ -59,6 +59,7 @@ button.pill{cursor:pointer}
 #intro{position:fixed;inset:0;pointer-events:none}
 #intro .pill{pointer-events:auto}
 #intro.gone{display:none}
+.arrive #intro,.arrive #skip,.arrive #ihint{display:none!important}
 .lbx{position:fixed;left:0;right:0;height:0;background:#000;pointer-events:none}#barT{top:0}#barB{bottom:0}
 #skip{position:absolute;left:max(16px,env(safe-area-inset-left,0px));top:max(10px,env(safe-area-inset-top,0px));opacity:.8}
 #ihint{position:absolute;left:50%;bottom:max(26px,calc(env(safe-area-inset-bottom,0px) + 20px));transform:translateX(-50%);text-align:center;
@@ -628,6 +629,7 @@ const OBST=[];          // axis-aligned blockers {x0,x1,z0,z1}
 const ATTR=[];          // attractions
 const LIGHTS=[];        // static lights [x,y,z,range,r,g,b,intensity]
 const DECO=[];          // the room's own moving parts: {update(dt), draw(), drawScreens()}
+const ARRIVE={};        // where you stand when you come in by a door from another room: {<the room you came from>:{x,z,face}}; the floor plan fills it
 function block(x0,x1,z0,z1){OBST.push({x0:Math.min(x0,x1),x1:Math.max(x0,x1),z0:Math.min(z0,z1),z1:Math.max(z0,z1)});}
 function lightAt(x,y,z,range,col,k){const L={p:[x,y,z],range,col,k,base:k};LIGHTS.push(L);return L;}
 const BEAMS=[];        // spot cones only the haze shows: apex, unit direction, half-angle, length
@@ -2756,7 +2758,7 @@ const PIN=(()=>{
   const BAR_ON={glitch:1,dive:1,fall:1,descend:1,land:1,suck:1,drift:1};
   function update(dt){
     api.t+=dt;
-    if(api.fadeHold){if(FADE<=.001){api.fadeHold=false;api.fastFade=true;W_.camYaw=0;finish();const w=walkCam();CAM.eye=w.eye;CAM.tgt=w.tgt;CAM.fov=w.fov;}return;}
+    if(api.fadeHold){if(FADE<=.001){api.fadeHold=false;api.fastFade=true;W_.camYaw=0;finish();if(HERE){CH_.x=HERE.x;CH_.z=HERE.z;CH_.face=HERE.face;W_.camYaw=HERE.face+Math.PI;}const w=walkCam();CAM.eye=w.eye;CAM.tgt=w.tgt;CAM.fov=w.fov;}return;}
     pollPad();audioNodes();imTick();
     const st=api.stage;
     const sr=st==='suck'&&VAR.rate?VAR.rate(api.st):1;      // a test version may run its own stage slower
@@ -2801,6 +2803,8 @@ buildRoom();buildCharacter();
 for(const a of ATTR)if(a.build){WORLD.fin(.4,0);a.build(WORLD);}WORLD.fin(0,0);
 worldMesh=mesh(WORLD);floorMesh=mesh(FLOOR);
 resize();buildFloorAO();
+/* in by a door from another room (?from=...): no intro, and you stand at that door */
+const HERE=ARRIVE[new URLSearchParams(location.search).get('from')];if(HERE){document.documentElement.classList.add('arrive');PIN.skip();}
 window.__arcade={W_,CH_,CAM,ATTR,IN,KEY,PIN,AP,LIGHTS,BEAMS,HZ,LOOK,get Q(){return Q.n},startAttr,leaveAttr,enterArcade,ff:(sec)=>{for(let i=0;i<sec*60;i++)step(1/60);},tris:()=>(worldMesh.n+floorMesh.n)/3,fps:()=>fps};
 requestAnimationFrame(frame);
 })();
