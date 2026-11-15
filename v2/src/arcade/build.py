@@ -22,7 +22,7 @@ def build(intro,out,root='../',demo=False,outdir=None):
         assert s.count(marker)==1,('marker',marker,s.count(marker))
         s=s.replace(marker,text)
     put('/*@@ROOM@@*/',rd('m0_room.js'))
-    put('/*@@MACHINES@@*/','\n'.join(rd(n) for n in ['m1_host.js','m2_cabinets.js','m2b_simpod.js','m3_tables.js','m4_floor.js','m5_prizes.js']))
+    put('/*@@MACHINES@@*/','\n'.join(rd(n) for n in ['m1_host.js','m2_cabinets.js','m2b_simpod.js','m3_tables.js','m6_doors.js','m4_floor.js','m5_prizes.js']))
     put("/*@@INTRO@@*/'original'","'"+intro+"'")
     put("/*@@ROOT@@*/'../'","'"+root+"'")
     put("/*@@DEMO@@*/false",'true' if demo else 'false')

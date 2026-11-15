@@ -49,3 +49,7 @@ Alley({name:'Ring Roller',sub:'Roll it up the alley',x:4.1,z:-.9,ry:0,game:G_('r
 Hoops({name:'Bucket Blitz',sub:'Basketball',x:6.2,z:-.9,ry:0,game:G_('hoops','BUCKET BLITZ'),res:[256,96]});
 Lane({name:'Strike Night',sub:'Bowling',x:-9.8,z:3.1,ry:0,game:G_('bowl','STRIKE NIGHT'),res:[256,144]});
 AirHockey({x:0,z:.6});
+/* THE DOOR TO THE BACK ROOM, on the back wall between Ultramassive and Sky Stack. The back room is its own page (../backroom/).
+   Coming back through it, you arrive in front of this door, facing the floor. The stand-alone intro demo has no back room, so no door. */
+if(!DEMO){Doorway({name:'Back room',sub:'3D rebuilds · the Workshop · games in progress',x:BACKDOOR.x,z:ROOM.z0+.04,ry:0,label:'BACK ROOM',col:'#2fe6ff',to:ROOT+'backroom/?from=v2'});
+  ARRIVE.backroom={x:BACKDOOR.x,z:ROOM.z0+2.4,face:0};}

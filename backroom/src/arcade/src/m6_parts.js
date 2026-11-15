@@ -3,7 +3,6 @@
    - Handheld: a giant handheld on a pedestal, for What the Map Forgot (the design follows the game's own handheld)
    - Panel: a lit board in the X Room; READ opens it as a card
    - ArtFrame: a framed picture in the gallery; VIEW opens it full size
-   - SealedDoor: the door to the main floor, closed for now
    Every one is a Machine, so walking up, the prompt, the camera move and the ← Arcade button all work as on the floor.
    ===================================================================================== */
 /* a camera square in front of a flat thing at local centre c, sized to fit w x h */
@@ -109,38 +108,5 @@ function ArtFrame(o){
   };
   const lp=a.W(0,CY+.2,.9);lightAt(lp[0],lp[1],lp[2],2.6,[1,.9,.75],.45);
   a.cam=flatCam(a,[0,CY,.032],w,h,40,1.12);
-  return a;
-}
-
-/* ---------- the door to the main floor, sealed for now ---------- */
-function SealedDoor(o){
-  const a=Machine(Object.assign({useZ:1.1},o));a.verb='LOOK';
-  a.game={id:'door',title:'Main floor',panel:'<article class="card"><h2>Main floor</h2>'+
-    ['This door opens onto the main floor of Hyperdot Arcade.','It stays sealed while the back room is being built. When it opens, you’ll walk straight from here onto the floor.'].map(p=>'<p>'+p+'</p>').join('')+'<footer>Hyperdot Arcade · the back room</footer></article>'};
-  /* frosted glass: the floor's neon, blurred, behind it */
-  const c=mkCanvas(512,400),g=c.getContext('2d');
-  let gr=g.createLinearGradient(0,0,0,400);gr.addColorStop(0,'#0a0618');gr.addColorStop(1,'#1a0c2a');g.fillStyle=gr;g.fillRect(0,0,512,400);
-  g.filter='blur(9px)';
-  const glow=[['#ff2f9a',40,90,60,120],['#2fe6ff',130,110,50,100],['#ffd23f',215,80,56,130],['#b47aff',300,100,50,110],['#ff7a2e',380,90,58,120],['#2fe6ff',455,110,46,100]];
-  for(const [col,x,y,w,hh] of glow){g.fillStyle=col;g.globalAlpha=.7;g.fillRect(x,y,w,hh*.55);g.globalAlpha=.35;g.fillRect(x-6,y+hh*.6,w+12,hh*.9);}
-  g.globalAlpha=.6;g.fillStyle='#ff2f9a';g.fillRect(150,24,212,22);g.globalAlpha=1;g.filter='none';
-  for(let i=0;i<2600;i++){g.fillStyle='rgba(255,255,255,'+(Math.random()*.06)+')';g.fillRect(Math.random()*512,Math.random()*400,1.5,1.5);}
-  gr=g.createLinearGradient(0,0,512,0);gr.addColorStop(0,'rgba(255,255,255,.04)');gr.addColorStop(.5,'rgba(255,255,255,.12)');gr.addColorStop(1,'rgba(255,255,255,.03)');g.fillStyle=gr;g.fillRect(0,0,512,400);
-  const tex=texFrom(c,false);
-  a.build=mb=>{
-    texQuad(a.T,[[-1.5,0,.03],[1.5,0,.03],[1.5,2.3,.03],[-1.5,2.3,.03]],tex,.8);
-    mb.push();mb.m=mmul(mb.m,a.T);
-    const chrome=CHROME,trimC=hex('#2fe6ff');
-    mb.fin(.9,1);
-    for(const [p,q] of [[[-1.55,0,.06],[-1.55,2.35,.06]],[[1.55,0,.06],[1.55,2.35,.06]],[[-1.55,2.35,.06],[1.55,2.35,.06]],[[0,0,.06],[0,2.35,.06]]])mb.tube(p,q,.035,chrome,0,6);
-    for(const sx of [-1,1])mb.tube([sx*.12,.95,.11],[sx*.12,1.5,.11],.014,chrome,0,6);
-    mb.tube([-1.35,1.05,.1],[-.25,1.05,.1],.016,chrome,0,6);mb.tube([.25,1.05,.1],[1.35,1.05,.1],.016,chrome,0,6);
-    mb.fin(0,0);for(const [p,q] of [[[-1.62,0,.08],[-1.62,2.42,.08]],[[1.62,0,.08],[1.62,2.42,.08]],[[-1.62,2.42,.08],[1.62,2.42,.08]]])mb.tube(p,q,.012,trimC,3);
-    neon2(mb,'MAIN FLOOR',[0,2.62,.08],[1,0,0],.05,hex('#ff2f9a'),4);
-    neon2(mb,'CONNECTING SOON',[0,1.2,.12],[1,0,0],.016,hex('#ffd23f'),3.4);
-    mb.pop();
-  };
-  const lp=a.W(0,1.6,.9);lightAt(lp[0],lp[1],lp[2],4,[.8,.35,.9],.5);
-  a.cam=flatCam(a,[0,1.35,.03],3.2,2.6,45,1.08);
   return a;
 }

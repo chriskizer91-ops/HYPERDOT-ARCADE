@@ -1,71 +1,97 @@
 # Hyperdot Arcade: the back room
 
-The back room of [Hyperdot Arcade](https://github.com/chriskizer91-ops/HYPERDOT-ARCADE), in a repo of its own for now. The arcade itself (V1 and V2) is unchanged. When the door between them opens, this folder moves into the arcade's repo, next to `v2/`.
+The rooms behind the main floor of [Hyperdot Arcade](../README.md). You get here through the BACK ROOM door on V2's back wall, or by opening `backroom/` directly.
 
 It runs on V2's engine: the same renderer, the same walking, the same cabinets. It has no pinball intro. You start just inside the door from the main floor.
 
-## What's in it
+## The rooms
+
+| Room | What's in it |
+|---|---|
+| **The main room** (18 × 22 m) | The 3D rebuilds of the arcade's games, under the BACK ROOM · 3D REBUILDS sign, and the gallery by the door. |
+| **The Workshop** (18 × 12 m), through the doorway in the far wall | The unfinished games. All of them play. |
+| **The X Room**, a closet on the right | Five lit panels about what this place is. |
+| **The empty room** (10 × 10 m), through the doorway in the left wall | Nothing yet. It's lit and dressed like the rest. |
+| **The endless room** | A secret. See below. |
+
+### The main room
 
 | Where | What |
 |---|---|
-| Front wall | **The door to the main floor.** Frosted glass with the floor's neon behind it, under a MAIN FLOOR sign. It's sealed for now (CONNECTING SOON), and LOOK explains that. |
-| Back wall, under BACK ROOM · GAMES IN PROGRESS | **What the Map Forgot**, a giant handheld on a pedestal, built after the game's own handheld. On the left, a doorway leads through to the Workshop. |
-| Left wall, the GALLERY | Three framed pictures from Envoi. |
-| Right wall | Two from What the Map Forgot. The Jester from Moon Faire hangs on the X Room's wall. |
-| Through the doorway: **the Workshop**, under THE WORKSHOP · UNFINISHED GAMES | Unfinished games, each on a cabinet built to look like its game. **Envoi on the Longest Night** is a moonlit gothic shrine: a pointed arch with gilt trim, a stained-glass rose window, a crescent moon, candles on the steps, motes of magic drifting round it, and the key art on its front. **Moon Faire** is a booth at a night faire: a striped tent with a valance of chasing bulbs, a velvet curtain, a gilt playbill screen, a full moon on the peak, and the performers on cut-out boards either side. On the right wall, **the Howler**, Ironhowl's mech cockpit: a mech kneeling with its chest hatch open. Climbing in offers Ironhowl 3D or the Retro 2D original, both played from the main arcade's site, so it's always the newest build. In the middle, **Redline County**: the front half of the game's stock SUV (warm grey, chrome twin-bar grille, six-spoke wheels, mud up the sides) on a patch of the game's own tyre-tracked dirt. Climb into the driver's seat and the windshield is the screen, with a choice of *Road Not Found + Traffic* (heavy: best on a laptop) or *Salt & Sand* (runs well on phones). In the back corner is the next one, a cabinet still being built (NEXT UP), with a work light, sawhorses and paint. A workbench sits under a pegboard of tools. |
-| The Workshop's middle and side walls: **the upgrades** | One cabinet for each game being rebuilt in V2, built like its game. Each one plays from the main arcade's site, so it's always the newest build, and offers the new version and the Retro 2D original. **Strike Night** is a short blacklight lane with ten pins and a ball return. **Voidlance** is a starfighter's cockpit on a docking cradle, its lance nose pointed at the wall. **Voltfist** is two cabinets back to back with a championship belt on top. **Prisma** is a hover-bike over a glowing pad, with light trails and rain. **Molten** is a brick forge with a glowing mouth, a crucible pouring and ice creeping in. **Plush Panic** is a tall candy-pink claw machine full of plushes. **Lantern** is an iron street lamp on cobbles, with moths round its flame (The Long Night, Lantern 3D, or Retro 2D). The Howler also offers Ironhowl 3. **Air Hockey 3D** gets a full-size table like the game's own Classic table (a white surface pricked with air holes, a pink-lit rim, blue creases), under a hanging scoreboard and lamp; a puck glides across it on its own while nobody's playing. |
-| Back right corner | **The X Room**, a closet through its own door. It holds five lit panels: What this is, Collaboration + augmentation, The part that's mine, The future of media, and Open by design. |
+| Front wall | **The door to the main floor**: frosted glass under a MAIN FLOOR sign. ENTER takes you back to V2, in front of its BACK ROOM door. |
+| By the door | **The gallery.** Three pictures from Envoi on the left wall, with a bench. Two from What the Map Forgot and the Jester from Moon Faire on the X Room's outside wall. |
+| Right wall, by the door | **Molten**, a brick forge with a glowing mouth, and **Plush Panic**, a tall candy-pink claw machine. |
+| Middle of the floor | **Air Hockey 3D** (a full-size table under a hanging scoreboard), **Voltfist** (two cabinets back to back with a championship belt on top), **Voidlance** (a starfighter's cockpit, its lance pointed at the sign) and **Prisma** (a hover-bike over a glowing pad). |
+| Left wall, at the far end | **Strike Night**, a short blacklight lane with its pins at the far wall. |
+| Far wall | **Lantern**, an iron street lamp. **What the Map Forgot**, a giant handheld on a pedestal under the sign. The doorway to the Workshop is on the right. |
+| The nook behind the X Room | **The Howler**, Ironhowl's mech, kneeling with its chest hatch open. |
 
-Every picture and panel works like a machine. Walk up and press VIEW or READ (E or Enter). The picture or the words open full size, and ← Arcade (or Esc) brings you back.
+Each rebuild's cabinet offers the new version and the Retro 2D original. They play the arcade's own builds from one folder up (`../v2/games/`, `../games/`), so they're always the newest.
+
+### The Workshop
+
+**Envoi on the Longest Night** (a moonlit gothic shrine) and **Moon Faire** (a booth at a night faire) stand on the far wall under THE WORKSHOP · UNFINISHED GAMES. **Redline County** is the front half of the game's SUV on a patch of dirt; climb in and the windshield is the screen. Along the left wall are the workbench and a cabinet that's still being built.
+
+### The endless room
+
+A stretch of the X Room's far wall, in the corner to the left of the panels, looks like wall and isn't. Walk into it and you come out in a hall that never ends: a polished black floor, and an arch of chrome and LED every 6 m, pink and then cyan. The line at the top of the screen shows how far you've walked. From inside, the way back is marked X ROOM.
+
+How it never ends: the hall is built 144 m long and repeats every 12 m. Once you're 66 m in, every time you walk out of a 12 m window you and the camera are put back 12 m, onto a spot that looks the same. Walking back undoes it, so the door is always as far behind you as you walked. The camera sees 60 m, so neither end of the hall is in view from the window. The numbers are `EN` at the top of `src/arcade/src/m0_backroom.js`.
 
 ## The games
 
-`games/envoi.html`, `games/moonfaire.html`, `games/mapforgot.html`, `games/roadnotfound.html`, `games/saltsand.html` and `games/airhockey3d.html` are the builds as Christopher shared them, unchanged. The Howler's two games aren't copied here: it opens them from the main arcade's site (`../HYPERDOT-ARCADE/`). None of them speaks the cabinet contract yet. The cabinet is told so (`bridge:false`), and it lifts its loading screen as soon as the game's page has loaded. They don't award tickets. Leaving works as for any game: hold Esc, or the ← Arcade pill.
+`games/envoi.html`, `games/moonfaire.html`, `games/mapforgot.html`, `games/roadnotfound.html`, `games/saltsand.html` and `games/airhockey3d.html` are the builds as Christopher shared them, unchanged. The rebuilds aren't copied here: their cabinets open them from the arcade's own folders.
+
+Air Hockey 3D speaks the cabinet contract. The other five don't yet: their cabinets are told so (`bridge:false`) and lift the loading screen as soon as the game's page has loaded, and they don't award tickets. Leaving works as for any game: hold Esc, or the ← Arcade pill.
 
 To update a game, replace its file in `games/`.
 
 ## Changing things
 
-- **The words on the panels** are at the bottom of `src/arcade/src/m4_backroom.js`, one `Panel({...})` each. They were drafted from Christopher's own words and are his to rewrite.
+- **Where a machine stands**: `src/arcade/src/m4_backroom.js`, one line per machine, with its `x`, `z` and the way it faces (`ry`).
+- **The walls and doorways**: the top of `src/arcade/src/m0_backroom.js`. `ZB` is the wall between the main room and the Workshop, `WD` the doorway in it, `CL` the X Room, `ER` the empty room, `EN` the endless room.
+- **The words on the panels**: the bottom of `m4_backroom.js`, one `Panel({...})` each. They were drafted from Christopher's own words and are his to rewrite.
 - **A picture**: put the image in `art/` and add an `ArtFrame({...})` line in the same file, with its width and height in metres.
 - **A cabinet with more than one game**: a machine's `game` can be `{title, choices:[{title, sub, src}, ...]}`. Sitting down then shows a choice between them.
-- **A themed cabinet** for another unfinished game: the Workshop's builders are in `src/arcade/src/m7_workshop.js`, one function per cabinet. Copy the nearest one and change it.
+- **A themed cabinet** for another game: the builders are in `m7_workshop.js` and `m8_upgrades.js`, one function per cabinet. Copy the nearest one and change it.
 
 Then build:
 
 ```
-python3 src/arcade/build.py
+python3 backroom/src/arcade/build.py
 ```
 
-That writes `index.html` from V2's `shell.html` (copied into `src/arcade/` unchanged) and the modules in `src/arcade/src/`:
+That writes `backroom/index.html` from V2's `shell.html` and these modules:
 
 | Module | What it is |
 |---|---|
-| `m0_backroom.js` | the room: the walls, the X Room's walls and door, the ceiling, the lights, the signs |
-| `m1_host.js` | V2's game host, plus reading cards (panels, pictures, the door) and the chooser for a cabinet with more than one game |
-| `m2_cabinets.js`, `m3_tables.js` | V2's cabinets and tables, unchanged |
-| `m6_parts.js` | the back room's own machines: the giant handheld, the panels, the frames, the sealed door |
-| `m7_workshop.js` | the Workshop's cabinets: Envoi's shrine, Moon Faire's booth, the Howler, the Redline County SUV, the half-built NEXT UP, the workbench |
-| `m8_upgrades.js` | the upgrades' cabinets: the lane, the cockpit, the versus cabinets, the hover-bike, the forge, the claw machine, the lamp post, the air hockey table |
+| `m0_backroom.js` | the rooms: walls, doorways, ceilings, lights, signs, and the endless room |
+| `m1_host.js` | V2's game host, plus reading cards (panels, pictures) and the chooser for a cabinet with more than one game |
+| `m6_parts.js` | the giant handheld, the panels, the picture frames |
+| `m7_workshop.js` | Envoi's shrine, Moon Faire's booth, the Howler, the Redline County SUV, the half-built cabinet, the workbench |
+| `m8_upgrades.js` | the rebuilds' cabinets: the lane, the cockpit, the versus cabinets, the hover-bike, the forge, the claw machine, the lamp post, the air hockey table |
 | `m4_backroom.js` | the floor plan |
 
+The shell, `m2_cabinets.js`, `m3_tables.js` and `m6_doors.js` are read from `v2/src/arcade/`, so there is one copy of each. A change to V2's shell reaches the back room the next time it's built.
+
 `build.py` also makes a few small changes to the shell, and checks that each one matches exactly once:
-- the room's size (the back room, the X Room and the Workshop)
+- the size of the box round all the rooms
 - where you start
 - no intro
-- the camera stays on your side of the X Room's walls
+- the camera stays on your side of the walls between rooms
+- the air thickens in the endless room
 
 ## Run it
 
-Serve the folder over HTTP (any static server works) and open it:
+Serve the repo's top folder over HTTP and open `/backroom/`:
 
 ```
 python3 -m http.server 8000
-# then open http://localhost:8000/
+# then open http://localhost:8000/backroom/
 ```
 
-GitHub Pages works as is. The `.nojekyll` file stops Pages from processing the folder.
+It has to be served from inside the repo, because the rebuilds' games are one folder up.
 
 ## Tickets
 
-The back room shares V2's wallet (`arcade2-tickets`), so whatever you win in one is there in the other once the door opens.
+The back room shares V2's wallet (`arcade2-tickets`), so whatever you win in one is there in the other.

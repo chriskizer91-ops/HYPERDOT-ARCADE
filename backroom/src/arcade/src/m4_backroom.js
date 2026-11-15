@@ -62,8 +62,8 @@ ArtFrame({id:'coast',name:'The coast town',sub:'Art made with AI',x:5.3,z:CL.z+C
 ArtFrame({id:'jester',name:'The Jester',sub:'Art made with AI',x:8.3,z:CL.z+CL.t/2+.01,ry:0,src:ROOT+'art/moon-jester.webp',w:.55,h:1.12,y:1.62,pixel:true,
   title:'The Jester',cap:'From Moon Faire · made with AI'});
 
-/* THE DOOR from the main floor, sealed for now */
-SealedDoor({name:'Main floor',sub:'Connecting soon',x:0,z:B.z1-.04,ry:Math.PI});
+/* THE DOOR to the main floor (V2, one folder up). You start just inside it, so coming through from the floor needs no ARRIVE entry. */
+Doorway({name:'Main floor',sub:'Back to the arcade',x:0,z:B.z1-.04,ry:Math.PI,label:'MAIN FLOOR',to:'../v2/?from=backroom'});
 
 /* THE X ROOM: five panels about what this is. Drafted from Christopher's own words; his to rewrite. */
 Panel({id:'what',name:'What this is',sub:'Panel 1 of 5',x:5.6,z:CL.zn+.1,ry:0,title:'What this is',body:[
