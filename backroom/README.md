@@ -32,13 +32,13 @@ Each rebuild's cabinet offers the new version and the Retro 2D original. They pl
 
 **Envoi on the Longest Night** (a moonlit gothic shrine) and **Moon Faire** (a booth at a night faire) stand on the far wall under THE WORKSHOP · UNFINISHED GAMES. **Redline County** is the front half of the game's SUV on a patch of dirt; climb in and the windshield is the screen. Along the left wall are the workbench and a cabinet that's still being built.
 
-Three more cabinets are ready for games that are still being built. Until a game is finished, its cabinet's button says LOOK and opens a card about it.
+Three newer cabinets stand round them. **Ironhowl 4** plays on the Wraith. The other two are ready for games that aren't in yet: their button says LOOK and opens a card about the game.
 
 | Cabinet | For | What it is |
 |---|---|---|
-| **The Wraith**, right wall | Ironhowl 4 | The recon mech from the game: orange over gunmetal, a wolf's head, bent-back legs on clawed feet, a jet pack, the Lance on its right arm. It crouches on a timber skid with its chest hatch dropped as a ramp. |
-| **The bogged Rock & Mud**, left of the SUV | Mud Lab | The front half of the Rock & Mud, sunk to its axles in a patch of mud, with its winch line run out to the pull-test post, a field table of soil jars and the game's title board. |
-| **The Showroom**, back right | Salt & Sand Showroom | A black backdrop and a turntable. A model of the stock SUV turns on it under two spots, then the Rock & Mud takes its place. |
+| **The Wraith**, right wall | Ironhowl 4 (plays) | The recon mech from the game: orange over gunmetal, a wolf's head, bent-back legs on clawed feet, a jet pack, the Lance on its right arm. It crouches on a timber skid with its chest hatch dropped as a ramp. |
+| **The bogged Rock & Mud**, left of the SUV | Mud Lab (card) | The front half of the Rock & Mud, sunk to its axles in a patch of mud, with its winch line run out to the pull-test post, a field table of soil jars and the game's title board. |
+| **The Showroom**, back right | Salt & Sand Showroom (card) | A black backdrop and a turntable. A model of the stock SUV turns on it under two spots, then the Rock & Mud takes its place. |
 
 ### The endless room
 
@@ -52,7 +52,15 @@ How it never ends: the hall is built 144 m long and repeats every 12 m. Once you
 
 Air Hockey 3D speaks the cabinet contract. The other five don't yet: their cabinets are told so (`bridge:false`) and lift the loading screen as soon as the game's page has loaded, and they don't award tickets. Leaving works as for any game: hold Esc, or the ← Arcade pill.
 
-To update a game, replace its file in `games/`.
+`games/ironhowl4/` is Ironhowl 4, the build of 15 Nov 2026 (the game's commit `e3fe25c`). It is a folder, not one file, so a phone only downloads what it uses: the page and its scripts, `art/`, `models/`, and the kit and foe models in `m4/`. It is about 136 MB, 85 MB of that the full-detail models the mod bay shows on a laptop. It speaks the cabinet contract and awards tickets.
+
+To update a game, replace its file in `games/`. To update Ironhowl 4:
+
+```
+python3 backroom/src/ironhowl4/bring_in.py <a clone of the iron-howler-4 repo> <branch or commit>
+```
+
+That rewrites `games/ironhowl4/` from the game's repo. Its one change to the game is a line in `index.html` saying where the kit and foe models are.
 
 ## Changing things
 
