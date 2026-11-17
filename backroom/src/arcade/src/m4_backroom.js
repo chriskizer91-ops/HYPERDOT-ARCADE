@@ -45,6 +45,22 @@ RedlineSUV({name:'Redline County',sub:'Climb into the SUV · pick a game',x:1.0,
   game:{id:'redlinecounty',title:'Redline County',choices:[
     {title:'Road Not Found + Traffic',sub:'Wide Open 2, the full game · heavy: best on a laptop',src:ROOT+'games/roadnotfound.html',bridge:false},
     {title:'Salt & Sand',sub:'The Studio 2 SUV on the salt flats · runs well on phones',src:ROOT+'games/saltsand.html',bridge:false}]}});
+/* THE NEWEST THREE: games still being built. Each cabinet is ready and shows a card until its game is finished.
+   When one is, swap its soon(...) for the game: game:G_('<id>','<TITLE>',{deluxe:true}) and drop the file in games/. */
+WraithBay({name:'Ironhowl 4',sub:'Pilot the Wraith · being built',x:7.6,z:-17.2,ry:-RX,res:[384,216],
+  game:soon('ironhowl4','Ironhowl 4',[
+    'Ironhowl 4 is set in 2176, fifty years after Ironhowl 3. You pilot the Wraith, a recon mech a farm family dug up and rebuilt, against FORGE’s unmanned machines.',
+    'It’s being built now. A sandbox, Endless mode and the first chapter, The Salvage Rush, already play.',
+    'When it’s finished, this cabinet will play it. Until then, the Howler in the main room plays Ironhowl 3.'])});
+MudTruck({name:'Mud Lab',sub:'Get stuck on purpose · being built',x:-4.8,z:-18.4,ry:.6,res:[320,180],
+  game:soon('mudlab','Mud Lab',[
+    'Mud Lab is the soil game from the Redline County line. You drive the Rock & Mud or the stock SUV on ground that tears up for real: ruts, mud and standing water.',
+    'Getting stuck is the game. There’s a winch and a strap for getting out again, and a bush plane, the Heron, on its own strip.',
+    'It’s being built now. When it’s finished, this cabinet will play it.'])});
+Showroom({name:'Salt & Sand Showroom',sub:'The SUVs up close · being built',x:7.2,z:-21.9,ry:-RX,res:[320,180],
+  game:soon('showroom','Salt & Sand Showroom',[
+    'The Showroom puts Redline County’s SUVs on a turntable, in a black room or a white one, so you can look closely at each before you drive it.',
+    'It’s being built now. When it’s finished, this cabinet will play it.'])});
 Workbench({x:B.x0+.42,z:-18.4,ry:RX});
 HalfBuilt({x:B.x0+.75,z:-24.9,ry:RX});
 

@@ -32,6 +32,14 @@ Each rebuild's cabinet offers the new version and the Retro 2D original. They pl
 
 **Envoi on the Longest Night** (a moonlit gothic shrine) and **Moon Faire** (a booth at a night faire) stand on the far wall under THE WORKSHOP · UNFINISHED GAMES. **Redline County** is the front half of the game's SUV on a patch of dirt; climb in and the windshield is the screen. Along the left wall are the workbench and a cabinet that's still being built.
 
+Three more cabinets are ready for games that are still being built. Until a game is finished, its cabinet's button says LOOK and opens a card about it.
+
+| Cabinet | For | What it is |
+|---|---|---|
+| **The Wraith**, right wall | Ironhowl 4 | The recon mech from the game: orange over gunmetal, a wolf's head, bent-back legs on clawed feet, a jet pack, the Lance on its right arm. It crouches on a timber skid with its chest hatch dropped as a ramp. |
+| **The bogged Rock & Mud**, left of the SUV | Mud Lab | The front half of the Rock & Mud, sunk to its axles in a patch of mud, with its winch line run out to the pull-test post, a field table of soil jars and the game's title board. |
+| **The Showroom**, back right | Salt & Sand Showroom | A black backdrop and a turntable. A model of the stock SUV turns on it under two spots, then the Rock & Mud takes its place. |
+
 ### The endless room
 
 A stretch of the X Room's far wall, in the corner to the left of the panels, looks like wall and isn't. Walk into it and you come out in a hall that never ends: a polished black floor, and an arch of chrome and LED every 6 m, pink and then cyan. The line at the top of the screen shows how far you've walked. From inside, the way back is marked X ROOM.
@@ -53,7 +61,8 @@ To update a game, replace its file in `games/`.
 - **The words on the panels**: the bottom of `m4_backroom.js`, one `Panel({...})` each. They were drafted from Christopher's own words and are his to rewrite.
 - **A picture**: put the image in `art/` and add an `ArtFrame({...})` line in the same file, with its width and height in metres.
 - **A cabinet with more than one game**: a machine's `game` can be `{title, choices:[{title, sub, src}, ...]}`. Sitting down then shows a choice between them.
-- **A themed cabinet** for another game: the builders are in `m7_workshop.js` and `m8_upgrades.js`, one function per cabinet. Copy the nearest one and change it.
+- **A themed cabinet** for another game: the builders are in `m7_workshop.js`, `m8_upgrades.js` and `m9_next.js`, one function per cabinet. Copy the nearest one and change it.
+- **Putting a finished game on a cabinet that shows a card**: put the game's file in `games/`, then in `m4_backroom.js` replace that cabinet's `game:soon(...)` with `game:G_('<id>','<TITLE>',{deluxe:true})`. Add `bridge:false` if the game doesn't speak the cabinet contract. The button then says PLAY.
 
 Then build:
 
@@ -70,6 +79,7 @@ That writes `backroom/index.html` from V2's `shell.html` and these modules:
 | `m6_parts.js` | the giant handheld, the panels, the picture frames |
 | `m7_workshop.js` | Envoi's shrine, Moon Faire's booth, the Howler, the Redline County SUV, the half-built cabinet, the workbench |
 | `m8_upgrades.js` | the rebuilds' cabinets: the lane, the cockpit, the versus cabinets, the hover-bike, the forge, the claw machine, the lamp post, the air hockey table |
+| `m9_next.js` | the newest cabinets, for games still being built: the Wraith, the bogged Rock & Mud, the Showroom |
 | `m4_backroom.js` | the floor plan |
 
 The shell, `m2_cabinets.js`, `m3_tables.js` and `m6_doors.js` are read from `v2/src/arcade/`, so there is one copy of each. A change to V2's shell reaches the back room the next time it's built.

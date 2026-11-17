@@ -14,6 +14,7 @@ The modules:
   m6_parts.js      the back room's own machines: the giant handheld, the X Room's panels, the gallery's frames
   m7_workshop.js   the Workshop's cabinets, and the Howler
   m8_upgrades.js   the 3D rebuilds' cabinets
+  m9_next.js       the Workshop's newest cabinets, for games still being built: the Wraith, the bogged Rock & Mud, the Showroom
   m4_backroom.js   the floor plan: what stands where, and the words on the panels
 
 The games, their attract loops and the gallery's pictures sit next to index.html, in games/, attract/ and art/."""
@@ -28,7 +29,7 @@ def put(old,new):
     assert s.count(old)==1,('expected once',old[:70],s.count(old))
     s=s.replace(old,new)
 put('/*@@ROOM@@*/',rd('m0_backroom.js'))
-put('/*@@MACHINES@@*/','\n'.join(rd(n) for n in ['m1_host.js','m2_cabinets.js','m3_tables.js','m6_doors.js','m6_parts.js','m7_workshop.js','m8_upgrades.js','m4_backroom.js']))
+put('/*@@MACHINES@@*/','\n'.join(rd(n) for n in ['m1_host.js','m2_cabinets.js','m3_tables.js','m6_doors.js','m6_parts.js','m7_workshop.js','m8_upgrades.js','m9_next.js','m4_backroom.js']))
 put("/*@@INTRO@@*/'original'","'original'")
 put("/*@@ROOT@@*/'../'","''")
 put("/*@@DEMO@@*/false",'false')
