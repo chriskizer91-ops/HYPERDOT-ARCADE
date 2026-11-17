@@ -21,7 +21,7 @@ const ARC='../';
 MechCockpit({name:'Ironhowl',sub:'Climb into the Howler · pick a version',x:8.0,z:-11.0,ry:-RX,res:[384,216],
   game:{id:'ironhowl',title:'Ironhowl',deluxe:true,choices:[
     {title:'Ironhowl 3D',sub:'The mech arena in real 3D · in progress',src:ARC+'v2/games/ironhowl3d.html',deluxe:true},
-    {title:'Ironhowl 3',sub:'Four arenas and Endless mode · in progress, on its way to Ironhowl 4',src:ARC+'v2/games/ironhowl3/index.html',deluxe:true},
+    {title:'Ironhowl 3',sub:'Four arenas and Endless mode · Ironhowl 4 is in the Workshop',src:ARC+'v2/games/ironhowl3/index.html',deluxe:true},
     {title:'Ironhowl',sub:'Retro 2D · the original, on the LED matrix',src:ARC+'games/ironhowl.html'}]}});
 const UP=(id,title,list)=>({id,title,deluxe:true,choices:list.map(([t,s,src,retro])=>({title:t,sub:s,src:ARC+src,deluxe:!retro}))});
 BowlLane({name:'Strike Night',sub:'Bowl a frame · 3D or Retro 2D',x:-7.8,z:-9.8,ry:0,
@@ -45,6 +45,19 @@ RedlineSUV({name:'Redline County',sub:'Climb into the SUV · pick a game',x:1.0,
   game:{id:'redlinecounty',title:'Redline County',choices:[
     {title:'Road Not Found + Traffic',sub:'Wide Open 2, the full game · heavy: best on a laptop',src:ROOT+'games/roadnotfound.html',bridge:false},
     {title:'Salt & Sand',sub:'The Studio 2 SUV on the salt flats · runs well on phones',src:ROOT+'games/saltsand.html',bridge:false}]}});
+/* THE NEWEST THREE. Ironhowl 4 plays (games/ironhowl4/, the build of 15 Nov 2026). The other two cabinets are ready
+   and show a card until their games are in: swap soon(...) for game:G_('<id>','<TITLE>',{deluxe:true}) and put the file in games/. */
+WraithBay({name:'Ironhowl 4',sub:'Pilot the Wraith · in progress',x:7.6,z:-17.2,ry:-RX,res:[384,216],
+  game:G_('ironhowl4','IRONHOWL 4',{src:ROOT+'games/ironhowl4/index.html',deluxe:true})});
+MudTruck({name:'Mud Lab',sub:'Get stuck on purpose · being built',x:-4.8,z:-18.4,ry:.6,res:[320,180],
+  game:soon('mudlab','Mud Lab',[
+    'Mud Lab is the soil game from the Redline County line. You drive the Rock & Mud or the stock SUV on ground that tears up for real: ruts, mud and standing water.',
+    'Getting stuck is the game. There’s a winch and a strap for getting out again, and a bush plane, the Heron, on its own strip.',
+    'It’s being built now. When it’s finished, this cabinet will play it.'])});
+Showroom({name:'Salt & Sand Showroom',sub:'The SUVs up close · being built',x:7.2,z:-21.9,ry:-RX,res:[320,180],
+  game:soon('showroom','Salt & Sand Showroom',[
+    'The Showroom puts Redline County’s SUVs on a turntable, in a black room or a white one, so you can look closely at each before you drive it.',
+    'It’s being built now. When it’s finished, this cabinet will play it.'])});
 Workbench({x:B.x0+.42,z:-18.4,ry:RX});
 HalfBuilt({x:B.x0+.75,z:-24.9,ry:RX});
 
